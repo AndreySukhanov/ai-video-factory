@@ -1,0 +1,27 @@
+{
+  "character": "A young woman named Sofia, 25 years old, with long flowing black hair, pale skin, bright green eyes, wearing an elegant red dress with golden embroidery. She has a small beauty mark on her left cheek.",
+  "total_time": 183,
+  "episodes": [
+    {
+      "episode": 1,
+      "title": "The Arrival",
+      "status": "success",
+      "time": 63,
+      "url": "https://replicate.delivery/xezq/5FlTPlJjfBz5Hypp2V3ar0HlsEBcpPKlbUettfAicocrKamrA/tmpdyra4cuz.mp4"
+    },
+    {
+      "episode": 2,
+      "title": "The Discovery",
+      "status": "success",
+      "time": 56,
+      "url": "https://replicate.delivery/xezq/3aTz2xc3SOJJPNezDkApbE2EfSeuIar3ba1n87WmRFFkMamrA/tmpnocxzuoq.mp4"
+    },
+    {
+      "episode": 3,
+      "title": "The Transformation",
+      "status": "success",
+      "time": 56,
+      "url": "https://replicate.delivery/xezq/87XsDI2X3eXpLSkVKFv76xveIdqErMMLE1Qwb7Vd9K5KHNzVA/tmpuv4l5x2t.mp4"
+    }
+  ]
+}
