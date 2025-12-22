@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+alembic
+pydantic
+pydantic-settings
+python-dotenv
+rq
+redis
+openai
+pytest
+httpx
+ffmpeg-python
+requests
+replicate
+python-multipart
+Pillow
