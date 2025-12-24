@@ -1,0 +1,10 @@
+node_modules
+.next
+.turbo
+dist
+.git
+.gitignore
+README.md
+npm-debug.log
+.DS_Store
+*.log

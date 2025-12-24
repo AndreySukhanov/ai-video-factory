@@ -171,6 +171,11 @@ backend/test_*.py
 *.key
 
 # Unnecessary docs
-INVESTOR_DECK.md
 .gemini/
 .agent/
+.claude/
+
+# Server credentials and deployment info (NEVER commit!)
+*.txt
+DEPLOYMENT.md
+INVESTOR_DECK.md

@@ -126,7 +126,8 @@ export default function GenerateEpisodePage() {
                 prompt: episodePrompt.trim(),
                 duration,
                 aspect_ratio: aspectRatio,
-                reference_image_url: customRefUrl !== undefined ? customRefUrl : referenceImageUrl,
+                // Continuity disabled - always use null instead of referenceImageUrl
+                reference_image_url: customRefUrl !== undefined ? customRefUrl : null,
             }),
         });
         return await response.json();
@@ -193,14 +194,11 @@ export default function GenerateEpisodePage() {
         // Collect all generated episodes
         const generatedEpisodes: Episode[] = [];
 
-        // Track current reference (for continuity mode)
-        let currentRef: string | null = referenceImageUrl;
-
         for (let i = 0; i < validPrompts.length; i++) {
             setBatchProgress({ current: i + 1, total: validPrompts.length });
             try {
-                // Use current reference (initial or extracted from previous video)
-                const data = await generateEpisode(validPrompts[i], currentRef);
+                // Continuity disabled - generate each episode independently without reference images
+                const data = await generateEpisode(validPrompts[i], null);
 
                 if (data.success && data.video_url) {
                     generatedEpisodes.push({
@@ -210,14 +208,6 @@ export default function GenerateEpisodePage() {
                         duration: data.duration || duration,
                         created_at: new Date().toISOString(),
                     });
-
-                    // If continuity enabled, extract last frame for next episode
-                    if (enableContinuity && i < validPrompts.length - 1) {
-                        const frameUrl = await extractLastFrame(data.video_url);
-                        if (frameUrl) {
-                            currentRef = frameUrl;
-                        }
-                    }
                 }
             } catch (err) {
                 console.error(`Failed to generate episode ${i + 1}:`, err);
@@ -448,8 +438,6 @@ export default function GenerateEpisodePage() {
         setError(null);
 
         const generatedVideos: Episode[] = [];
-        let currentRef: string | null = referenceImageUrl;
-        let firstVideoRef: string | null = null; // Store first video's first frame for all episodes
 
         for (let i = 0; i < generatedEpisodes.length; i++) {
             setBatchProgress({ current: i + 1, total: generatedEpisodes.length });
@@ -457,14 +445,13 @@ export default function GenerateEpisodePage() {
             try {
                 console.log(`[Story Mode] Generating episode ${i + 1}/${generatedEpisodes.length}: ${generatedEpisodes[i].prompt.slice(0, 50)}...`);
 
-                // For episodes after the first, use the first video's frame as reference (always enabled)
-                const refToUse = i === 0 ? currentRef : firstVideoRef;
-                console.log(`[Story Mode] Using reference: ${refToUse ? 'yes (first video frame)' : 'none'}`);
+                // Story Mode: No continuity - each episode generates independently without reference images
+                console.log(`[Story Mode] Generating without reference image (continuity disabled)`);
 
                 // Try up to 2 times (retry on moderation errors)
                 let data = null;
                 for (let attempt = 1; attempt <= 2; attempt++) {
-                    data = await generateEpisode(generatedEpisodes[i].prompt, refToUse);
+                    data = await generateEpisode(generatedEpisodes[i].prompt, null);
                     console.log(`[Story Mode] Episode ${i + 1} attempt ${attempt} response:`, { success: data.success, hasVideoUrl: !!data.video_url });
 
                     if (data.success && data.video_url) {
@@ -484,16 +471,6 @@ export default function GenerateEpisodePage() {
                         created_at: new Date().toISOString(),
                     });
                     console.log(`[Story Mode] Episode ${i + 1} added successfully`);
-
-                    // After first video, extract its frame to use for all other episodes
-                    if (i === 0) {
-                        console.log(`[Story Mode] Extracting frame from first video for character consistency...`);
-                        const frameUrl = await extractLastFrame(data.video_url);
-                        if (frameUrl) {
-                            firstVideoRef = frameUrl;
-                            console.log(`[Story Mode] First video frame saved: ${frameUrl.slice(0, 50)}...`);
-                        }
-                    }
                 } else {
                     console.warn(`[Story Mode] Episode ${i + 1} skipped after 2 attempts - no video_url`);
                 }
