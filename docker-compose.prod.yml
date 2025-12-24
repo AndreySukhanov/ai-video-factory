@@ -1,0 +1,97 @@
+services:
+  # Redis for job queue
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - SQLALCHEMY_DATABASE_URI=sqlite:///./sql_app.db
+      - BACKEND_URL=http://64.23.158.28
+    env_file:
+      - ./backend/.env
+    volumes:
+      - backend_data:/app/data
+      - ./backend/sql_app.db:/app/sql_app.db
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  # Background worker
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - SQLALCHEMY_DATABASE_URI=sqlite:///./sql_app.db
+      - BACKEND_URL=http://64.23.158.28
+    env_file:
+      - ./backend/.env
+    volumes:
+      - backend_data:/app/data
+      - ./backend/sql_app.db:/app/sql_app.db
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    command: python -m app.worker
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        - NEXT_PUBLIC_API_BASE_URL=http://64.23.158.28
+    restart: unless-stopped
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=http://64.23.158.28
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - app-network
+
+volumes:
+  redis_data:
+  backend_data:
+
+networks:
+  app-network:
+    driver: bridge
