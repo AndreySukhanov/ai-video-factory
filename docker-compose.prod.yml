@@ -22,7 +22,7 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/0
       - SQLALCHEMY_DATABASE_URI=sqlite:///./sql_app.db
-      - BACKEND_URL=http://SERVER_IP
+      - BACKEND_URL=https://your-domain.com
     env_file:
       - ./backend/.env
     volumes:
@@ -44,7 +44,7 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/0
       - SQLALCHEMY_DATABASE_URI=sqlite:///./sql_app.db
-      - BACKEND_URL=http://SERVER_IP
+      - BACKEND_URL=https://your-domain.com
     env_file:
       - ./backend/.env
     volumes:
@@ -63,10 +63,10 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
       args:
-        - NEXT_PUBLIC_API_BASE_URL=http://SERVER_IP
+        - NEXT_PUBLIC_API_BASE_URL=https://your-domain.com
     restart: unless-stopped
     environment:
-      - NEXT_PUBLIC_API_BASE_URL=http://SERVER_IP
+      - NEXT_PUBLIC_API_BASE_URL=https://oem-herbal-networks-century.trycloudflare.com
     depends_on:
       - backend
     networks:
