@@ -22,7 +22,7 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/0
       - SQLALCHEMY_DATABASE_URI=sqlite:///./sql_app.db
-      - BACKEND_URL=https://your-domain.com
+      - BACKEND_URL=http://backend:8000
     env_file:
       - ./backend/.env
     volumes:
@@ -44,7 +44,7 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/0
       - SQLALCHEMY_DATABASE_URI=sqlite:///./sql_app.db
-      - BACKEND_URL=https://your-domain.com
+      - BACKEND_URL=http://backend:8000
     env_file:
       - ./backend/.env
     volumes:
@@ -63,25 +63,23 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
       args:
-        - NEXT_PUBLIC_API_BASE_URL=https://your-domain.com
+        - NEXT_PUBLIC_API_BASE_URL=/api
     restart: unless-stopped
     environment:
-      - NEXT_PUBLIC_API_BASE_URL=https://oem-herbal-networks-century.trycloudflare.com
+      - NEXT_PUBLIC_API_BASE_URL=/api
     depends_on:
       - backend
     networks:
       - app-network
 
-  # Nginx reverse proxy
+  # Nginx reverse proxy - exposed only to localhost for Cloudflare Tunnel
   nginx:
     image: nginx:alpine
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "127.0.0.1:80:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
     depends_on:
       - frontend
       - backend
