@@ -15,7 +15,7 @@ import requests
 from PIL import Image
 
 from app.core.config import settings
-from app.media import VideoProviderMock, ReplicateVeoProvider
+from app.media import VideoProviderMock, ReplicateVeoProvider, ReplicateKlingProvider
 from app.media.video_provider_pika import PikaVideoProvider
 from app.ai_orchestrator.agents import get_prompt_enhancer, get_story_generator
 
@@ -70,9 +70,10 @@ router = APIRouter()
 class EpisodeGenerateRequest(BaseModel):
     """Request body for episode generation"""
     prompt: str = Field(..., min_length=10, max_length=2000, description="Visual prompt for video generation")
-    duration: int = Field(default=4, description="Video duration in seconds (4, 6, or 8)")
+    duration: int = Field(default=4, description="Video duration in seconds (4, 6, or 8 for Veo3; 5 or 10 for Kling)")
     aspect_ratio: str = Field(default="9:16", description="Video aspect ratio")
     reference_image_url: Optional[str] = Field(default=None, description="Optional reference image URL")
+    model: str = Field(default="veo3", description="Video generation model: veo3 or kling")
 
 
 class EpisodeGenerateResponse(BaseModel):
@@ -101,10 +102,13 @@ class MergeResponse(BaseModel):
 
 
 # Initialize video provider
-def get_video_provider():
-    """Get the configured video provider"""
+def get_video_provider(model: str = "veo3"):
+    """Get the configured video provider based on model choice"""
     if settings.REPLICATE_API_TOKEN:
-        return ReplicateVeoProvider()
+        if model == "kling":
+            return ReplicateKlingProvider()
+        else:
+            return ReplicateVeoProvider()
     elif settings.VIDEO_API_KEY or settings.FAL_KEY:
         return PikaVideoProvider()
     else:
@@ -128,10 +132,10 @@ async def generate_episode(request: EpisodeGenerateRequest):
     import base64
     start_time = time.time()
     
-    print(f"[DEBUG] Generate request: prompt={request.prompt[:50]}..., ref_image={request.reference_image_url}")
+    print(f"[DEBUG] Generate request: prompt={request.prompt[:50]}..., model={request.model}, ref_image={request.reference_image_url}")
     
     try:
-        video_provider = get_video_provider()
+        video_provider = get_video_provider(request.model)
         
         # Build full reference URL if it's a local upload
         reference_url = request.reference_image_url
