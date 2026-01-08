@@ -46,6 +46,7 @@ export default function GenerateEpisodePage() {
     const [prompt, setPrompt] = useState('');
     const [duration, setDuration] = useState(4);
     const [aspectRatio, setAspectRatio] = useState('9:16');
+    const [model, setModel] = useState<'veo3' | 'kling'>('veo3');
     const [referenceImageUrl, setReferenceImageUrl] = useState<string | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const [result, setResult] = useState<GenerationResult | null>(null);
@@ -126,6 +127,7 @@ export default function GenerateEpisodePage() {
                 prompt: episodePrompt.trim(),
                 duration,
                 aspect_ratio: aspectRatio,
+                model,
                 // Continuity disabled - always use null instead of referenceImageUrl
                 reference_image_url: customRefUrl !== undefined ? customRefUrl : null,
             }),
@@ -728,7 +730,7 @@ export default function GenerateEpisodePage() {
                         {/* Settings */}
                         <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
                             <h3 className="text-white font-medium mb-3 flex items-center gap-2"><Settings className="w-4 h-4" /> Settings</h3>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-3 gap-4">
                                 <div>
                                     <label className="text-gray-400 text-sm mb-1 block">Duration</label>
                                     <select
@@ -751,6 +753,17 @@ export default function GenerateEpisodePage() {
                                         <option value="9:16" className="bg-gray-800 text-white">9:16 (Vertical)</option>
                                         <option value="16:9" className="bg-gray-800 text-white">16:9 (Horizontal)</option>
                                         <option value="1:1" className="bg-gray-800 text-white">1:1 (Square)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-gray-400 text-sm mb-1 block">AI Model</label>
+                                    <select
+                                        value={model}
+                                        onChange={(e) => setModel(e.target.value as 'veo3' | 'kling')}
+                                        className="w-full bg-gray-800 border border-white/10 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500 font-sans"
+                                    >
+                                        <option value="veo3" className="bg-gray-800 text-white">Veo 3 (Google)</option>
+                                        <option value="kling" className="bg-gray-800 text-white">Kling AI (Kuaishou)</option>
                                     </select>
                                 </div>
                             </div>

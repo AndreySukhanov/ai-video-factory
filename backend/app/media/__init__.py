@@ -2,4 +2,5 @@ from .video_provider_base import VideoProvider
 from .video_provider_mock import VideoProviderMock
 from .video_provider_real import VideoProviderReal
 from .video_provider_replicate import ReplicateVeoProvider
+from .video_provider_kling import ReplicateKlingProvider
 from .tts_client import TTSClient
