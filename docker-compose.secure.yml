@@ -6,7 +6,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -63,10 +63,10 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
       args:
-        - NEXT_PUBLIC_API_BASE_URL=/api
+        - NEXT_PUBLIC_API_BASE_URL=
     restart: unless-stopped
     environment:
-      - NEXT_PUBLIC_API_BASE_URL=/api
+      - NEXT_PUBLIC_API_BASE_URL=
     depends_on:
       - backend
     networks:
@@ -89,6 +89,7 @@ services:
 volumes:
   redis_data:
   backend_data:
+
 
 networks:
   app-network:
