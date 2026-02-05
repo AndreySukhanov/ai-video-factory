@@ -4,7 +4,9 @@ Supports text-to-video and image-to-video generation using Kuaishou's Kling mode
 """
 
 import os
+import httpx
 import replicate
+from replicate import Client
 from typing import Optional
 from app.core.config import settings
 from .video_provider_base import VideoProvider
@@ -16,19 +18,25 @@ class ReplicateKlingProvider(VideoProvider):
     Generates high-quality videos using Kuaishou's Kling model via Replicate
     """
     
-    # Available Kling models on Replicate
+    # Available Kling models on Replicate (updated 2026)
     MODELS = {
-        "kling-1.6": "kuaishou-video/kling-v1.6-pro",
-        "kling-2.0": "kuaishou-video/kling-v2.0-pro", 
+        "kling-2.1": "kwaivgi/kling-v2.1",  # image-to-video
+        "kling-2.5": "kling-ai/kling-v2.5",  # text-to-video
     }
     
-    def __init__(self, model_version: str = "kling-1.6"):
+    def __init__(self, model_version: str = "kling-2.1"):
         self.api_token = settings.REPLICATE_API_TOKEN or os.getenv("REPLICATE_API_TOKEN")
         if self.api_token:
             os.environ["REPLICATE_API_TOKEN"] = self.api_token
-        
+
+        # Create client with extended timeout (5 minutes for video generation)
+        self.client = Client(
+            api_token=self.api_token,
+            timeout=httpx.Timeout(300.0, connect=60.0)
+        )
+
         self.model_version = model_version
-        self.model_id = self.MODELS.get(model_version, self.MODELS["kling-1.6"])
+        self.model_id = self.MODELS.get(model_version, self.MODELS["kling-2.1"])
         
     def generate_clip(
         self, 
@@ -68,24 +76,32 @@ class ReplicateKlingProvider(VideoProvider):
         }
         kling_aspect = aspect_map.get(aspect_ratio, "9:16")
         
-        # Prepare input
-        input_data = {
-            "prompt": visual_prompt,
-            "duration": duration_sec,
-            "aspect_ratio": kling_aspect,
-        }
-        
-        # Add reference image for image-to-video
+        # Choose model based on whether we have reference image
         if reference_image_url:
-            input_data["image"] = reference_image_url
-            print(f"[DEBUG KLING] Using reference image for image-to-video")
-        
-        print(f"[DEBUG KLING] Sending to Kling: prompt={visual_prompt[:50]}..., aspect_ratio={kling_aspect}, duration={duration_sec}")
+            # Image-to-video: use kling-v2.6 (best quality)
+            model_id = "kwaivgi/kling-v2.6"
+            input_data = {
+                "prompt": visual_prompt,
+                "image": reference_image_url,
+                "duration": duration_sec,
+            }
+            print(f"[DEBUG KLING] Using kling-v2.6 image-to-video")
+        else:
+            # Text-to-video: use kling-v2.5-turbo-pro
+            model_id = "kwaivgi/kling-v2.5-turbo-pro"
+            input_data = {
+                "prompt": visual_prompt,
+                "duration": duration_sec,
+                "aspect_ratio": kling_aspect,
+            }
+            print(f"[DEBUG KLING] Using kling-v2.5-turbo-pro text-to-video")
+
+        print(f"[DEBUG KLING] Sending to {model_id}: prompt={visual_prompt[:50]}..., duration={duration_sec}")
         
         try:
-            # Run prediction
-            output = replicate.run(
-                self.model_id,
+            # Run prediction with extended timeout
+            output = self.client.run(
+                model_id,
                 input=input_data
             )
             

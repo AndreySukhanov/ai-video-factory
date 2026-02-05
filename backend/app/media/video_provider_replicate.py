@@ -4,7 +4,9 @@ Supports text-to-video and image-to-video generation using Google's Veo 3 model
 """
 
 import os
+import httpx
 import replicate
+from replicate import Client
 from typing import Optional
 from app.core.config import settings
 from .video_provider_base import VideoProvider
@@ -15,11 +17,17 @@ class ReplicateVeoProvider(VideoProvider):
     Replicate Veo 3 Fast Video Provider
     Generates high-quality videos using Google's Veo 3 model via Replicate
     """
-    
+
     def __init__(self):
         self.api_token = settings.REPLICATE_API_TOKEN or os.getenv("REPLICATE_API_TOKEN")
         if self.api_token:
             os.environ["REPLICATE_API_TOKEN"] = self.api_token
+
+        # Create client with extended timeout (5 minutes for video generation)
+        self.client = Client(
+            api_token=self.api_token,
+            timeout=httpx.Timeout(300.0, connect=60.0)
+        )
         
     def generate_clip(
         self, 
@@ -68,8 +76,8 @@ class ReplicateVeoProvider(VideoProvider):
         print(f"[DEBUG REPLICATE] Sending to Veo 3: prompt={visual_prompt[:50]}..., aspect_ratio={aspect_ratio}, duration={duration_sec}")
         
         try:
-            # Run prediction
-            output = replicate.run(
+            # Run prediction with extended timeout
+            output = self.client.run(
                 "google/veo-3-fast",
                 input=input_data
             )

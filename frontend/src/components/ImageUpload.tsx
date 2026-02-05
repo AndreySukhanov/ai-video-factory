@@ -76,7 +76,8 @@ export default function ImageUpload({
             setUploadedFilename(data.filename);
 
             // Return full URL for the video provider
-            const fullUrl = `${apiBaseUrl}${data.url}`;
+            // If URL is already absolute (catbox), use it directly
+            const fullUrl = data.url.startsWith('http') ? data.url : `${apiBaseUrl}${data.url}`;
             onImageUploaded(fullUrl);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Upload failed');
