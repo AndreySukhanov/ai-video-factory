@@ -10,6 +10,46 @@ import {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
+// Model configurations with constraints
+const MODEL_CONFIG = {
+    veo3: {
+        name: 'Veo 3 Fast',
+        durations: [4, 6, 8],
+        defaultDuration: 4,
+        aspectRatios: ['9:16', '16:9'],
+        supportsI2V: false,
+        supportsCharacterConsistency: false,
+    },
+    veo31: {
+        name: 'Veo 3.1 (R2V)',
+        durations: [4, 6, 8],
+        defaultDuration: 8,  // R2V requires 8 sec
+        aspectRatios: ['16:9'],  // R2V only supports 16:9
+        supportsI2V: true,
+        supportsCharacterConsistency: true,
+        consistencyNote: 'R2V: 16:9, 8 сек',
+    },
+    kling: {
+        name: 'Kling 2.6',
+        durations: [5, 10],
+        defaultDuration: 5,
+        aspectRatios: ['9:16', '16:9', '1:1'],
+        supportsI2V: true,
+        supportsCharacterConsistency: false,
+    },
+    minimax: {
+        name: 'MiniMax (S2V)',
+        durations: [6],
+        defaultDuration: 6,
+        aspectRatios: ['9:16', '16:9', '1:1'],
+        supportsI2V: true,
+        supportsCharacterConsistency: true,
+        consistencyNote: 'S2V-01: 6 сек',
+    },
+};
+
+type ModelType = keyof typeof MODEL_CONFIG;
+
 interface GenerationResult {
     success: boolean;
     video_url?: string;
@@ -46,7 +86,8 @@ export default function GenerateEpisodePage() {
     const [prompt, setPrompt] = useState('');
     const [duration, setDuration] = useState(4);
     const [aspectRatio, setAspectRatio] = useState('9:16');
-    const [model, setModel] = useState<'veo3' | 'kling'>('veo3');
+    const [model, setModel] = useState<ModelType>('veo3');
+    const [storyModel, setStoryModel] = useState<'minimax' | 'veo31'>('minimax');  // Model for Story Mode
     const [referenceImageUrl, setReferenceImageUrl] = useState<string | null>(null);
 
     // Reset aspectRatio and referenceImage when switching to Veo3 (doesn't support 1:1 and image-to-video)
@@ -136,39 +177,35 @@ export default function GenerateEpisodePage() {
         }
     }, [generatedEpisodes, seriesTitle, seriesLogline, storyIdea]);
 
-    // Generate single episode with optional custom reference
-    const generateEpisode = async (episodePrompt: string, customRefUrl?: string | null): Promise<GenerationResult> => {
+    // Generate single episode with optional custom reference and subject reference (for MiniMax character consistency)
+    const generateEpisode = async (
+        episodePrompt: string,
+        customRefUrl?: string | null,
+        subjectRefUrl?: string | null,
+        referenceImages?: string[] | null,
+        useModel?: ModelType,
+        customDuration?: number,
+        customAspectRatio?: string
+    ): Promise<GenerationResult> => {
+        const selectedModel = useModel || model;
+        const modelConfig = MODEL_CONFIG[selectedModel];
+        const finalDuration = customDuration || modelConfig.defaultDuration;
+        const finalAspectRatio = customAspectRatio || (modelConfig.aspectRatios.includes(aspectRatio) ? aspectRatio : modelConfig.aspectRatios[0]);
+
         const response = await fetch(`${API_BASE_URL}/api/v1/episodes/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 prompt: episodePrompt.trim(),
-                duration,
-                aspect_ratio: aspectRatio,
-                model,
-                // Continuity disabled - always use null instead of referenceImageUrl
+                duration: finalDuration,
+                aspect_ratio: finalAspectRatio,
+                model: selectedModel,
                 reference_image_url: customRefUrl !== undefined ? customRefUrl : null,
+                subject_reference_url: subjectRefUrl !== undefined ? subjectRefUrl : null,
+                reference_images: referenceImages !== undefined ? referenceImages : null,
             }),
         });
         return await response.json();
-    };
-
-    // Extract last frame from video for continuity
-    const extractLastFrame = async (videoUrl: string): Promise<string | null> => {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/episodes/extract-last-frame`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ video_url: videoUrl }),
-            });
-            const data = await response.json();
-            if (data.success && data.frame_url) {
-                return data.frame_url;
-            }
-        } catch (err) {
-            console.error('Failed to extract frame:', err);
-        }
-        return null;
     };
 
     // Handle single generate
@@ -425,6 +462,8 @@ export default function GenerateEpisodePage() {
         setCharacterName('');
         setCharacterDescription('');
 
+        const modelConfig = MODEL_CONFIG[storyModel];
+
         try {
             // Use new consistent story endpoint that also generates character image
             const response = await fetch(`${API_BASE_URL}/api/v1/episodes/generate-story-consistent`, {
@@ -434,9 +473,9 @@ export default function GenerateEpisodePage() {
                     idea: storyIdea.trim(),
                     genre: storyGenre,
                     episodes_count: storyEpisodesCount,
-                    duration,
-                    aspect_ratio: aspectRatio,
-                    model: 'kling'  // Force Kling for I2V support
+                    duration: modelConfig.defaultDuration,
+                    aspect_ratio: modelConfig.aspectRatios[0],
+                    model: storyModel
                 }),
             });
 
@@ -471,7 +510,7 @@ export default function GenerateEpisodePage() {
         setGeneratedEpisodes(updated);
     };
 
-    // Generate videos from story prompts with character consistency
+    // Generate videos from story prompts with character consistency (MiniMax S2V-01)
     const handleStoryGenerate = async () => {
         if (generatedEpisodes.length === 0) {
             setError('No episodes to generate. Generate prompts first.');
@@ -482,39 +521,40 @@ export default function GenerateEpisodePage() {
         setError(null);
 
         const generatedVideos: Episode[] = [];
+        const modelConfig = MODEL_CONFIG[storyModel];
 
-        // Start with base character image for consistency
-        let currentReferenceUrl: string | null = isConsistencyEnabled ? characterImageUrl : null;
-        const baseCharacterImage = characterImageUrl;
+        // Character consistency setup based on selected model
+        const subjectReference = (isConsistencyEnabled && storyModel === 'minimax') ? characterImageUrl : null;
+        const referenceImages = (isConsistencyEnabled && storyModel === 'veo31' && characterImageUrl) ? [characterImageUrl] : null;
 
-        console.log(`[Story Mode] Starting generation with consistency=${isConsistencyEnabled}, characterImage=${characterImageUrl ? 'yes' : 'no'}`);
+        console.log(`[Story Mode ${storyModel}] Starting generation with consistency=${isConsistencyEnabled}, characterImage=${characterImageUrl ? 'yes' : 'no'}`);
+        console.log(`[Story Mode ${storyModel}] Model config: duration=${modelConfig.defaultDuration}, aspectRatio=${modelConfig.aspectRatios[0]}`);
 
         for (let i = 0; i < generatedEpisodes.length; i++) {
             setBatchProgress({ current: i + 1, total: generatedEpisodes.length });
 
             try {
-                console.log(`[Story Mode] Generating episode ${i + 1}/${generatedEpisodes.length}: ${generatedEpisodes[i].prompt.slice(0, 50)}...`);
-
-                // Character Consistency: Use reference image for I2V
-                if (isConsistencyEnabled && currentReferenceUrl) {
-                    console.log(`[Story Mode] Using reference image: ${currentReferenceUrl.slice(0, 60)}...`);
-                } else {
-                    console.log(`[Story Mode] Generating without reference image`);
-                }
+                console.log(`[Story Mode ${storyModel}] Generating episode ${i + 1}/${generatedEpisodes.length}: ${generatedEpisodes[i].prompt.slice(0, 50)}...`);
 
                 // Try up to 2 times (retry on moderation errors)
                 let data = null;
                 for (let attempt = 1; attempt <= 2; attempt++) {
+                    // Generate with model-specific parameters
                     data = await generateEpisode(
                         generatedEpisodes[i].prompt,
-                        isConsistencyEnabled ? currentReferenceUrl : null
+                        null,  // reference_image_url (first frame)
+                        subjectReference,  // subject_reference_url for MiniMax S2V-01
+                        referenceImages,  // reference_images for Veo 3.1 R2V
+                        storyModel,
+                        modelConfig.defaultDuration,
+                        modelConfig.aspectRatios[0]
                     );
-                    console.log(`[Story Mode] Episode ${i + 1} attempt ${attempt} response:`, { success: data.success, hasVideoUrl: !!data.video_url });
+                    console.log(`[Story Mode ${storyModel}] Episode ${i + 1} attempt ${attempt} response:`, { success: data.success, hasVideoUrl: !!data.video_url, error: data.error });
 
                     if (data.success && data.video_url) {
                         break; // Success!
                     } else if (attempt < 2) {
-                        console.log(`[Story Mode] Episode ${i + 1} failed, retrying in 2 seconds...`);
+                        console.log(`[Story Mode ${storyModel}] Episode ${i + 1} failed, retrying in 2 seconds...`);
                         await new Promise(resolve => setTimeout(resolve, 2000));
                     }
                 }
@@ -524,42 +564,12 @@ export default function GenerateEpisodePage() {
                         id: `${Date.now()}-${i}`,
                         prompt: generatedEpisodes[i].prompt,
                         video_url: data.video_url,
-                        duration: data.duration || duration,
+                        duration: data.duration || modelConfig.defaultDuration,
                         created_at: new Date().toISOString(),
                     });
-                    console.log(`[Story Mode] Episode ${i + 1} added successfully`);
-
-                    // Extract last frame for next episode's reference (if consistency enabled)
-                    if (isConsistencyEnabled && i < generatedEpisodes.length - 1) {
-                        // Every 3rd episode, reset to base character image to prevent drift
-                        const shouldResetToBase = (i + 1) % 3 === 0;
-
-                        if (shouldResetToBase && baseCharacterImage) {
-                            console.log(`[Story Mode] Episode ${i + 2} will use base character image (drift prevention)`);
-                            currentReferenceUrl = baseCharacterImage;
-                        } else {
-                            // Extract last frame from current video for next episode
-                            const frameUrl = await extractLastFrame(data.video_url);
-                            if (frameUrl) {
-                                // Need to upload extracted frame to catbox for Replicate access
-                                const externalFrameUrl = await uploadFrameToCatbox(frameUrl);
-                                if (externalFrameUrl) {
-                                    currentReferenceUrl = externalFrameUrl;
-                                    console.log(`[Story Mode] Extracted frame for episode ${i + 2}: ${currentReferenceUrl.slice(0, 60)}...`);
-                                } else {
-                                    // Fallback to base character image
-                                    currentReferenceUrl = baseCharacterImage;
-                                    console.log(`[Story Mode] Frame upload failed, using base character image`);
-                                }
-                            } else {
-                                // Fallback to base character image
-                                currentReferenceUrl = baseCharacterImage;
-                                console.log(`[Story Mode] Frame extraction failed, using base character image`);
-                            }
-                        }
-                    }
+                    console.log(`[Story Mode ${storyModel}] Episode ${i + 1} added successfully`);
                 } else {
-                    console.warn(`[Story Mode] Episode ${i + 1} skipped after 2 attempts - no video_url`);
+                    console.warn(`[Story Mode ${storyModel}] Episode ${i + 1} skipped after 2 attempts - no video_url, error: ${data?.error}`);
                 }
             } catch (err) {
                 console.error(`Failed to generate episode ${i + 1}:`, err);
@@ -581,28 +591,6 @@ export default function GenerateEpisodePage() {
         setIsGenerating(false);
         setBatchProgress(null);
         // NOTE: Prompts are NOT cleared - user can edit and regenerate
-    };
-
-    // Upload extracted frame to catbox for Replicate access
-    const uploadFrameToCatbox = async (frameUrl: string): Promise<string | null> => {
-        try {
-            // If it's already a catbox URL, return as-is
-            if (frameUrl.includes('catbox.moe')) {
-                return frameUrl;
-            }
-
-            // For local URLs, we need to download and re-upload via backend
-            // The backend handles this in the generate endpoint when it detects local URLs
-            // But for extracted frames, they're already on our server
-            // We can use the local URL directly since the backend will handle the conversion
-
-            // Actually, the backend's generate endpoint already handles local URL -> base64 conversion
-            // So we can return the frame URL as-is and let the backend handle it
-            return frameUrl;
-        } catch (err) {
-            console.error('[Story Mode] Frame upload to catbox failed:', err);
-            return null;
-        }
     };
 
     return (
@@ -750,7 +738,7 @@ export default function GenerateEpisodePage() {
                                         className="w-full h-24 bg-black/30 border border-white/10 rounded-lg p-3 text-white placeholder-gray-500 resize-none focus:outline-none focus:border-purple-500"
                                     />
 
-                                    <div className="grid grid-cols-2 gap-4 mt-4">
+                                    <div className="grid grid-cols-3 gap-4 mt-4">
                                         <div>
                                             <label className="text-gray-400 text-sm mb-1 block">Genre</label>
                                             <select
@@ -771,6 +759,17 @@ export default function GenerateEpisodePage() {
                                             </select>
                                         </div>
                                         <div>
+                                            <label className="text-gray-400 text-sm mb-1 block">AI Model</label>
+                                            <select
+                                                value={storyModel}
+                                                onChange={(e) => setStoryModel(e.target.value as 'minimax' | 'veo31')}
+                                                className="w-full bg-gray-800 border border-white/10 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500 font-sans"
+                                            >
+                                                <option value="minimax">MiniMax (6 сек, 9:16)</option>
+                                                <option value="veo31">Veo 3.1 (8 сек, 16:9)</option>
+                                            </select>
+                                        </div>
+                                        <div>
                                             <label className="text-gray-400 text-sm mb-1 block">Episodes: {storyEpisodesCount}</label>
                                             <input
                                                 type="range"
@@ -778,7 +777,7 @@ export default function GenerateEpisodePage() {
                                                 max={10}
                                                 value={storyEpisodesCount}
                                                 onChange={(e) => setStoryEpisodesCount(parseInt(e.target.value))}
-                                                className="w-full accent-purple-500"
+                                                className="w-full accent-purple-500 mt-2"
                                             />
                                         </div>
                                     </div>
@@ -869,7 +868,7 @@ export default function GenerateEpisodePage() {
                                                 </p>
                                                 {isConsistencyEnabled ? (
                                                     <p className="text-green-400 text-xs mt-2 flex items-center gap-1">
-                                                        <Link2 className="w-3 h-3" /> Consistency enabled - same character in all episodes
+                                                        <Link2 className="w-3 h-3" /> {MODEL_CONFIG[storyModel].name}: {MODEL_CONFIG[storyModel].consistencyNote}
                                                     </p>
                                                 ) : (
                                                     <p className="text-yellow-400 text-xs mt-2 flex items-center gap-1">
