@@ -17,6 +17,8 @@ from PIL import Image
 from app.core.config import settings
 from app.media import VideoProviderMock, ReplicateVeoProvider, ReplicateKlingProvider
 from app.media.video_provider_pika import PikaVideoProvider
+from app.media.video_provider_minimax import MiniMaxProvider
+from app.media.video_provider_veo31 import Veo31Provider
 from app.media.character_generator import CharacterGenerator
 from app.ai_orchestrator.agents import get_prompt_enhancer, get_story_generator
 
@@ -134,10 +136,12 @@ router = APIRouter()
 class EpisodeGenerateRequest(BaseModel):
     """Request body for episode generation"""
     prompt: str = Field(..., min_length=10, max_length=2000, description="Visual prompt for video generation")
-    duration: int = Field(default=4, description="Video duration in seconds (4, 6, or 8 for Veo3; 5 or 10 for Kling)")
+    duration: int = Field(default=4, description="Video duration in seconds (4/6/8 for Veo; 5/10 for Kling; 6 for MiniMax)")
     aspect_ratio: str = Field(default="9:16", description="Video aspect ratio")
-    reference_image_url: Optional[str] = Field(default=None, description="Optional reference image URL")
-    model: str = Field(default="veo3", description="Video generation model: veo3 or kling")
+    reference_image_url: Optional[str] = Field(default=None, description="Optional reference image URL (first frame for I2V)")
+    subject_reference_url: Optional[str] = Field(default=None, description="Character reference for identity consistency (MiniMax S2V-01)")
+    reference_images: Optional[List[str]] = Field(default=None, description="1-3 reference images for Veo 3.1 R2V character consistency")
+    model: str = Field(default="veo3", description="Video model: veo3, veo31, kling, or minimax")
 
 
 class EpisodeGenerateResponse(BaseModel):
@@ -169,7 +173,11 @@ class MergeResponse(BaseModel):
 def get_video_provider(model: str = "veo3"):
     """Get the configured video provider based on model choice"""
     if settings.REPLICATE_API_TOKEN:
-        if model == "kling":
+        if model == "minimax":
+            return MiniMaxProvider()
+        elif model == "veo31":
+            return Veo31Provider(use_fast=True)
+        elif model == "kling":
             return ReplicateKlingProvider()
         else:
             return ReplicateVeoProvider()
@@ -196,64 +204,71 @@ async def generate_episode(request: EpisodeGenerateRequest):
     import base64
     start_time = time.time()
     
-    print(f"[DEBUG] Generate request: prompt={request.prompt[:50]}..., model={request.model}, ref_image={request.reference_image_url}")
-    
+    print(f"[DEBUG] Generate request: prompt={request.prompt[:50]}..., model={request.model}, ref_image={request.reference_image_url}, subject_ref={request.subject_reference_url}")
+
     try:
         video_provider = get_video_provider(request.model)
-        
-        # Build full reference URL if it's a local upload
-        reference_url = request.reference_image_url
-        
-        # Check if it's a local upload (either relative path or localhost URL)
-        is_local_upload = False
-        file_name = None
-        
-        if reference_url:
-            if reference_url.startswith("/uploads/"):
-                is_local_upload = True
-                file_name = reference_url.replace("/uploads/", "")
-            elif "/uploads/" in reference_url and ("localhost" in reference_url or "127.0.0.1" in reference_url):
-                is_local_upload = True
-                file_name = reference_url.split("/uploads/")[-1]
-        
-        if is_local_upload and file_name:
-            # Local file - need to convert to base64 data URI for Replicate
-            # (localhost URLs are inaccessible from external API)
-            # Path: episodes.py -> v1 -> api -> app -> backend -> uploads
+
+        # Helper function to convert local uploads to base64 data URI
+        def convert_local_to_base64(url: Optional[str], crop_aspect: bool = True) -> Optional[str]:
+            if not url:
+                return None
+
+            is_local = False
+            file_name = None
+
+            if url.startswith("/uploads/"):
+                is_local = True
+                file_name = url.replace("/uploads/", "")
+            elif "/uploads/" in url and ("localhost" in url or "127.0.0.1" in url):
+                is_local = True
+                file_name = url.split("/uploads/")[-1]
+
+            if not is_local or not file_name:
+                return url  # Return as-is if not local
+
             uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "uploads")
             file_path = os.path.join(uploads_dir, file_name)
-            
+
             print(f"[DEBUG] Looking for file: {file_path}")
             print(f"[DEBUG] File exists: {os.path.exists(file_path)}")
-            
-            if os.path.exists(file_path):
-                with open(file_path, "rb") as f:
-                    image_data = f.read()
-                
-                # Crop image to match target aspect ratio (center crop)
+
+            if not os.path.exists(file_path):
+                print(f"[DEBUG] File not found, returning None")
+                return None
+
+            with open(file_path, "rb") as f:
+                image_data = f.read()
+
+            # Crop image to match target aspect ratio (center crop) if requested
+            if crop_aspect:
                 original_size = len(image_data)
                 image_data = crop_image_to_aspect_ratio(image_data, request.aspect_ratio)
                 print(f"[DEBUG] Cropped image from {original_size} to {len(image_data)} bytes for aspect_ratio={request.aspect_ratio}")
-                
-                # Determine mime type
-                if file_path.lower().endswith(".png"):
-                    mime_type = "image/png"
-                elif file_path.lower().endswith((".jpg", ".jpeg")):
-                    mime_type = "image/jpeg"
-                else:
-                    mime_type = "image/png"
-                
-                # Convert to data URI
-                b64_data = base64.b64encode(image_data).decode("utf-8")
-                reference_url = f"data:{mime_type};base64,{b64_data}"
-                print(f"[DEBUG] Converted to base64, length: {len(reference_url)}")
+
+            # Determine mime type
+            if file_path.lower().endswith(".png"):
+                mime_type = "image/png"
+            elif file_path.lower().endswith((".jpg", ".jpeg")):
+                mime_type = "image/jpeg"
             else:
-                # File not found, proceed without reference
-                print(f"[DEBUG] File not found, proceeding without reference")
-                reference_url = None
-        
-        print(f"[DEBUG] Calling video provider with ref_url type: {type(reference_url)}, has_ref: {reference_url is not None}")
-        
+                mime_type = "image/png"
+
+            # Convert to data URI
+            b64_data = base64.b64encode(image_data).decode("utf-8")
+            data_uri = f"data:{mime_type};base64,{b64_data}"
+            print(f"[DEBUG] Converted to base64, length: {len(data_uri)}")
+            return data_uri
+
+        # Process reference image URL (first frame for I2V)
+        reference_url = convert_local_to_base64(request.reference_image_url, crop_aspect=True)
+
+        # Process subject reference URL (character identity for MiniMax S2V-01)
+        # Don't crop subject reference - keep original proportions for face detection
+        subject_reference_url = convert_local_to_base64(request.subject_reference_url, crop_aspect=False)
+
+        print(f"[DEBUG] Calling video provider with ref_url: {reference_url is not None}, subject_ref: {subject_reference_url is not None}")
+
         # Enhance prompt via GPT before sending to video provider
         prompt_enhancer = get_prompt_enhancer()
         enhanced_prompt = prompt_enhancer.enhance_prompt(
@@ -261,14 +276,34 @@ async def generate_episode(request: EpisodeGenerateRequest):
             aspect_ratio=request.aspect_ratio,
             duration=request.duration
         )
-        
+
         # Generate video with enhanced prompt
-        video_url = video_provider.generate_clip(
-            visual_prompt=enhanced_prompt,
-            duration_sec=request.duration,
-            aspect_ratio=request.aspect_ratio,
-            reference_image_url=reference_url
-        )
+        # MiniMax supports subject_reference for character consistency (S2V-01)
+        # MiniMax with subject_reference for character consistency (S2V-01)
+        if request.model == "minimax" and subject_reference_url:
+            video_url = video_provider.generate_clip(
+                visual_prompt=enhanced_prompt,
+                duration_sec=request.duration,
+                aspect_ratio=request.aspect_ratio,
+                reference_image_url=reference_url,
+                subject_reference_url=subject_reference_url
+            )
+        # Veo 3.1 with reference_images for character consistency (R2V)
+        elif request.model == "veo31" and request.reference_images:
+            video_url = video_provider.generate_clip(
+                visual_prompt=enhanced_prompt,
+                duration_sec=request.duration,
+                aspect_ratio=request.aspect_ratio,
+                reference_image_url=reference_url,
+                reference_images=request.reference_images
+            )
+        else:
+            video_url = video_provider.generate_clip(
+                visual_prompt=enhanced_prompt,
+                duration_sec=request.duration,
+                aspect_ratio=request.aspect_ratio,
+                reference_image_url=reference_url
+            )
         
         print(f"[DEBUG] Generated video_url: {video_url[:100] if video_url else 'None'}...")
         
