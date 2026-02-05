@@ -21,6 +21,7 @@ class SeriesStructure(BaseModel):
     series_title: str
     logline: str
     genre: str
+    main_character: str = ""  # Character description for consistency
     episodes: List[EpisodePrompt]
 
 
@@ -288,6 +289,7 @@ CRITICAL: Every visual_prompt MUST start with the EXACT same character descripti
                 series_title=result.get("series_title", "Untitled Series"),
                 logline=result.get("logline", ""),
                 genre=genre,
+                main_character=result.get("main_character", ""),
                 episodes=episodes
             )
             

@@ -17,7 +17,71 @@ from PIL import Image
 from app.core.config import settings
 from app.media import VideoProviderMock, ReplicateVeoProvider, ReplicateKlingProvider
 from app.media.video_provider_pika import PikaVideoProvider
+from app.media.character_generator import CharacterGenerator
 from app.ai_orchestrator.agents import get_prompt_enhancer, get_story_generator
+
+# Catbox upload URL for external access
+CATBOX_API_URL = "https://catbox.moe/user/api.php"
+
+
+async def upload_to_catbox_from_url(image_url: str) -> Optional[str]:
+    """
+    Download image from URL and upload to catbox.moe for external access.
+    This is needed because Replicate cannot access localhost URLs.
+
+    Args:
+        image_url: URL of the image to download and re-upload
+
+    Returns:
+        Public catbox.moe URL or None if failed
+    """
+    try:
+        # Download image
+        response = requests.get(image_url, timeout=30)
+        response.raise_for_status()
+        content = response.content
+
+        # Determine filename from URL or use default
+        filename = image_url.split("/")[-1] if "/" in image_url else "character.png"
+        if not filename.endswith((".png", ".jpg", ".jpeg", ".webp")):
+            filename = "character.png"
+
+        # Upload to catbox
+        files = {"fileToUpload": (filename, content)}
+        data = {"reqtype": "fileupload"}
+
+        upload_response = requests.post(CATBOX_API_URL, files=files, data=data, timeout=60)
+
+        if upload_response.status_code == 200 and upload_response.text.startswith("https://"):
+            catbox_url = upload_response.text.strip()
+            print(f"[CATBOX] Uploaded to: {catbox_url}")
+            return catbox_url
+        else:
+            print(f"[CATBOX] Upload failed: {upload_response.text}")
+            return None
+
+    except Exception as e:
+        print(f"[CATBOX] Error uploading from URL: {e}")
+        return None
+
+
+def extract_character_name(description: str) -> str:
+    """Extract character name from description (first word or name pattern)."""
+    if not description:
+        return "Main Character"
+
+    # Try to find name pattern like "Maya Chen" or "Detective Maya"
+    words = description.split()
+    if len(words) >= 2:
+        # Check if first two words look like a name (capitalized)
+        if words[0][0].isupper() and words[1][0].isupper():
+            return f"{words[0]} {words[1]}"
+
+    # Return first word if it's capitalized
+    if words and words[0][0].isupper():
+        return words[0]
+
+    return "Main Character"
 
 
 def crop_image_to_aspect_ratio(image_data: bytes, target_aspect_ratio: str) -> bytes:
@@ -501,4 +565,167 @@ async def generate_series(request: SeriesGenerateRequest):
         return SeriesGenerateResponse(
             success=False,
             error=f"Series generation failed: {str(e)}"
+        )
+
+
+# ==================== CONSISTENT STORY GENERATION (Character Consistency) ====================
+
+class ConsistentStoryRequest(BaseModel):
+    """Request body for consistent story generation with character image"""
+    idea: str = Field(..., min_length=10, max_length=1000, description="Main idea for the series")
+    genre: str = Field(default="drama", description="Genre: drama, comedy, thriller, fantasy, romance, action")
+    episodes_count: int = Field(default=5, ge=1, le=10, description="Number of episodes to generate")
+    duration: int = Field(default=5, description="Duration per episode in seconds (5 or 10 for Kling)")
+    aspect_ratio: str = Field(default="9:16", description="Video aspect ratio")
+    model: str = Field(default="kling", description="Video model (kling required for I2V)")
+
+
+class ConsistentStoryResponse(BaseModel):
+    """Response body for consistent story generation"""
+    success: bool
+    series_title: Optional[str] = None
+    logline: Optional[str] = None
+    genre: Optional[str] = None
+    character_name: Optional[str] = None
+    character_description: Optional[str] = None
+    character_image_url: Optional[str] = None  # Public catbox URL for Replicate
+    episodes: List[EpisodePromptData] = []
+    error: Optional[str] = None
+
+
+@router.post("/generate-story-consistent", response_model=ConsistentStoryResponse)
+async def generate_consistent_story(request: ConsistentStoryRequest):
+    """
+    Generate a story structure with a base character image for consistent multi-episode generation.
+
+    This endpoint:
+    1. Generates story structure via LLM (same as /generate-series)
+    2. Extracts main character description
+    3. Generates a base character image via T2I (fal.ai Instant Character)
+    4. Uploads character image to catbox for Replicate access
+
+    The character image serves as reference for I2V generation,
+    ensuring the same character appears across all episodes.
+
+    Args:
+        request: ConsistentStoryRequest with idea, genre, episodes_count
+
+    Returns:
+        ConsistentStoryResponse with story structure + character image URL
+    """
+    print(f"[CONSISTENT STORY] Request: idea={request.idea[:50]}..., genre={request.genre}, episodes={request.episodes_count}")
+
+    try:
+        # 1. Generate story structure via LLM
+        story_generator = get_story_generator()
+
+        series = story_generator.generate_series(
+            idea=request.idea,
+            genre=request.genre,
+            episodes_count=request.episodes_count,
+            duration=request.duration,
+            aspect_ratio=request.aspect_ratio
+        )
+
+        # 2. Get main character description from the series data
+        # The story generator now includes main_character in SeriesStructure
+        main_character = series.main_character or ""
+        character_name = "Main Character"
+
+        # If main_character is available from LLM, use it
+        if main_character:
+            character_name = extract_character_name(main_character)
+        # Fallback: Try to extract from first episode prompt (character description is at the start)
+        elif series.episodes and series.episodes[0].visual_prompt:
+            first_prompt = series.episodes[0].visual_prompt
+            # Character descriptions usually end with a comma after clothing description
+            # Look for pattern like "Name, age, description... wearing..."
+            parts = first_prompt.split(",")
+            if len(parts) >= 3:
+                # Take first 4-5 parts as character description
+                main_character = ", ".join(parts[:min(5, len(parts))])
+                character_name = extract_character_name(main_character)
+
+        print(f"[CONSISTENT STORY] Extracted character: {character_name}")
+        print(f"[CONSISTENT STORY] Character description: {main_character[:100]}...")
+
+        # 3. Generate base character image via T2I
+        character_image_url = None
+        try:
+            char_generator = CharacterGenerator()
+
+            # Build style based on genre
+            genre_styles = {
+                "drama": "cinematic, dramatic lighting, emotional",
+                "comedy": "bright, vibrant colors, expressive",
+                "thriller": "moody, film noir, atmospheric",
+                "fantasy": "magical, ethereal, vibrant",
+                "romance": "soft, warm golden hour lighting, dreamy",
+                "action": "dynamic, high contrast, intense",
+                "horror": "dark, atmospheric, unsettling",
+                "scifi": "futuristic, neon, sleek",
+                "mystery": "shadowy, mysterious, intriguing",
+                "melodrama": "dramatic, emotional, intense colors"
+            }
+            style = genre_styles.get(request.genre.lower(), "photorealistic, cinematic lighting")
+
+            print(f"[CONSISTENT STORY] Generating character image with style: {style}")
+
+            char_result = char_generator.generate_character(
+                name=character_name,
+                description=main_character,
+                style=style,
+                aspect_ratio=request.aspect_ratio
+            )
+
+            if char_result and char_result.get("image_url"):
+                local_image_url = char_result["image_url"]
+                print(f"[CONSISTENT STORY] Character image generated: {local_image_url}")
+
+                # 4. Upload to catbox for external access (Replicate requirement)
+                external_url = await upload_to_catbox_from_url(local_image_url)
+                if external_url:
+                    character_image_url = external_url
+                    print(f"[CONSISTENT STORY] Character image uploaded to catbox: {character_image_url}")
+                else:
+                    # Fallback to original URL (may not work with Replicate)
+                    character_image_url = local_image_url
+                    print(f"[CONSISTENT STORY] Using original URL (catbox upload failed)")
+
+        except Exception as e:
+            print(f"[CONSISTENT STORY] Character image generation failed: {e}")
+            # Continue without character image - will use text prompts only
+
+        # 5. Convert episodes to response format
+        episodes = [
+            EpisodePromptData(
+                number=ep.number,
+                title=ep.title,
+                synopsis=ep.synopsis,
+                prompt=ep.visual_prompt
+            )
+            for ep in series.episodes
+        ]
+
+        print(f"[CONSISTENT STORY] Generated series: {series.series_title} with {len(episodes)} episodes")
+        print(f"[CONSISTENT STORY] Character image URL: {character_image_url}")
+
+        return ConsistentStoryResponse(
+            success=True,
+            series_title=series.series_title,
+            logline=series.logline,
+            genre=series.genre,
+            character_name=character_name,
+            character_description=main_character,
+            character_image_url=character_image_url,
+            episodes=episodes
+        )
+
+    except Exception as e:
+        print(f"[CONSISTENT STORY] Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return ConsistentStoryResponse(
+            success=False,
+            error=f"Consistent story generation failed: {str(e)}"
         )

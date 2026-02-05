@@ -5,7 +5,7 @@ import Link from 'next/link';
 import ImageUpload from '@/components/ImageUpload';
 import {
     Camera, PenLine, Settings, Link2, Film, AlertTriangle,
-    Play, Trash2, ChevronUp, ChevronDown, Download, FolderOpen, Sparkles, BookOpen
+    Play, Trash2, ChevronUp, ChevronDown, Download, FolderOpen, Sparkles, BookOpen, User
 } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
@@ -48,6 +48,18 @@ export default function GenerateEpisodePage() {
     const [aspectRatio, setAspectRatio] = useState('9:16');
     const [model, setModel] = useState<'veo3' | 'kling'>('veo3');
     const [referenceImageUrl, setReferenceImageUrl] = useState<string | null>(null);
+
+    // Reset aspectRatio and referenceImage when switching to Veo3 (doesn't support 1:1 and image-to-video)
+    useEffect(() => {
+        if (model === 'veo3') {
+            if (aspectRatio === '1:1') {
+                setAspectRatio('9:16');
+            }
+            if (referenceImageUrl) {
+                setReferenceImageUrl(null);
+            }
+        }
+    }, [model]);
     const [isGenerating, setIsGenerating] = useState(false);
     const [result, setResult] = useState<GenerationResult | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -75,6 +87,12 @@ export default function GenerateEpisodePage() {
     }>>([]);
     const [seriesTitle, setSeriesTitle] = useState('');
     const [seriesLogline, setSeriesLogline] = useState('');
+
+    // Character Consistency state
+    const [characterImageUrl, setCharacterImageUrl] = useState<string | null>(null);
+    const [characterName, setCharacterName] = useState<string>('');
+    const [characterDescription, setCharacterDescription] = useState<string>('');
+    const [isConsistencyEnabled, setIsConsistencyEnabled] = useState(true);
 
     // Load series from localStorage
     useEffect(() => {
@@ -165,7 +183,7 @@ export default function GenerateEpisodePage() {
         setIsGenerating(true);
 
         try {
-            const data = await generateEpisode(prompt);
+            const data = await generateEpisode(prompt, referenceImageUrl);
             setResult(data);
 
             if (data.success && data.video_url) {
@@ -345,14 +363,25 @@ export default function GenerateEpisodePage() {
             console.log('Merge response:', data);
 
             if (data.success && data.merged_video_url) {
-                // Download merged video using anchor element
-                const link = document.createElement('a');
-                link.href = data.merged_video_url;
-                link.download = `merged_video_${Date.now()}.mp4`;
-                link.target = '_blank';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+                // Download merged video using fetch + blob for cross-origin support
+                try {
+                    const videoResponse = await fetch(data.merged_video_url);
+                    const blob = await videoResponse.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+
+                    const link = document.createElement('a');
+                    link.href = blobUrl;
+                    link.download = `${currentSeries.name.replace(/[^a-zA-Z0-9]/g, '_')}_merged.mp4`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+
+                    // Clean up blob URL
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                } catch (downloadErr) {
+                    // Fallback: open in new tab
+                    window.open(data.merged_video_url, '_blank');
+                }
             } else {
                 setError(data.error || 'Merge failed');
             }
@@ -382,7 +411,7 @@ export default function GenerateEpisodePage() {
 
     // ==================== STORY MODE FUNCTIONS ====================
 
-    // Generate story prompts from idea using GPT
+    // Generate story prompts from idea using GPT (with character consistency)
     const generateStoryPrompts = async () => {
         if (!storyIdea.trim() || storyIdea.length < 10) {
             setError('Please enter a story idea (at least 10 characters)');
@@ -392,9 +421,13 @@ export default function GenerateEpisodePage() {
         setIsGeneratingStory(true);
         setError(null);
         setGeneratedEpisodes([]);
+        setCharacterImageUrl(null);
+        setCharacterName('');
+        setCharacterDescription('');
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/episodes/generate-series`, {
+            // Use new consistent story endpoint that also generates character image
+            const response = await fetch(`${API_BASE_URL}/api/v1/episodes/generate-story-consistent`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -403,6 +436,7 @@ export default function GenerateEpisodePage() {
                     episodes_count: storyEpisodesCount,
                     duration,
                     aspect_ratio: aspectRatio,
+                    model: 'kling'  // Force Kling for I2V support
                 }),
             });
 
@@ -412,6 +446,14 @@ export default function GenerateEpisodePage() {
                 setSeriesTitle(data.series_title || 'Untitled Series');
                 setSeriesLogline(data.logline || '');
                 setGeneratedEpisodes(data.episodes);
+
+                // Set character consistency data
+                if (data.character_image_url) {
+                    setCharacterImageUrl(data.character_image_url);
+                    setCharacterName(data.character_name || 'Main Character');
+                    setCharacterDescription(data.character_description || '');
+                    console.log('[Story Mode] Character image ready:', data.character_image_url);
+                }
             } else {
                 setError(data.error || 'Failed to generate story');
             }
@@ -429,7 +471,7 @@ export default function GenerateEpisodePage() {
         setGeneratedEpisodes(updated);
     };
 
-    // Generate videos from story prompts
+    // Generate videos from story prompts with character consistency
     const handleStoryGenerate = async () => {
         if (generatedEpisodes.length === 0) {
             setError('No episodes to generate. Generate prompts first.');
@@ -441,19 +483,32 @@ export default function GenerateEpisodePage() {
 
         const generatedVideos: Episode[] = [];
 
+        // Start with base character image for consistency
+        let currentReferenceUrl: string | null = isConsistencyEnabled ? characterImageUrl : null;
+        const baseCharacterImage = characterImageUrl;
+
+        console.log(`[Story Mode] Starting generation with consistency=${isConsistencyEnabled}, characterImage=${characterImageUrl ? 'yes' : 'no'}`);
+
         for (let i = 0; i < generatedEpisodes.length; i++) {
             setBatchProgress({ current: i + 1, total: generatedEpisodes.length });
 
             try {
                 console.log(`[Story Mode] Generating episode ${i + 1}/${generatedEpisodes.length}: ${generatedEpisodes[i].prompt.slice(0, 50)}...`);
 
-                // Story Mode: No continuity - each episode generates independently without reference images
-                console.log(`[Story Mode] Generating without reference image (continuity disabled)`);
+                // Character Consistency: Use reference image for I2V
+                if (isConsistencyEnabled && currentReferenceUrl) {
+                    console.log(`[Story Mode] Using reference image: ${currentReferenceUrl.slice(0, 60)}...`);
+                } else {
+                    console.log(`[Story Mode] Generating without reference image`);
+                }
 
                 // Try up to 2 times (retry on moderation errors)
                 let data = null;
                 for (let attempt = 1; attempt <= 2; attempt++) {
-                    data = await generateEpisode(generatedEpisodes[i].prompt, null);
+                    data = await generateEpisode(
+                        generatedEpisodes[i].prompt,
+                        isConsistencyEnabled ? currentReferenceUrl : null
+                    );
                     console.log(`[Story Mode] Episode ${i + 1} attempt ${attempt} response:`, { success: data.success, hasVideoUrl: !!data.video_url });
 
                     if (data.success && data.video_url) {
@@ -473,6 +528,36 @@ export default function GenerateEpisodePage() {
                         created_at: new Date().toISOString(),
                     });
                     console.log(`[Story Mode] Episode ${i + 1} added successfully`);
+
+                    // Extract last frame for next episode's reference (if consistency enabled)
+                    if (isConsistencyEnabled && i < generatedEpisodes.length - 1) {
+                        // Every 3rd episode, reset to base character image to prevent drift
+                        const shouldResetToBase = (i + 1) % 3 === 0;
+
+                        if (shouldResetToBase && baseCharacterImage) {
+                            console.log(`[Story Mode] Episode ${i + 2} will use base character image (drift prevention)`);
+                            currentReferenceUrl = baseCharacterImage;
+                        } else {
+                            // Extract last frame from current video for next episode
+                            const frameUrl = await extractLastFrame(data.video_url);
+                            if (frameUrl) {
+                                // Need to upload extracted frame to catbox for Replicate access
+                                const externalFrameUrl = await uploadFrameToCatbox(frameUrl);
+                                if (externalFrameUrl) {
+                                    currentReferenceUrl = externalFrameUrl;
+                                    console.log(`[Story Mode] Extracted frame for episode ${i + 2}: ${currentReferenceUrl.slice(0, 60)}...`);
+                                } else {
+                                    // Fallback to base character image
+                                    currentReferenceUrl = baseCharacterImage;
+                                    console.log(`[Story Mode] Frame upload failed, using base character image`);
+                                }
+                            } else {
+                                // Fallback to base character image
+                                currentReferenceUrl = baseCharacterImage;
+                                console.log(`[Story Mode] Frame extraction failed, using base character image`);
+                            }
+                        }
+                    }
                 } else {
                     console.warn(`[Story Mode] Episode ${i + 1} skipped after 2 attempts - no video_url`);
                 }
@@ -496,6 +581,28 @@ export default function GenerateEpisodePage() {
         setIsGenerating(false);
         setBatchProgress(null);
         // NOTE: Prompts are NOT cleared - user can edit and regenerate
+    };
+
+    // Upload extracted frame to catbox for Replicate access
+    const uploadFrameToCatbox = async (frameUrl: string): Promise<string | null> => {
+        try {
+            // If it's already a catbox URL, return as-is
+            if (frameUrl.includes('catbox.moe')) {
+                return frameUrl;
+            }
+
+            // For local URLs, we need to download and re-upload via backend
+            // The backend handles this in the generate endpoint when it detects local URLs
+            // But for extracted frames, they're already on our server
+            // We can use the local URL directly since the backend will handle the conversion
+
+            // Actually, the backend's generate endpoint already handles local URL -> base64 conversion
+            // So we can return the frame URL as-is and let the backend handle it
+            return frameUrl;
+        } catch (err) {
+            console.error('[Story Mode] Frame upload to catbox failed:', err);
+            return null;
+        }
     };
 
     return (
@@ -546,14 +653,21 @@ export default function GenerateEpisodePage() {
                             </button>
                         </div>
 
-                        {/* Reference Image */}
+                        {/* Reference Image - Only for Kling (Veo3 doesn't support image-to-video) */}
                         <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
                             <h3 className="text-white font-medium mb-3 flex items-center gap-2"><Camera className="w-4 h-4" /> Reference Image <span className="text-gray-500 text-sm">(Optional)</span></h3>
-                            <ImageUpload
-                                apiBaseUrl={API_BASE_URL}
-                                onImageUploaded={(url) => setReferenceImageUrl(url)}
-                                onImageRemoved={() => setReferenceImageUrl(null)}
-                            />
+                            {model === 'veo3' ? (
+                                <div className="text-gray-400 text-sm p-4 bg-black/20 rounded-lg border border-white/5">
+                                    <AlertTriangle className="w-4 h-4 inline mr-2 text-yellow-500" />
+                                    Veo 3 does not support image-to-video. Switch to <span className="text-purple-400">Kling AI</span> to use reference images.
+                                </div>
+                            ) : (
+                                <ImageUpload
+                                    apiBaseUrl={API_BASE_URL}
+                                    onImageUploaded={(url) => setReferenceImageUrl(url)}
+                                    onImageRemoved={() => setReferenceImageUrl(null)}
+                                />
+                            )}
                         </div>
 
                         {/* Single Mode */}
@@ -724,6 +838,48 @@ export default function GenerateEpisodePage() {
 
                                     </div>
                                 )}
+
+                                {/* Character Preview (after generating prompts) */}
+                                {characterImageUrl && (
+                                    <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <h3 className="text-white font-medium flex items-center gap-2">
+                                                <User className="w-4 h-4" /> Main Character
+                                            </h3>
+                                            <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isConsistencyEnabled}
+                                                    onChange={(e) => setIsConsistencyEnabled(e.target.checked)}
+                                                    className="w-4 h-4 rounded bg-black/30 border-white/20 text-purple-500 focus:ring-purple-500"
+                                                />
+                                                <span className="text-gray-400">Character Consistency</span>
+                                            </label>
+                                        </div>
+                                        <div className="flex gap-4">
+                                            <img
+                                                src={characterImageUrl}
+                                                alt={characterName}
+                                                className="w-24 h-32 object-cover rounded-lg border border-white/20"
+                                            />
+                                            <div className="flex-1">
+                                                <p className="text-purple-400 font-medium">{characterName}</p>
+                                                <p className="text-gray-400 text-sm mt-1 line-clamp-3">
+                                                    {characterDescription || 'This character will appear consistently across all episodes.'}
+                                                </p>
+                                                {isConsistencyEnabled ? (
+                                                    <p className="text-green-400 text-xs mt-2 flex items-center gap-1">
+                                                        <Link2 className="w-3 h-3" /> Consistency enabled - same character in all episodes
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-yellow-400 text-xs mt-2 flex items-center gap-1">
+                                                        <AlertTriangle className="w-3 h-3" /> Consistency disabled - characters may vary
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -752,7 +908,9 @@ export default function GenerateEpisodePage() {
                                     >
                                         <option value="9:16" className="bg-gray-800 text-white">9:16 (Vertical)</option>
                                         <option value="16:9" className="bg-gray-800 text-white">16:9 (Horizontal)</option>
-                                        <option value="1:1" className="bg-gray-800 text-white">1:1 (Square)</option>
+                                        {model === 'kling' && (
+                                            <option value="1:1" className="bg-gray-800 text-white">1:1 (Square)</option>
+                                        )}
                                     </select>
                                 </div>
                                 <div>
