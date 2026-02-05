@@ -179,3 +179,4 @@ backend/test_*.py
 *.txt
 DEPLOYMENT.md
 INVESTOR_DECK.md
+docs/STORY_MODE_FOR_INVESTORS.md
