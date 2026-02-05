@@ -115,6 +115,22 @@ Google Veo 3 has strict content moderation. NEVER use these words in visual_prom
 - BANNED: weapon, gun, knife, sword, blood, violence, fight, combat, tactical, military, kill, death, attack, battle
 - INSTEAD USE: athletic wear, sporty outfit, urban style, chase, pursuit, escape, parkour, running, acrobatics, intense moment
 
+CRITICAL - NO COPYRIGHTED CHARACTERS:
+NEVER include copyrighted or famous characters in the story:
+- BANNED: Spider-Man, Batman, Superman, Marvel heroes, DC heroes, Disney characters, Pixar characters, anime characters from famous franchises
+- BANNED: Any character from movies, TV shows, comics, video games
+- If user mentions such characters, create ORIGINAL characters inspired by them but with different names and appearances
+- Example: Instead of "meets Spider-Man" → "meets a mysterious acrobatic hero in red"
+
+CRITICAL - MAIN CHARACTER ALWAYS IN FOCUS:
+The main character MUST be the visual focus of EVERY episode:
+1. Main character must occupy 60-80% of the frame in EVERY shot
+2. Main character must be in the FOREGROUND and CENTER of frame
+3. Other characters (if any) must be in the BACKGROUND, smaller, less detailed
+4. EVERY visual_prompt must end with: "Main character in foreground, center frame, close-up or medium shot"
+5. Camera must ALWAYS focus on the main character's face and actions
+6. If scene involves other characters, describe them vaguely: "a shadowy figure", "a person in the background"
+
 CRITICAL - CHARACTER CONSISTENCY:
 Without reference images, AI video generators create different people each time. To maintain consistency:
 1. Create ONE detailed character description at the start (name, age, ethnicity, hair color/style, eye color, face shape, distinctive features)
@@ -126,11 +142,13 @@ RULES:
 1. Create dramatic, engaging stories with clear hooks matching the {genre} genre
 2. Each episode should have a compelling visual prompt for AI video generation (Veo 3)
 3. Visual prompts must START with the EXACT character description, then setting, lighting, action, camera work
-4. APPLY THE GENRE STYLE to every visual prompt - use the specific lighting, mood, and camera work for {genre}
-5. ALWAYS respond in the SAME LANGUAGE as the user's idea
-6. Format: {format_info.get(aspect_ratio, 'vertical mobile video')}
-7. Keep each episode self-contained but connected to the overall story arc
-8. End each episode with a hook to encourage watching the next one"""
+4. Visual prompts must END with "Main character in foreground, center frame"
+5. APPLY THE GENRE STYLE to every visual prompt - use the specific lighting, mood, and camera work for {genre}
+6. ALWAYS respond in the SAME LANGUAGE as the user's idea
+7. Format: {format_info.get(aspect_ratio, 'vertical mobile video')}
+8. Keep each episode self-contained but connected to the overall story arc
+9. End each episode with a hook to encourage watching the next one
+10. The story must focus ONLY on the main character - avoid scenes where main character is not present"""
 
         user_request = f"""Create a {episodes_count}-episode micro-drama series based on this idea:
 
@@ -150,12 +168,17 @@ Return JSON with this EXACT structure:
       "number": 1,
       "title": "Episode title",
       "synopsis": "Brief 1-2 sentence description of what happens",
-      "visual_prompt": "START with the EXACT main_character description, then: setting details, character action, lighting, camera movement, mood. 80-120 words total."
+      "visual_prompt": "START with the EXACT main_character description, then: setting details, character action, lighting, camera movement, mood. END with 'Main character in foreground, center frame, close-up'. 80-120 words total."
     }}
   ]
 }}
 
-CRITICAL: Every visual_prompt MUST start with the EXACT same character description (copy from main_character) to ensure the AI generates the same person in every episode."""
+CRITICAL RULES FOR visual_prompt:
+1. MUST start with the EXACT same character description (copy from main_character)
+2. MUST end with "Main character in foreground, center frame, close-up or medium shot"
+3. Main character must be the ONLY focus - no other characters in foreground
+4. If other characters needed, describe them vaguely and place in background
+5. NO copyrighted characters (Marvel, DC, Disney, etc.) - create original characters instead"""
 
         try:
             print(f"[STORY GENERATOR] Generating {episodes_count} episodes for: {idea[:50]}...")
@@ -243,12 +266,25 @@ CRITICAL: Every visual_prompt MUST start with the EXACT same character descripti
             
             # Parse episodes
             episodes = []
+            main_character = result.get("main_character", "")
+
             for ep_data in result.get("episodes", []):
+                visual_prompt = ep_data.get("visual_prompt", "")
+
+                # Ensure prompt starts with main character description
+                if main_character and not visual_prompt.lower().startswith(main_character[:20].lower()):
+                    visual_prompt = f"{main_character}. {visual_prompt}"
+
+                # Ensure prompt ends with focus instruction
+                focus_phrase = "Main character in foreground, center frame, close-up"
+                if focus_phrase.lower() not in visual_prompt.lower():
+                    visual_prompt = f"{visual_prompt.rstrip('.')}. {focus_phrase}."
+
                 episodes.append(EpisodePrompt(
                     number=ep_data.get("number", len(episodes) + 1),
                     title=ep_data.get("title", f"Episode {len(episodes) + 1}"),
                     synopsis=ep_data.get("synopsis", ""),
-                    visual_prompt=ep_data.get("visual_prompt", "")
+                    visual_prompt=visual_prompt
                 ))
             
             # Quality check and auto-fix prompts
@@ -256,7 +292,7 @@ CRITICAL: Every visual_prompt MUST start with the EXACT same character descripti
                 print(f"[STORY GENERATOR] Running quality check on {len(episodes)} episodes...")
                 from .quality_checker import get_quality_checker
                 quality_checker = get_quality_checker()
-                
+
                 # Convert to dict format for quality checker
                 prompts_data = [
                     {
@@ -267,9 +303,6 @@ CRITICAL: Every visual_prompt MUST start with the EXACT same character descripti
                     }
                     for ep in episodes
                 ]
-                
-                # Get main character from result
-                main_character = result.get("main_character", "")
                 
                 # Check and fix
                 fixed_prompts, reports = quality_checker.check_and_fix_prompts(prompts_data, main_character)
