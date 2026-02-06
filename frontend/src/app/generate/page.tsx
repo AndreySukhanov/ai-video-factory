@@ -1007,8 +1007,8 @@ export default function GenerateEpisodePage() {
                                     </div>
                                 )}
 
-                                {/* Character Preview (after generating prompts) */}
-                                {characterImageUrl && (
+                                {/* Character Preview (only when auto-generated, not when manual reference uploaded) */}
+                                {characterImageUrl && !referenceImageUrl && (
                                     <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
                                         <div className="flex items-center justify-between mb-3">
                                             <h3 className="text-white font-medium flex items-center gap-2">
