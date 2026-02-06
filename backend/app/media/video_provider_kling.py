@@ -83,7 +83,7 @@ class ReplicateKlingProvider(VideoProvider):
             model_id = "kwaivgi/kling-v2.6"
             input_data = {
                 "prompt": visual_prompt,
-                "image": reference_image_url,
+                "start_image": reference_image_url,  # Correct parameter per Replicate docs
                 "duration": duration_sec,
             }
             print(f"[DEBUG KLING] Using kling-v2.6 image-to-video")
