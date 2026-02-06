@@ -760,7 +760,8 @@ export default function GenerateEpisodePage() {
                             </button>
                         </div>
 
-                        {/* Reference Image - Character reference for consistency */}
+                        {/* Reference Image - Only for Single and Story modes (not used in Batch) */}
+                        {mode !== 'batch' && (
                         <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
                             <h3 className="text-white font-medium mb-3 flex items-center gap-2">
                                 <Camera className="w-4 h-4" /> Reference Image{mode === 'story' && storyModel === 'veo31' ? 's' : ''}
@@ -774,7 +775,7 @@ export default function GenerateEpisodePage() {
                                     <span className="text-gray-500 text-sm">(Optional)</span>
                                 )}
                             </h3>
-                            {(mode !== 'story' && model === 'veo3') ? (
+                            {(mode === 'single' && model === 'veo3') ? (
                                 <div className="text-gray-400 text-sm p-4 bg-black/20 rounded-lg border border-white/5">
                                     <AlertTriangle className="w-4 h-4 inline mr-2 text-yellow-500" />
                                     Veo 3 does not support image-to-video. Switch to <span className="text-purple-400">Kling AI</span> to use reference images.
@@ -860,6 +861,7 @@ export default function GenerateEpisodePage() {
                                 </>
                             )}
                         </div>
+                        )}
 
                         {/* Single Mode */}
                         {mode === 'single' && (
