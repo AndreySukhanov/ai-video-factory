@@ -8,6 +8,7 @@ import httpx
 from replicate import Client
 from typing import Optional, List
 from app.core.config import settings
+from app.core.retry import with_retry
 from .video_provider_base import VideoProvider
 
 
@@ -106,8 +107,10 @@ class Veo31Provider(VideoProvider):
         print(f"[DEBUG VEO31] Sending to {self.model_id}: prompt={visual_prompt[:50]}...")
         print(f"[DEBUG VEO31] Parameters: duration={input_data.get('duration')}, aspect={input_data.get('aspect_ratio')}, r2v={bool(reference_images)}")
 
-        try:
-            # Run prediction
+        def on_retry(attempt: int, error: Exception, delay: float):
+            print(f"[DEBUG VEO31] Retry {attempt}: {error}, waiting {delay:.1f}s")
+
+        def api_call():
             output = self.client.run(
                 self.model_id,
                 input=input_data
@@ -129,6 +132,10 @@ class Veo31Provider(VideoProvider):
                 raise ValueError("No video URL returned from Veo 3.1 API")
 
             return video_url
+
+        try:
+            # Run with retry (3 attempts, exponential backoff)
+            return with_retry(max_attempts=3, base_delay=2.0, on_retry=on_retry)(api_call)
         except Exception as e:
-            print(f"[DEBUG VEO31] Error during generation: {e}")
+            print(f"[DEBUG VEO31] Error during generation after retries: {e}")
             raise
