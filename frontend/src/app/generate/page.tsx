@@ -828,24 +828,8 @@ export default function GenerateEpisodePage() {
                                 <>
                                     <ImageUpload
                                         apiBaseUrl={API_BASE_URL}
-                                        onImageUploaded={(url) => {
-                                            setReferenceImageUrl(url);
-                                            // In Story Mode, also set as character image
-                                            if (mode === 'story') {
-                                                setCharacterImageUrl(url);
-                                                setCharacterName('Custom Character');
-                                                setCharacterDescription('User-uploaded reference image');
-                                            }
-                                        }}
-                                        onImageRemoved={() => {
-                                            setReferenceImageUrl(null);
-                                            // In Story Mode, clear character image if it was the uploaded one
-                                            if (mode === 'story' && characterName === 'Custom Character') {
-                                                setCharacterImageUrl(null);
-                                                setCharacterName('');
-                                                setCharacterDescription('');
-                                            }
-                                        }}
+                                        onImageUploaded={(url) => setReferenceImageUrl(url)}
+                                        onImageRemoved={() => setReferenceImageUrl(null)}
                                     />
                                     {mode === 'story' && (
                                         <p className="text-gray-500 text-xs mt-2">
