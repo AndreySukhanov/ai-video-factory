@@ -21,6 +21,7 @@ from app.media.video_provider_minimax import MiniMaxProvider
 from app.media.video_provider_veo31 import Veo31Provider
 from app.media.character_generator import CharacterGenerator
 from app.ai_orchestrator.agents import get_prompt_enhancer, get_story_generator
+from app.api.v1.websocket import get_session_manager
 
 # Catbox upload URL for external access
 CATBOX_API_URL = "https://catbox.moe/user/api.php"
@@ -142,6 +143,7 @@ class EpisodeGenerateRequest(BaseModel):
     subject_reference_url: Optional[str] = Field(default=None, description="Character reference for identity consistency (MiniMax S2V-01)")
     reference_images: Optional[List[str]] = Field(default=None, description="1-3 reference images for Veo 3.1 R2V character consistency")
     model: str = Field(default="veo3", description="Video model: veo3, veo31, kling, or minimax")
+    session_id: Optional[str] = Field(default=None, description="WebSocket session ID for progress updates")
 
 
 class EpisodeGenerateResponse(BaseModel):
@@ -187,24 +189,45 @@ def get_video_provider(model: str = "veo3"):
         return VideoProviderMock()
 
 
+async def send_progress(session_id: Optional[str], stage: str, progress: int, message: str, video_url: Optional[str] = None):
+    """Helper to send progress updates via WebSocket"""
+    if not session_id:
+        return
+    try:
+        session_mgr = get_session_manager()
+        await session_mgr.send_progress(session_id, {
+            "type": "progress",
+            "stage": stage,
+            "progress": progress,
+            "message": message,
+            "video_url": video_url
+        })
+    except Exception as e:
+        print(f"[WS] Progress send error: {e}")
+
+
 @router.post("/generate", response_model=EpisodeGenerateResponse)
 async def generate_episode(request: EpisodeGenerateRequest):
     """
     Generate a video episode from a text prompt and optional reference image.
-    
+
     This endpoint directly generates a video clip using the configured video provider
     (Replicate Veo 3, Pika, or Mock for testing).
-    
+
     Args:
         request: EpisodeGenerateRequest with prompt, duration, and optional reference image
-        
+
     Returns:
         EpisodeGenerateResponse with video URL or error message
     """
     import base64
     start_time = time.time()
-    
+    session_id = request.session_id
+
     print(f"[DEBUG] Generate request: prompt={request.prompt[:50]}..., model={request.model}, ref_image={request.reference_image_url}, subject_ref={request.subject_reference_url}")
+
+    # Send initial progress
+    await send_progress(session_id, "starting", 5, "Starting video generation...")
 
     try:
         video_provider = get_video_provider(request.model)
@@ -261,6 +284,7 @@ async def generate_episode(request: EpisodeGenerateRequest):
             return data_uri
 
         # Process reference image URL (first frame for I2V)
+        await send_progress(session_id, "processing", 10, "Processing reference images...")
         reference_url = convert_local_to_base64(request.reference_image_url, crop_aspect=True)
 
         # Process subject reference URL (character identity for MiniMax S2V-01)
@@ -270,12 +294,14 @@ async def generate_episode(request: EpisodeGenerateRequest):
         print(f"[DEBUG] Calling video provider with ref_url: {reference_url is not None}, subject_ref: {subject_reference_url is not None}")
 
         # Enhance prompt via GPT before sending to video provider
+        await send_progress(session_id, "enhancing", 20, "Enhancing prompt with AI...")
         prompt_enhancer = get_prompt_enhancer()
         enhanced_prompt = prompt_enhancer.enhance_prompt(
             user_prompt=request.prompt,
             aspect_ratio=request.aspect_ratio,
             duration=request.duration
         )
+        await send_progress(session_id, "generating", 35, f"Generating video with {request.model.upper()}...")
 
         # Generate video with enhanced prompt
         # MiniMax supports subject_reference for character consistency (S2V-01)
@@ -306,9 +332,12 @@ async def generate_episode(request: EpisodeGenerateRequest):
             )
         
         print(f"[DEBUG] Generated video_url: {video_url[:100] if video_url else 'None'}...")
-        
+
         generation_time = round(time.time() - start_time, 2)
-        
+
+        # Send completion progress
+        await send_progress(session_id, "completed", 100, "Video generation complete!", video_url)
+
         return EpisodeGenerateResponse(
             success=True,
             video_url=video_url,
@@ -318,12 +347,14 @@ async def generate_episode(request: EpisodeGenerateRequest):
         )
         
     except ValueError as e:
+        await send_progress(session_id, "error", 0, f"Error: {str(e)}")
         return EpisodeGenerateResponse(
             success=False,
             status="failed",
             error=str(e)
         )
     except Exception as e:
+        await send_progress(session_id, "error", 0, f"Generation failed: {str(e)}")
         return EpisodeGenerateResponse(
             success=False,
             status="error",

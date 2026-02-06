@@ -1,14 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import ImageUpload from '@/components/ImageUpload';
 import {
     Camera, PenLine, Settings, Link2, Film, AlertTriangle,
-    Play, Trash2, ChevronUp, ChevronDown, Download, FolderOpen, Sparkles, BookOpen, User
+    Play, Trash2, ChevronUp, ChevronDown, Download, FolderOpen, Sparkles, BookOpen, User, Loader2
 } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+const WS_BASE_URL = API_BASE_URL.replace('http', 'ws');
+
+// Progress state interface
+interface GenerationProgress {
+    stage: string;
+    progress: number;
+    message: string;
+    videoUrl?: string;
+}
 
 // Model configurations with constraints
 const MODEL_CONFIG = {
@@ -108,7 +117,6 @@ export default function GenerateEpisodePage() {
     // Batch mode state
     const [batchPrompts, setBatchPrompts] = useState<string[]>(['']);
     const [batchProgress, setBatchProgress] = useState<{ current: number, total: number } | null>(null);
-    const [enableContinuity, setEnableContinuity] = useState(true); // Episode continuity toggle
 
     // Series state
     const [series, setSeries] = useState<Series[]>([]);
@@ -134,6 +142,65 @@ export default function GenerateEpisodePage() {
     const [characterName, setCharacterName] = useState<string>('');
     const [characterDescription, setCharacterDescription] = useState<string>('');
     const [isConsistencyEnabled, setIsConsistencyEnabled] = useState(true);
+
+    // WebSocket progress state
+    const [generationProgress, setGenerationProgress] = useState<GenerationProgress | null>(null);
+    const wsRef = useRef<WebSocket | null>(null);
+    const sessionIdRef = useRef<string>('');
+
+    // Generate unique session ID
+    const generateSessionId = useCallback(() => {
+        return `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    }, []);
+
+    // Connect to WebSocket for progress updates
+    const connectWebSocket = useCallback((sessionId: string) => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.close();
+        }
+
+        const ws = new WebSocket(`${WS_BASE_URL}/api/v1/ws/session/${sessionId}`);
+
+        ws.onopen = () => {
+            console.log('[WS] Connected for progress updates');
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'progress') {
+                    setGenerationProgress({
+                        stage: data.stage,
+                        progress: data.progress,
+                        message: data.message,
+                        videoUrl: data.video_url,
+                    });
+                }
+            } catch (e) {
+                console.error('[WS] Parse error:', e);
+            }
+        };
+
+        ws.onerror = (error) => {
+            console.error('[WS] Error:', error);
+        };
+
+        ws.onclose = () => {
+            console.log('[WS] Disconnected');
+        };
+
+        wsRef.current = ws;
+        return ws;
+    }, []);
+
+    // Cleanup WebSocket on unmount
+    useEffect(() => {
+        return () => {
+            if (wsRef.current) {
+                wsRef.current.close();
+            }
+        };
+    }, []);
 
     // Load series from localStorage
     useEffect(() => {
@@ -185,7 +252,8 @@ export default function GenerateEpisodePage() {
         referenceImages?: string[] | null,
         useModel?: ModelType,
         customDuration?: number,
-        customAspectRatio?: string
+        customAspectRatio?: string,
+        sessionId?: string
     ): Promise<GenerationResult> => {
         const selectedModel = useModel || model;
         const modelConfig = MODEL_CONFIG[selectedModel];
@@ -203,6 +271,7 @@ export default function GenerateEpisodePage() {
                 reference_image_url: customRefUrl !== undefined ? customRefUrl : null,
                 subject_reference_url: subjectRefUrl !== undefined ? subjectRefUrl : null,
                 reference_images: referenceImages !== undefined ? referenceImages : null,
+                session_id: sessionId || null,
             }),
         });
         return await response.json();
@@ -218,9 +287,15 @@ export default function GenerateEpisodePage() {
         setError(null);
         setResult(null);
         setIsGenerating(true);
+        setGenerationProgress(null);
+
+        // Setup WebSocket for progress
+        const sessionId = generateSessionId();
+        sessionIdRef.current = sessionId;
+        connectWebSocket(sessionId);
 
         try {
-            const data = await generateEpisode(prompt, referenceImageUrl);
+            const data = await generateEpisode(prompt, referenceImageUrl, null, null, undefined, undefined, undefined, sessionId);
             setResult(data);
 
             if (data.success && data.video_url) {
@@ -233,6 +308,11 @@ export default function GenerateEpisodePage() {
             setError(err instanceof Error ? err.message : 'Failed to generate video');
         } finally {
             setIsGenerating(false);
+            setGenerationProgress(null);
+            // Close WebSocket after generation completes
+            if (wsRef.current) {
+                wsRef.current.close();
+            }
         }
     };
 
@@ -247,18 +327,25 @@ export default function GenerateEpisodePage() {
         setIsGenerating(true);
         setError(null);
         setResult(null);
+        setGenerationProgress(null);
 
         // Collect all generated episodes
-        const generatedEpisodes: Episode[] = [];
+        const batchGeneratedEpisodes: Episode[] = [];
 
         for (let i = 0; i < validPrompts.length; i++) {
             setBatchProgress({ current: i + 1, total: validPrompts.length });
+
+            // Setup WebSocket for each episode
+            const sessionId = generateSessionId();
+            sessionIdRef.current = sessionId;
+            connectWebSocket(sessionId);
+
             try {
                 // Continuity disabled - generate each episode independently without reference images
-                const data = await generateEpisode(validPrompts[i], null);
+                const data = await generateEpisode(validPrompts[i], null, null, null, undefined, undefined, undefined, sessionId);
 
                 if (data.success && data.video_url) {
-                    generatedEpisodes.push({
+                    batchGeneratedEpisodes.push({
                         id: `${Date.now()}-${i}`,
                         prompt: validPrompts[i],
                         video_url: data.video_url,
@@ -269,15 +356,21 @@ export default function GenerateEpisodePage() {
             } catch (err) {
                 console.error(`Failed to generate episode ${i + 1}:`, err);
             }
+
+            // Close WebSocket after each episode
+            if (wsRef.current) {
+                wsRef.current.close();
+            }
         }
 
         // Add all episodes at once
-        if (generatedEpisodes.length > 0) {
-            addMultipleEpisodesToSeries(generatedEpisodes);
+        if (batchGeneratedEpisodes.length > 0) {
+            addMultipleEpisodesToSeries(batchGeneratedEpisodes);
         }
 
         setIsGenerating(false);
         setBatchProgress(null);
+        setGenerationProgress(null);
         setBatchPrompts(['']);
     };
 
@@ -519,19 +612,25 @@ export default function GenerateEpisodePage() {
 
         setIsGenerating(true);
         setError(null);
+        setGenerationProgress(null);
 
         const generatedVideos: Episode[] = [];
         const modelConfig = MODEL_CONFIG[storyModel];
 
         // Character consistency setup based on selected model
         const subjectReference = (isConsistencyEnabled && storyModel === 'minimax') ? characterImageUrl : null;
-        const referenceImages = (isConsistencyEnabled && storyModel === 'veo31' && characterImageUrl) ? [characterImageUrl] : null;
+        const referenceImagesArray = (isConsistencyEnabled && storyModel === 'veo31' && characterImageUrl) ? [characterImageUrl] : null;
 
         console.log(`[Story Mode ${storyModel}] Starting generation with consistency=${isConsistencyEnabled}, characterImage=${characterImageUrl ? 'yes' : 'no'}`);
         console.log(`[Story Mode ${storyModel}] Model config: duration=${modelConfig.defaultDuration}, aspectRatio=${modelConfig.aspectRatios[0]}`);
 
         for (let i = 0; i < generatedEpisodes.length; i++) {
             setBatchProgress({ current: i + 1, total: generatedEpisodes.length });
+
+            // Setup WebSocket for each episode
+            const sessionId = generateSessionId();
+            sessionIdRef.current = sessionId;
+            connectWebSocket(sessionId);
 
             try {
                 console.log(`[Story Mode ${storyModel}] Generating episode ${i + 1}/${generatedEpisodes.length}: ${generatedEpisodes[i].prompt.slice(0, 50)}...`);
@@ -544,10 +643,11 @@ export default function GenerateEpisodePage() {
                         generatedEpisodes[i].prompt,
                         null,  // reference_image_url (first frame)
                         subjectReference,  // subject_reference_url for MiniMax S2V-01
-                        referenceImages,  // reference_images for Veo 3.1 R2V
+                        referenceImagesArray,  // reference_images for Veo 3.1 R2V
                         storyModel,
                         modelConfig.defaultDuration,
-                        modelConfig.aspectRatios[0]
+                        modelConfig.aspectRatios[0],
+                        sessionId
                     );
                     console.log(`[Story Mode ${storyModel}] Episode ${i + 1} attempt ${attempt} response:`, { success: data.success, hasVideoUrl: !!data.video_url, error: data.error });
 
@@ -574,6 +674,11 @@ export default function GenerateEpisodePage() {
             } catch (err) {
                 console.error(`Failed to generate episode ${i + 1}:`, err);
             }
+
+            // Close WebSocket after each episode
+            if (wsRef.current) {
+                wsRef.current.close();
+            }
         }
 
         // Add all to series with custom name
@@ -590,6 +695,7 @@ export default function GenerateEpisodePage() {
 
         setIsGenerating(false);
         setBatchProgress(null);
+        setGenerationProgress(null);
         // NOTE: Prompts are NOT cleared - user can edit and regenerate
     };
 
@@ -641,22 +747,24 @@ export default function GenerateEpisodePage() {
                             </button>
                         </div>
 
-                        {/* Reference Image - Only for Kling (Veo3 doesn't support image-to-video) */}
-                        <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
-                            <h3 className="text-white font-medium mb-3 flex items-center gap-2"><Camera className="w-4 h-4" /> Reference Image <span className="text-gray-500 text-sm">(Optional)</span></h3>
-                            {model === 'veo3' ? (
-                                <div className="text-gray-400 text-sm p-4 bg-black/20 rounded-lg border border-white/5">
-                                    <AlertTriangle className="w-4 h-4 inline mr-2 text-yellow-500" />
-                                    Veo 3 does not support image-to-video. Switch to <span className="text-purple-400">Kling AI</span> to use reference images.
-                                </div>
-                            ) : (
-                                <ImageUpload
-                                    apiBaseUrl={API_BASE_URL}
-                                    onImageUploaded={(url) => setReferenceImageUrl(url)}
-                                    onImageRemoved={() => setReferenceImageUrl(null)}
-                                />
-                            )}
-                        </div>
+                        {/* Reference Image - Only for Single/Batch modes (Story Mode has character consistency built-in) */}
+                        {mode !== 'story' && (
+                            <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
+                                <h3 className="text-white font-medium mb-3 flex items-center gap-2"><Camera className="w-4 h-4" /> Reference Image <span className="text-gray-500 text-sm">(Optional)</span></h3>
+                                {model === 'veo3' ? (
+                                    <div className="text-gray-400 text-sm p-4 bg-black/20 rounded-lg border border-white/5">
+                                        <AlertTriangle className="w-4 h-4 inline mr-2 text-yellow-500" />
+                                        Veo 3 does not support image-to-video. Switch to <span className="text-purple-400">Kling AI</span> to use reference images.
+                                    </div>
+                                ) : (
+                                    <ImageUpload
+                                        apiBaseUrl={API_BASE_URL}
+                                        onImageUploaded={(url) => setReferenceImageUrl(url)}
+                                        onImageRemoved={() => setReferenceImageUrl(null)}
+                                    />
+                                )}
+                            </div>
+                        )}
 
                         {/* Single Mode */}
                         {mode === 'single' && (
@@ -705,21 +813,6 @@ export default function GenerateEpisodePage() {
                                     ))}
                                 </div>
 
-                                {/* Episode Continuity Toggle */}
-                                <div className="mt-4 pt-4 border-t border-white/10">
-                                    <label className="flex items-center gap-3 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={enableContinuity}
-                                            onChange={(e) => setEnableContinuity(e.target.checked)}
-                                            className="w-5 h-5 rounded bg-black/30 border-white/20 text-purple-500 focus:ring-purple-500"
-                                        />
-                                        <div>
-                                            <span className="text-white font-medium flex items-center gap-2"><Link2 className="w-4 h-4" /> Episode Continuity</span>
-                                            <p className="text-gray-500 text-sm">Use last frame of each episode as reference for the next</p>
-                                        </div>
-                                    </label>
-                                </div>
                             </div>
                         )}
 
@@ -882,49 +975,51 @@ export default function GenerateEpisodePage() {
                             </div>
                         )}
 
-                        {/* Settings */}
-                        <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
-                            <h3 className="text-white font-medium mb-3 flex items-center gap-2"><Settings className="w-4 h-4" /> Settings</h3>
-                            <div className="grid grid-cols-3 gap-4">
-                                <div>
-                                    <label className="text-gray-400 text-sm mb-1 block">Duration</label>
-                                    <select
-                                        value={duration}
-                                        onChange={(e) => setDuration(parseInt(e.target.value))}
-                                        className="w-full bg-gray-800 border border-white/10 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500 font-sans"
-                                    >
-                                        <option value={4} className="bg-gray-800 text-white">4 seconds</option>
-                                        <option value={6} className="bg-gray-800 text-white">6 seconds</option>
-                                        <option value={8} className="bg-gray-800 text-white">8 seconds</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="text-gray-400 text-sm mb-1 block">Aspect Ratio</label>
-                                    <select
-                                        value={aspectRatio}
-                                        onChange={(e) => setAspectRatio(e.target.value)}
-                                        className="w-full bg-gray-800 border border-white/10 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500 font-sans"
-                                    >
-                                        <option value="9:16" className="bg-gray-800 text-white">9:16 (Vertical)</option>
-                                        <option value="16:9" className="bg-gray-800 text-white">16:9 (Horizontal)</option>
-                                        {model === 'kling' && (
-                                            <option value="1:1" className="bg-gray-800 text-white">1:1 (Square)</option>
-                                        )}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="text-gray-400 text-sm mb-1 block">AI Model</label>
-                                    <select
-                                        value={model}
-                                        onChange={(e) => setModel(e.target.value as 'veo3' | 'kling')}
-                                        className="w-full bg-gray-800 border border-white/10 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500 font-sans"
-                                    >
-                                        <option value="veo3" className="bg-gray-800 text-white">Veo 3 (Google)</option>
-                                        <option value="kling" className="bg-gray-800 text-white">Kling AI (Kuaishou)</option>
-                                    </select>
+                        {/* Settings - Only for Single/Batch modes (Story Mode has settings built into AI Model selector) */}
+                        {mode !== 'story' && (
+                            <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
+                                <h3 className="text-white font-medium mb-3 flex items-center gap-2"><Settings className="w-4 h-4" /> Settings</h3>
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="text-gray-400 text-sm mb-1 block">Duration</label>
+                                        <select
+                                            value={duration}
+                                            onChange={(e) => setDuration(parseInt(e.target.value))}
+                                            className="w-full bg-gray-800 border border-white/10 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500 font-sans"
+                                        >
+                                            <option value={4} className="bg-gray-800 text-white">4 seconds</option>
+                                            <option value={6} className="bg-gray-800 text-white">6 seconds</option>
+                                            <option value={8} className="bg-gray-800 text-white">8 seconds</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-gray-400 text-sm mb-1 block">Aspect Ratio</label>
+                                        <select
+                                            value={aspectRatio}
+                                            onChange={(e) => setAspectRatio(e.target.value)}
+                                            className="w-full bg-gray-800 border border-white/10 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500 font-sans"
+                                        >
+                                            <option value="9:16" className="bg-gray-800 text-white">9:16 (Vertical)</option>
+                                            <option value="16:9" className="bg-gray-800 text-white">16:9 (Horizontal)</option>
+                                            {model === 'kling' && (
+                                                <option value="1:1" className="bg-gray-800 text-white">1:1 (Square)</option>
+                                            )}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-gray-400 text-sm mb-1 block">AI Model</label>
+                                        <select
+                                            value={model}
+                                            onChange={(e) => setModel(e.target.value as 'veo3' | 'kling')}
+                                            className="w-full bg-gray-800 border border-white/10 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500 font-sans"
+                                        >
+                                            <option value="veo3" className="bg-gray-800 text-white">Veo 3 (Google)</option>
+                                            <option value="kling" className="bg-gray-800 text-white">Kling AI (Kuaishou)</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
 
                         {/* Generate Button */}
                         <button
@@ -945,10 +1040,10 @@ export default function GenerateEpisodePage() {
                         >
                             {isGenerating ? (
                                 <span className="flex items-center justify-center gap-2">
-                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    <Loader2 className="w-5 h-5 animate-spin" />
                                     {batchProgress
-                                        ? `Generating ${batchProgress.current}/${batchProgress.total}...`
-                                        : 'Generating... (1-3 min)'
+                                        ? `Episode ${batchProgress.current}/${batchProgress.total}`
+                                        : 'Generating...'
                                     }
                                 </span>
                             ) : (
@@ -963,6 +1058,29 @@ export default function GenerateEpisodePage() {
                                 </span>
                             )}
                         </button>
+
+                        {/* Progress Indicator */}
+                        {isGenerating && generationProgress && (
+                            <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-white font-medium text-sm">
+                                        {generationProgress.message}
+                                    </span>
+                                    <span className="text-purple-400 text-sm">
+                                        {generationProgress.progress}%
+                                    </span>
+                                </div>
+                                <div className="w-full bg-gray-700 rounded-full h-2">
+                                    <div
+                                        className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-300"
+                                        style={{ width: `${generationProgress.progress}%` }}
+                                    />
+                                </div>
+                                <p className="text-gray-500 text-xs mt-2 capitalize">
+                                    Stage: {generationProgress.stage}
+                                </p>
+                            </div>
+                        )}
 
                         {error && (
                             <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-300 text-sm">
