@@ -9,6 +9,7 @@ import replicate
 from replicate import Client
 from typing import Optional
 from app.core.config import settings
+from app.core.retry import with_retry
 from .video_provider_base import VideoProvider
 
 
@@ -79,8 +80,10 @@ class MiniMaxProvider(VideoProvider):
         print(f"[DEBUG MINIMAX] Sending to video-01: prompt={visual_prompt[:50]}...")
         print(f"[DEBUG MINIMAX] subject_reference: {'Yes' if subject_reference_url else 'No'}, first_frame: {'Yes' if reference_image_url else 'No'}")
 
-        try:
-            # Run prediction with extended timeout
+        def on_retry(attempt: int, error: Exception, delay: float):
+            print(f"[DEBUG MINIMAX] Retry {attempt}: {error}, waiting {delay:.1f}s")
+
+        def api_call():
             output = self.client.run(
                 "minimax/video-01",
                 input=input_data
@@ -102,6 +105,10 @@ class MiniMaxProvider(VideoProvider):
                 raise ValueError("No video URL returned from MiniMax API")
 
             return video_url
+
+        try:
+            # Run with retry (3 attempts, exponential backoff)
+            return with_retry(max_attempts=3, base_delay=2.0, on_retry=on_retry)(api_call)
         except Exception as e:
-            print(f"[DEBUG MINIMAX] Error during generation: {e}")
+            print(f"[DEBUG MINIMAX] Error during generation after retries: {e}")
             raise
