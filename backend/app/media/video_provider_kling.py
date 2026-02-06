@@ -9,6 +9,7 @@ import replicate
 from replicate import Client
 from typing import Optional
 from app.core.config import settings
+from app.core.retry import with_retry
 from .video_provider_base import VideoProvider
 
 
@@ -97,16 +98,18 @@ class ReplicateKlingProvider(VideoProvider):
             print(f"[DEBUG KLING] Using kling-v2.5-turbo-pro text-to-video")
 
         print(f"[DEBUG KLING] Sending to {model_id}: prompt={visual_prompt[:50]}..., duration={duration_sec}")
-        
-        try:
-            # Run prediction with extended timeout
+
+        def on_retry(attempt: int, error: Exception, delay: float):
+            print(f"[DEBUG KLING] Retry {attempt}: {error}, waiting {delay:.1f}s")
+
+        def api_call():
             output = self.client.run(
                 model_id,
                 input=input_data
             )
-            
+
             print(f"[DEBUG KLING] Output received, type: {type(output)}")
-            
+
             # Get video URL from output
             if hasattr(output, 'url'):
                 video_url = output.url
@@ -115,13 +118,17 @@ class ReplicateKlingProvider(VideoProvider):
                 video_url = output[0] if isinstance(output[0], str) else output[0].url
             else:
                 video_url = str(output)
-            
+
             print(f"[DEBUG KLING] Video URL extracted: {video_url[:80] if video_url else 'None'}...")
-                
+
             if not video_url:
                 raise ValueError("No video URL returned from Replicate API")
-                
+
             return video_url
+
+        try:
+            # Run with retry (3 attempts, exponential backoff)
+            return with_retry(max_attempts=3, base_delay=2.0, on_retry=on_retry)(api_call)
         except Exception as e:
-            print(f"[DEBUG KLING] Error during generation: {e}")
+            print(f"[DEBUG KLING] Error during generation after retries: {e}")
             raise

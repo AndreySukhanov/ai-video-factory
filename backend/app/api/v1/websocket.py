@@ -3,7 +3,7 @@ WebSocket endpoint for real-time job progress updates
 """
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.orm import Session
-from typing import Dict, Set
+from typing import Dict, Set, Optional
 import json
 import asyncio
 
@@ -13,9 +13,44 @@ from app.models import Job, Episode, Scene, Project
 router = APIRouter()
 
 
+class SessionConnectionManager:
+    """Manages WebSocket connections per session (for Simple/Story modes)"""
+
+    def __init__(self):
+        self.active_connections: Dict[str, WebSocket] = {}
+
+    async def connect(self, websocket: WebSocket, session_id: str):
+        await websocket.accept()
+        self.active_connections[session_id] = websocket
+        print(f"[WS] Session {session_id} connected")
+
+    def disconnect(self, session_id: str):
+        if session_id in self.active_connections:
+            del self.active_connections[session_id]
+            print(f"[WS] Session {session_id} disconnected")
+
+    async def send_progress(self, session_id: str, progress: dict):
+        """Send progress update to a specific session"""
+        if session_id in self.active_connections:
+            try:
+                await self.active_connections[session_id].send_json(progress)
+            except Exception as e:
+                print(f"[WS] Error sending to {session_id}: {e}")
+                self.disconnect(session_id)
+
+
+# Global session manager for Simple/Story modes
+session_manager = SessionConnectionManager()
+
+
+def get_session_manager() -> SessionConnectionManager:
+    """Get the global session connection manager"""
+    return session_manager
+
+
 class ConnectionManager:
     """Manages WebSocket connections per project"""
-    
+
     def __init__(self):
         self.active_connections: Dict[int, Set[WebSocket]] = {}
     
@@ -115,3 +150,47 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int):
     except Exception as e:
         print(f"WebSocket error: {e}")
         manager.disconnect(websocket, project_id)
+
+
+@router.websocket("/ws/session/{session_id}")
+async def session_websocket_endpoint(websocket: WebSocket, session_id: str):
+    """
+    WebSocket endpoint for real-time generation progress (Simple/Story modes)
+
+    Clients connect with a unique session_id and receive updates:
+    - progress: percentage complete (0-100)
+    - stage: current stage (enhancing, generating, processing)
+    - message: human-readable status message
+    - video_url: final video URL when complete
+    """
+    await session_manager.connect(websocket, session_id)
+
+    try:
+        # Send connection confirmation
+        await websocket.send_json({
+            "type": "connected",
+            "session_id": session_id,
+            "message": "Connected to generation progress"
+        })
+
+        while True:
+            try:
+                data = await asyncio.wait_for(
+                    websocket.receive_text(),
+                    timeout=60.0  # Longer timeout for video generation
+                )
+
+                if data == "ping":
+                    await websocket.send_json({"type": "pong"})
+
+            except asyncio.TimeoutError:
+                try:
+                    await websocket.send_json({"type": "heartbeat"})
+                except Exception:
+                    break
+
+    except WebSocketDisconnect:
+        session_manager.disconnect(session_id)
+    except Exception as e:
+        print(f"[WS] Session {session_id} error: {e}")
+        session_manager.disconnect(session_id)
