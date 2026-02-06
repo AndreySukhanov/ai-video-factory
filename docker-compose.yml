@@ -48,9 +48,12 @@ services:
 
   # Frontend
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        - NEXT_PUBLIC_API_BASE_URL=https://aivideo.duckdns.org
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8000
+      - NEXT_PUBLIC_API_BASE_URL=https://aivideo.duckdns.org
     depends_on:
       - backend
 
