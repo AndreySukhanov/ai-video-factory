@@ -84,13 +84,16 @@ class Veo31Provider(VideoProvider):
         }
 
         # R2V (Reference-to-Video) for character consistency
-        # Note: R2V only works with 16:9 aspect ratio and 8 second duration
+        # Note: R2V only works with full version (not fast), 16:9 aspect ratio, and 8 second duration
+        # Determine which model to use
+        model_to_use = self.model_id
         if reference_images and len(reference_images) > 0:
-            # R2V mode - character consistency
+            # R2V mode - MUST use full version (fast doesn't support reference_images)
+            model_to_use = "google/veo-3.1"  # Force full version for R2V
             input_data["reference_images"] = reference_images[:3]  # Max 3 images
             input_data["aspect_ratio"] = "16:9"  # R2V requires 16:9
             input_data["duration"] = 8  # R2V requires 8 seconds
-            print(f"[DEBUG VEO31] Using R2V mode with {len(reference_images)} reference images")
+            print(f"[DEBUG VEO31] Using R2V mode with {len(reference_images)} reference images (full version required)")
         else:
             # Standard mode
             input_data["aspect_ratio"] = aspect_ratio
@@ -104,7 +107,7 @@ class Veo31Provider(VideoProvider):
         if negative_prompt:
             input_data["negative_prompt"] = negative_prompt
 
-        print(f"[DEBUG VEO31] Sending to {self.model_id}: prompt={visual_prompt[:50]}...")
+        print(f"[DEBUG VEO31] Sending to {model_to_use}: prompt={visual_prompt[:50]}...")
         print(f"[DEBUG VEO31] Parameters: duration={input_data.get('duration')}, aspect={input_data.get('aspect_ratio')}, r2v={bool(reference_images)}")
 
         def on_retry(attempt: int, error: Exception, delay: float):
@@ -112,7 +115,7 @@ class Veo31Provider(VideoProvider):
 
         def api_call():
             output = self.client.run(
-                self.model_id,
+                model_to_use,
                 input=input_data
             )
 
