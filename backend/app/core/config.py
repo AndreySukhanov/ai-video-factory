@@ -24,8 +24,9 @@ class Settings(BaseSettings):
     # Backend URL for static files
     BACKEND_URL: Optional[str] = None
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"  # Ignore extra env variables
+    model_config = {
+        "env_file": ".env",
+        "extra": "ignore"  # Ignore extra env variables
+    }
 
 settings = Settings()
