@@ -26,17 +26,17 @@ const MODEL_CONFIG = {
         durations: [4, 6, 8],
         defaultDuration: 4,
         aspectRatios: ['9:16', '16:9'],
-        supportsI2V: false,
+        supportsI2V: true,  // Supports image parameter for I2V
         supportsCharacterConsistency: false,
     },
     veo31: {
         name: 'Veo 3.1 (R2V)',
-        durations: [4, 6, 8],
-        defaultDuration: 8,  // R2V requires 8 sec
+        durations: [8],  // R2V requires 8 sec
+        defaultDuration: 8,
         aspectRatios: ['16:9'],  // R2V only supports 16:9
         supportsI2V: true,
         supportsCharacterConsistency: true,
-        consistencyNote: 'R2V: 16:9, 8 сек',
+        consistencyNote: 'R2V: 16:9, 8 сек, 1-3 ref',
     },
     kling: {
         name: 'Kling 2.6',
@@ -775,12 +775,7 @@ export default function GenerateEpisodePage() {
                                     <span className="text-gray-500 text-sm">(Optional)</span>
                                 )}
                             </h3>
-                            {(mode === 'single' && model === 'veo3') ? (
-                                <div className="text-gray-400 text-sm p-4 bg-black/20 rounded-lg border border-white/5">
-                                    <AlertTriangle className="w-4 h-4 inline mr-2 text-yellow-500" />
-                                    Veo 3 does not support image-to-video. Switch to <span className="text-purple-400">Kling AI</span> to use reference images.
-                                </div>
-                            ) : mode === 'story' && storyModel === 'veo31' ? (
+                            {mode === 'story' && storyModel === 'veo31' ? (
                                 /* Veo 3.1 R2V: Multiple reference images (up to 3) */
                                 <div className="space-y-3">
                                     <div className="grid grid-cols-3 gap-3">
