@@ -13,9 +13,7 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { safeJsonParse, safeStringArray } from '@/lib/safeJson';
 import { isUiV2Enabled } from '@/lib/featureFlags';
 import GenerationWizardV2 from '@/features/generate-v2/GenerationWizardV2';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
-const WS_BASE_URL = API_BASE_URL.replace('http', 'ws');
+import { API_BASE_URL, API_V1_BASE_URL, WS_BASE_URL } from '@/lib/apiBase';
 
 // Progress state interface
 interface GenerationProgress {
@@ -291,7 +289,7 @@ function GenerateEpisodePage() {
 
         const loadProject = async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}`);
+                const res = await fetch(`${API_V1_BASE_URL}/projects/${projectId}`);
                 if (!res.ok) return;
                 const data = await res.json();
                 setLoadedProject(data);
@@ -354,7 +352,7 @@ function GenerateEpisodePage() {
         const finalDuration = customDuration || modelConfig.defaultDuration;
         const finalAspectRatio = customAspectRatio || (modelConfig.aspectRatios.includes(aspectRatio) ? aspectRatio : modelConfig.aspectRatios[0]);
 
-        const response = await fetch(`${API_BASE_URL}/api/v1/episodes/generate`, {
+        const response = await fetch(`${API_V1_BASE_URL}/episodes/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -368,7 +366,16 @@ function GenerateEpisodePage() {
                 session_id: sessionId || null,
             }),
         });
-        return await response.json();
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            const detail = typeof data?.detail === 'string'
+                ? data.detail
+                : typeof data?.error === 'string'
+                    ? data.error
+                    : `Generation request failed (${response.status})`;
+            throw new Error(detail);
+        }
+        return data as GenerationResult;
     };
 
     const handleGenerate = async () => {
@@ -556,7 +563,7 @@ function GenerateEpisodePage() {
         setError(null);
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/episodes/merge`, {
+            const response = await fetch(`${API_V1_BASE_URL}/episodes/merge`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -631,7 +638,7 @@ function GenerateEpisodePage() {
                 }
             }
 
-            const res = await fetch(`${API_BASE_URL}/api/v1/review/`, {
+            const res = await fetch(`${API_V1_BASE_URL}/review/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -674,7 +681,7 @@ function GenerateEpisodePage() {
         const modelConfig = MODEL_CONFIG[storyModel];
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/episodes/generate-story-consistent`, {
+            const response = await fetch(`${API_V1_BASE_URL}/episodes/generate-story-consistent`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

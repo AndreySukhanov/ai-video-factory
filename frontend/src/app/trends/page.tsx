@@ -11,8 +11,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { safeArray, safeStringArray } from '@/lib/safeJson';
 import { toErrorMessage } from '@/lib/errorUtils';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+import { API_V1_BASE_URL } from '@/lib/apiBase';
 
 interface TrendItem {
     id: number;
@@ -161,7 +160,7 @@ export default function TrendsPage() {
     const fetchTrendsList = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/trends/?region=${region}&limit=50`);
+            const res = await fetch(`${API_V1_BASE_URL}/trends/?region=${region}&limit=50`);
             const data = await res.json();
             setTrends(data);
         } catch (e: unknown) {
@@ -173,7 +172,7 @@ export default function TrendsPage() {
 
     const fetchIdeasList = useCallback(async () => {
         try {
-            let url = `${API_BASE_URL}/api/v1/trends/ideas?limit=50`;
+            let url = `${API_V1_BASE_URL}/trends/ideas?limit=50`;
             if (statusFilter) url += `&status=${statusFilter}`;
             if (genreFilter) url += `&genre=${genreFilter}`;
             const res = await fetch(url);
@@ -194,7 +193,7 @@ export default function TrendsPage() {
         setError('');
         try {
             // Step 1: fetch trends from sources
-            const res = await fetch(`${API_BASE_URL}/api/v1/trends/fetch`, {
+            const res = await fetch(`${API_V1_BASE_URL}/trends/fetch`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ region, max_per_source: 20 }),
@@ -206,7 +205,7 @@ export default function TrendsPage() {
                 // Step 2: auto-analyze with AI to generate story ideas
                 setAnalyzingTrends(true);
                 try {
-                    const analyzeRes = await fetch(`${API_BASE_URL}/api/v1/trends/analyze`, {
+                    const analyzeRes = await fetch(`${API_V1_BASE_URL}/trends/analyze`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ max_ideas: 5, genre: genreFilter }),
@@ -231,7 +230,7 @@ export default function TrendsPage() {
 
     const handleApprove = async (ideaId: number) => {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/trends/ideas/${ideaId}/approve`, { method: 'POST' });
+            const res = await fetch(`${API_V1_BASE_URL}/trends/ideas/${ideaId}/approve`, { method: 'POST' });
             const data = await res.json();
             if (data.success) await fetchIdeasList();
         } catch (e: unknown) { setError(toErrorMessage(e)); }
@@ -241,7 +240,7 @@ export default function TrendsPage() {
         setGeneratingIdea(ideaId);
         setError('');
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/trends/ideas/${ideaId}/generate`, {
+            const res = await fetch(`${API_V1_BASE_URL}/trends/ideas/${ideaId}/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ model: 'veo3', duration: 6, aspect_ratio: '9:16' }),
@@ -256,7 +255,7 @@ export default function TrendsPage() {
         setGeneratingTrend(trendId);
         setError('');
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/trends/${trendId}/generate`, {
+            const res = await fetch(`${API_V1_BASE_URL}/trends/${trendId}/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ genre: 'drama', model: 'veo3', duration: 6, aspect_ratio: '9:16' }),
