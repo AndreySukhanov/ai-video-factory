@@ -44,6 +44,7 @@ def auth_callback(code: str = Query(...), state: str = Query(...), db: Session =
             raise ValueError("Invalid or expired OAuth state")
 
         tokens = auth.exchange_code(code)
+        new_refresh_token = tokens.get("refresh_token")
 
         # Get channel info
         channel_info = auth.get_channel_info(tokens["access_token"])
@@ -56,7 +57,8 @@ def auth_callback(code: str = Query(...), state: str = Query(...), db: Session =
         if existing:
             # Update tokens
             existing.access_token = YouTubeAuth.encrypt_token(tokens["access_token"])
-            existing.refresh_token = YouTubeAuth.encrypt_token(tokens["refresh_token"])
+            if new_refresh_token:
+                existing.refresh_token = YouTubeAuth.encrypt_token(new_refresh_token)
             if tokens.get("token_expiry"):
                 existing.token_expiry = datetime.fromisoformat(tokens["token_expiry"])
             existing.is_active = True
@@ -64,11 +66,13 @@ def auth_callback(code: str = Query(...), state: str = Query(...), db: Session =
             channel = existing
         else:
             # Create new channel
+            if not new_refresh_token:
+                raise ValueError("OAuth response did not include refresh token. Please reconnect and grant offline access.")
             channel = YouTubeChannel(
                 channel_id=channel_info["channel_id"],
                 channel_title=channel_info["channel_title"],
                 access_token=YouTubeAuth.encrypt_token(tokens["access_token"]),
-                refresh_token=YouTubeAuth.encrypt_token(tokens["refresh_token"]),
+                refresh_token=YouTubeAuth.encrypt_token(new_refresh_token),
                 token_expiry=datetime.fromisoformat(tokens["token_expiry"]) if tokens.get("token_expiry") else None,
                 is_active=True,
             )

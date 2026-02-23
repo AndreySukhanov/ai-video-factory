@@ -27,6 +27,14 @@ def _migrate_add_columns():
                 conn.execute(text("ALTER TABLE trends ADD COLUMN region VARCHAR DEFAULT 'US'"))
                 print("[MIGRATE] Added 'region' column to trends table")
 
+    # Add 'youtube_upload_id' to 'review_items' table if missing
+    if "review_items" in insp.get_table_names():
+        columns = [c["name"] for c in insp.get_columns("review_items")]
+        if "youtube_upload_id" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE review_items ADD COLUMN youtube_upload_id INTEGER"))
+                print("[MIGRATE] Added 'youtube_upload_id' column to review_items table")
+
 _migrate_add_columns()
 
 app = FastAPI(
@@ -35,10 +43,27 @@ app = FastAPI(
 )
 
 # CORS middleware - MUST be added before routes
+cors_origins = [o.strip().rstrip("/") for o in (settings.CORS_ALLOW_ORIGINS or "").split(",") if o.strip()]
+frontend_origin = (settings.FRONTEND_URL or "").strip().rstrip("/")
+if frontend_origin and frontend_origin not in cors_origins:
+    cors_origins.append(frontend_origin)
+
+# Convenience for local dev when FRONTEND_URL uses localhost/127.0.0.1
+if frontend_origin.startswith("http://localhost:"):
+    local_alt = frontend_origin.replace("http://localhost:", "http://127.0.0.1:", 1)
+    if local_alt not in cors_origins:
+        cors_origins.append(local_alt)
+elif frontend_origin.startswith("http://127.0.0.1:"):
+    local_alt = frontend_origin.replace("http://127.0.0.1:", "http://localhost:", 1)
+    if local_alt not in cors_origins:
+        cors_origins.append(local_alt)
+
+allow_credentials = "*" not in cors_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
-    allow_credentials=True,
+    allow_origins=cors_origins or ["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )

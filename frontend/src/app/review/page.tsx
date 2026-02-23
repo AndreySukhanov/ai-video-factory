@@ -10,8 +10,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { safeStringArray } from '@/lib/safeJson';
 import { toErrorMessage } from '@/lib/errorUtils';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+import { API_V1_BASE_URL } from '@/lib/apiBase';
 
 interface ReviewItem {
     id: number;
@@ -55,7 +54,7 @@ export default function ReviewPage() {
     const fetchQueue = useCallback(async () => {
         setLoading(true);
         try {
-            let url = `${API_BASE_URL}/api/v1/review/queue?limit=50`;
+            let url = `${API_V1_BASE_URL}/review/queue?limit=50`;
             if (statusFilter) url += `&status=${statusFilter}`;
             const res = await fetch(url);
             const data = await res.json();
@@ -94,7 +93,7 @@ export default function ReviewPage() {
                 body.description = editDescription;
                 body.tags = editTags.split(',').map(tag => tag.trim()).filter(Boolean);
             }
-            const res = await fetch(`${API_BASE_URL}/api/v1/review/${itemId}/approve`, {
+            const res = await fetch(`${API_V1_BASE_URL}/review/${itemId}/approve`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
@@ -126,7 +125,7 @@ export default function ReviewPage() {
                 body.description = editDescription;
                 body.tags = editTags.split(',').map(tag => tag.trim()).filter(Boolean);
             }
-            const res = await fetch(`${API_BASE_URL}/api/v1/review/${itemId}/schedule`, {
+            const res = await fetch(`${API_V1_BASE_URL}/review/${itemId}/schedule`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
@@ -146,7 +145,7 @@ export default function ReviewPage() {
         setActionLoading(itemId);
         setError('');
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/review/${itemId}/reject`, {
+            const res = await fetch(`${API_V1_BASE_URL}/review/${itemId}/reject`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({}),
@@ -165,7 +164,7 @@ export default function ReviewPage() {
         setActionLoading(itemId);
         setError('');
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/review/${itemId}/regenerate`, {
+            const res = await fetch(`${API_V1_BASE_URL}/review/${itemId}/regenerate`, {
                 method: 'POST',
             });
             const data = await res.json();
@@ -182,7 +181,7 @@ export default function ReviewPage() {
         setActionLoading(itemId);
         setError('');
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/review/${itemId}/publish`, {
+            const res = await fetch(`${API_V1_BASE_URL}/review/${itemId}/publish`, {
                 method: 'POST',
             });
             const data = await res.json();

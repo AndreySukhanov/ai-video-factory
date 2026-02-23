@@ -192,3 +192,6 @@ nul
 # Misc junk
 *.docx
 Gemini_Generated_Image_*
+
+# Agent configs with credentials
+AGENTS.md

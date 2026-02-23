@@ -2,6 +2,7 @@
 API for generating episodes from prompt and reference image
 """
 import os
+import asyncio
 import time
 import tempfile
 import subprocess
@@ -57,29 +58,28 @@ async def upload_to_catbox_from_url(image_url: str) -> Optional[str]:
             print(f"[CATBOX] Blocked unsafe URL: {image_url}")
             return None
 
-        # Download image
-        response = requests.get(image_url, timeout=30)
-        response.raise_for_status()
-        content = response.content
+        def _upload_sync() -> Optional[str]:
+            response = requests.get(image_url, timeout=30)
+            response.raise_for_status()
+            content = response.content
 
-        # Determine filename from URL or use default
-        filename = image_url.split("/")[-1] if "/" in image_url else "character.png"
-        if not filename.endswith((".png", ".jpg", ".jpeg", ".webp")):
-            filename = "character.png"
+            filename = image_url.split("/")[-1] if "/" in image_url else "character.png"
+            if not filename.endswith((".png", ".jpg", ".jpeg", ".webp")):
+                filename = "character.png"
 
-        # Upload to catbox
-        files = {"fileToUpload": (filename, content)}
-        data = {"reqtype": "fileupload"}
+            files = {"fileToUpload": (filename, content)}
+            data = {"reqtype": "fileupload"}
+            upload_response = requests.post(CATBOX_API_URL, files=files, data=data, timeout=60)
 
-        upload_response = requests.post(CATBOX_API_URL, files=files, data=data, timeout=60)
+            if upload_response.status_code == 200 and upload_response.text.startswith("https://"):
+                catbox_url = upload_response.text.strip()
+                print(f"[CATBOX] Uploaded to: {catbox_url}")
+                return catbox_url
 
-        if upload_response.status_code == 200 and upload_response.text.startswith("https://"):
-            catbox_url = upload_response.text.strip()
-            print(f"[CATBOX] Uploaded to: {catbox_url}")
-            return catbox_url
-        else:
             print(f"[CATBOX] Upload failed: {upload_response.text}")
             return None
+
+        return await asyncio.to_thread(_upload_sync)
 
     except Exception as e:
         print(f"[CATBOX] Error uploading from URL: {e}")
@@ -309,40 +309,30 @@ async def generate_episode(request: EpisodeGenerateRequest):
         # Enhance prompt via GPT before sending to video provider
         await send_progress(session_id, "enhancing", 20, "Enhancing prompt with AI...")
         prompt_enhancer = get_prompt_enhancer()
-        enhanced_prompt = prompt_enhancer.enhance_prompt(
+        enhanced_prompt = await asyncio.to_thread(
+            prompt_enhancer.enhance_prompt,
             user_prompt=request.prompt,
             aspect_ratio=request.aspect_ratio,
-            duration=request.duration
+            duration=request.duration,
         )
         await send_progress(session_id, "generating", 35, f"Generating video with {request.model.upper()}...")
 
         # Generate video with enhanced prompt
         # MiniMax supports subject_reference for character consistency (S2V-01)
         # MiniMax with subject_reference for character consistency (S2V-01)
+        clip_kwargs = {
+            "visual_prompt": enhanced_prompt,
+            "duration_sec": request.duration,
+            "aspect_ratio": request.aspect_ratio,
+            "reference_image_url": reference_url,
+        }
         if request.model == "minimax" and subject_reference_url:
-            video_url = video_provider.generate_clip(
-                visual_prompt=enhanced_prompt,
-                duration_sec=request.duration,
-                aspect_ratio=request.aspect_ratio,
-                reference_image_url=reference_url,
-                subject_reference_url=subject_reference_url
-            )
+            clip_kwargs["subject_reference_url"] = subject_reference_url
         # Veo 3.1 with reference_images for character consistency (R2V)
         elif request.model == "veo31" and request.reference_images:
-            video_url = video_provider.generate_clip(
-                visual_prompt=enhanced_prompt,
-                duration_sec=request.duration,
-                aspect_ratio=request.aspect_ratio,
-                reference_image_url=reference_url,
-                reference_images=request.reference_images
-            )
-        else:
-            video_url = video_provider.generate_clip(
-                visual_prompt=enhanced_prompt,
-                duration_sec=request.duration,
-                aspect_ratio=request.aspect_ratio,
-                reference_image_url=reference_url
-            )
+            clip_kwargs["reference_images"] = request.reference_images
+
+        video_url = await asyncio.to_thread(video_provider.generate_clip, **clip_kwargs)
         
         print(f"[DEBUG] Generated video_url: {video_url[:100] if video_url else 'None'}...")
 
@@ -422,8 +412,8 @@ async def extract_last_frame(request: ExtractFrameRequest):
     Used for episode continuity - generate next episode from where previous ended.
     """
     print(f"[DEBUG] Extracting last frame from: {request.video_url[:60]}...")
-    
-    try:
+
+    def _extract_sync() -> ExtractFrameResponse:
         if not is_safe_outbound_url(request.video_url, allow_private=_allow_private_fetch(request.video_url)):
             return ExtractFrameResponse(success=False, error="Unsafe video URL")
 
@@ -432,53 +422,48 @@ async def extract_last_frame(request: ExtractFrameRequest):
             video_path = os.path.join(temp_dir, "video.mp4")
             response = requests.get(request.video_url, stream=True, timeout=120)
             response.raise_for_status()
-            
-            with open(video_path, 'wb') as f:
+
+            with open(video_path, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
-            
+
             # Get video duration
             probe_cmd = f'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "{video_path}"'
             probe_result = subprocess.run(probe_cmd, shell=True, capture_output=True, text=True)
             duration = float(probe_result.stdout.strip()) if probe_result.stdout.strip() else 4.0
-            
+
             # Extract last frame (0.1 sec before end to avoid black frames)
             last_frame_time = max(0, duration - 0.1)
-            
+
             # Save to uploads directory
             frame_filename = f"frame_{uuid.uuid4().hex[:12]}.png"
-            uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "uploads")
+            uploads_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+                "uploads",
+            )
             os.makedirs(uploads_dir, exist_ok=True)
             frame_path = os.path.join(uploads_dir, frame_filename)
-            
+
             # Extract frame with FFmpeg
             cmd = f'ffmpeg -y -ss {last_frame_time} -i "{video_path}" -vframes 1 -q:v 2 "{frame_path}"'
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
-            
+
             if result.returncode != 0 or not os.path.exists(frame_path):
                 print(f"[DEBUG] FFmpeg extract failed: {result.stderr[:200]}")
-                return ExtractFrameResponse(
-                    success=False,
-                    error="Failed to extract frame"
-                )
-            
+                return ExtractFrameResponse(success=False, error="Failed to extract frame")
+
             # Return URL
             base_url = os.getenv("BACKEND_URL", "http://localhost:8000")
             frame_url = f"{base_url}/uploads/{frame_filename}"
-            
+
             print(f"[DEBUG] Extracted frame: {frame_url}")
-            
-            return ExtractFrameResponse(
-                success=True,
-                frame_url=frame_url
-            )
-            
+            return ExtractFrameResponse(success=True, frame_url=frame_url)
+
+    try:
+        return await asyncio.to_thread(_extract_sync)
     except Exception as e:
         print(f"[DEBUG] Extract frame error: {str(e)}")
-        return ExtractFrameResponse(
-            success=False,
-            error=str(e)
-        )
+        return ExtractFrameResponse(success=False, error=str(e))
 
 @router.post("/merge", response_model=MergeResponse)
 async def merge_episodes(request: MergeRequest):
@@ -486,74 +471,74 @@ async def merge_episodes(request: MergeRequest):
     Merge multiple video episodes into a single video using simple concatenation.
     """
     print(f"[DEBUG MERGE] Starting merge with {len(request.video_urls)} videos")
-    
-    try:
+
+    def _merge_sync() -> MergeResponse:
         with tempfile.TemporaryDirectory() as temp_dir:
             video_files = []
-            
+
             # Download all videos
             for i, url in enumerate(request.video_urls):
                 video_path = os.path.join(temp_dir, f"video_{i}.mp4")
-                
+
                 print(f"[DEBUG MERGE] Downloading video {i}: {url[:60]}...")
                 if not is_safe_outbound_url(url, allow_private=_allow_private_fetch(url)):
                     return MergeResponse(success=False, error=f"Unsafe video URL at index {i}")
-                
+
                 response = requests.get(url, stream=True, timeout=120)
                 response.raise_for_status()
-                
-                with open(video_path, 'wb') as f:
+
+                with open(video_path, "wb") as f:
                     for chunk in response.iter_content(chunk_size=8192):
                         f.write(chunk)
-                
+
                 print(f"[DEBUG MERGE] Downloaded video {i}: {os.path.getsize(video_path)} bytes")
                 video_files.append(video_path)
-            
+
             output_filename = f"merged_{uuid.uuid4().hex[:8]}.mp4"
             # Use dynamic path that works both locally and in Docker
-            static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "static")
+            static_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+                "static",
+            )
             output_dir = os.path.join(static_dir, "merged")
             os.makedirs(output_dir, exist_ok=True)
             output_path = os.path.join(output_dir, output_filename)
-            
+
             if len(video_files) == 1:
                 import shutil
                 shutil.copy(video_files[0], output_path)
             else:
                 # Simple concat - no transitions
                 concat_list_path = os.path.join(temp_dir, "concat_list.txt")
-                with open(concat_list_path, 'w') as f:
+                with open(concat_list_path, "w") as f:
                     for vf in video_files:
                         f.write(f"file '{vf}'\n")
-                
+
                 cmd = f'ffmpeg -y -f concat -safe 0 -i "{concat_list_path}" -c:v libx264 -preset fast -crf 23 -c:a aac "{output_path}"'
-                
-                print(f"[DEBUG MERGE] Running concat...")
+
+                print("[DEBUG MERGE] Running concat...")
                 result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=300)
-                
+
                 if result.returncode != 0:
                     print(f"[DEBUG MERGE] Concat failed: {result.stderr[:300]}")
                     return MergeResponse(success=False, error=f"FFmpeg error: {result.stderr[:200]}")
-            
+
             if not os.path.exists(output_path):
                 return MergeResponse(success=False, error="Output file was not created")
-            
+
             # Get duration
             probe_cmd = f'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "{output_path}"'
             duration_result = subprocess.run(probe_cmd, shell=True, capture_output=True, text=True)
             total_duration = float(duration_result.stdout.strip()) if duration_result.stdout.strip() else None
-            
+
             base_url = os.getenv("BACKEND_URL", "http://localhost:8000")
             merged_url = f"{base_url}/static/merged/{output_filename}"
-            
+
             print(f"[DEBUG MERGE] Success! {merged_url}")
-            
-            return MergeResponse(
-                success=True,
-                merged_video_url=merged_url,
-                total_duration=total_duration
-            )
-            
+            return MergeResponse(success=True, merged_video_url=merged_url, total_duration=total_duration)
+
+    try:
+        return await asyncio.to_thread(_merge_sync)
     except requests.RequestException as e:
         return MergeResponse(success=False, error=f"Download failed: {str(e)}")
     except subprocess.TimeoutExpired:

@@ -9,7 +9,7 @@ from typing import List, Optional
 from app.core.db import get_db
 from app.models.review import ReviewItem
 from app.models.trend import StoryIdea
-from app.models.youtube_channel import YouTubeChannel
+from app.models.youtube_channel import YouTubeChannel, YouTubeUpload
 from app.schemas.review import (
     ReviewItemCreate, ReviewItemRead, ReviewApproveRequest, ReviewScheduleRequest,
     ReviewRejectRequest, ReviewActionResponse,
@@ -126,6 +126,7 @@ def approve_and_upload(
             project_id=item.project_id,
             story_idea_id=item.story_idea_id,
         )
+        item.youtube_upload_id = upload.id
         item.status = "uploaded"
         db.commit()
         db.refresh(item)
@@ -187,6 +188,7 @@ def approve_and_schedule(
             project_id=item.project_id,
             story_idea_id=item.story_idea_id,
         )
+        item.youtube_upload_id = upload.id
         item.status = "uploaded"
         db.commit()
         db.refresh(item)
@@ -261,13 +263,30 @@ def publish_video(item_id: int, db: Session = Depends(get_db)):
     if item.status != "uploaded":
         raise HTTPException(status_code=400, detail=f"Can only publish uploaded videos, current status: '{item.status}'")
 
-    # Find the YouTube upload record
-    from app.models.youtube_channel import YouTubeUpload
+    # Find the exact linked upload record first (safe path)
     upload = None
-    if item.project_id:
-        upload = db.query(YouTubeUpload).filter(
-            YouTubeUpload.project_id == item.project_id
-        ).order_by(YouTubeUpload.id.desc()).first()
+    if item.youtube_upload_id:
+        upload = db.query(YouTubeUpload).filter(YouTubeUpload.id == item.youtube_upload_id).first()
+
+    # Backward-compatibility fallback for older records without explicit link.
+    # Only auto-link when there is exactly one candidate to avoid publishing wrong video.
+    if not upload and item.project_id:
+        candidates = db.query(YouTubeUpload).filter(
+            YouTubeUpload.project_id == item.project_id,
+            YouTubeUpload.youtube_video_id.isnot(None),
+        ).order_by(YouTubeUpload.id.desc()).limit(5).all()
+
+        if len(candidates) == 1:
+            upload = candidates[0]
+            item.youtube_upload_id = upload.id
+            db.commit()
+            db.refresh(item)
+        elif len(candidates) > 1:
+            raise HTTPException(
+                status_code=409,
+                detail="Multiple YouTube uploads found for this project; item is not linked to a specific upload",
+            )
+
     if not upload or not upload.youtube_video_id:
         raise HTTPException(status_code=400, detail="No YouTube upload found for this video")
 
