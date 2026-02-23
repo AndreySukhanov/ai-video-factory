@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # Backend URL for static files
     BACKEND_URL: Optional[str] = None
     FRONTEND_URL: str = "http://localhost:3000"
+    CORS_ALLOW_ORIGINS: str = ""
     ALLOW_PRIVATE_URL_FETCH: bool = False
 
     # Trendwatcher
