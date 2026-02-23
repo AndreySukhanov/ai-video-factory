@@ -100,7 +100,19 @@ export default function YouTubePage() {
     const handleConnect = async () => {
         try {
             const res = await fetch(`${API_V1_BASE_URL}/youtube/auth/url`);
-            const data = await res.json();
+            const data = await res.json().catch(() => ({} as Record<string, unknown>));
+
+            if (!res.ok) {
+                const detail = typeof data.detail === 'string'
+                    ? data.detail
+                    : 'Failed to get YouTube auth URL';
+                throw new Error(detail);
+            }
+
+            if (typeof data.auth_url !== 'string' || !data.auth_url) {
+                throw new Error('YouTube auth URL is missing in server response');
+            }
+
             window.location.href = data.auth_url;
         } catch (e: unknown) {
             setError(toErrorMessage(e));
