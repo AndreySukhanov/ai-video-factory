@@ -10,8 +10,7 @@ import {
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { toErrorMessage } from '@/lib/errorUtils';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+import { API_V1_BASE_URL } from '@/lib/apiBase';
 
 interface AnalyticsSummary {
     total_videos: number;
@@ -60,9 +59,9 @@ export default function DashboardPage() {
         setLoading(true);
         try {
             const [summaryRes, healthRes, videosRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/api/v1/analytics/summary`),
-                fetch(`${API_BASE_URL}/api/v1/analytics/health`),
-                fetch(`${API_BASE_URL}/api/v1/analytics/videos?limit=20`),
+                fetch(`${API_V1_BASE_URL}/analytics/summary`),
+                fetch(`${API_V1_BASE_URL}/analytics/health`),
+                fetch(`${API_V1_BASE_URL}/analytics/videos?limit=20`),
             ]);
             setSummary(await summaryRes.json());
             setHealth(await healthRes.json());
@@ -84,7 +83,7 @@ export default function DashboardPage() {
     const handleTestAlert = async () => {
         setAlerting(true);
         try {
-            await fetch(`${API_BASE_URL}/api/v1/analytics/alert/test`, {
+            await fetch(`${API_V1_BASE_URL}/analytics/alert/test`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -103,7 +102,7 @@ export default function DashboardPage() {
 
     const handleHealthAlert = async () => {
         try {
-            await fetch(`${API_BASE_URL}/api/v1/analytics/health/check-and-alert`, { method: 'POST' });
+            await fetch(`${API_V1_BASE_URL}/analytics/health/check-and-alert`, { method: 'POST' });
             setSuccess(t('dashboard.healthCheckDone'));
         } catch (e: unknown) {
             setError(toErrorMessage(e));

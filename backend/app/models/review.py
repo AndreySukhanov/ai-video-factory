@@ -10,6 +10,7 @@ class ReviewItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     story_idea_id = Column(Integer, ForeignKey("story_ideas.id"), nullable=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
+    youtube_upload_id = Column(Integer, ForeignKey("youtube_uploads.id"), nullable=True)
     video_url = Column(String, default="")           # URL to generated video file
     title = Column(String, default="")                # LLM-generated title
     description = Column(Text, default="")            # LLM-generated description
@@ -20,3 +21,4 @@ class ReviewItem(Base):
 
     story_idea = relationship("StoryIdea")
     project = relationship("Project")
+    youtube_upload = relationship("YouTubeUpload", back_populates="review_items")

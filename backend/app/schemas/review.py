@@ -15,6 +15,7 @@ class ReviewItemRead(BaseModel):
     id: int
     story_idea_id: Optional[int] = None
     project_id: Optional[int] = None
+    youtube_upload_id: Optional[int] = None
     video_url: str = ""
     title: str = ""
     description: str = ""

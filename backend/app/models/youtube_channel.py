@@ -41,3 +41,4 @@ class YouTubeUpload(Base):
     channel = relationship("YouTubeChannel", back_populates="uploads")
     project = relationship("Project")
     story_idea = relationship("StoryIdea")
+    review_items = relationship("ReviewItem", back_populates="youtube_upload")
