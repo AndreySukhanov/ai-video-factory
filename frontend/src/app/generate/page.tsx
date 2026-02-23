@@ -1,12 +1,18 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ImageUpload from '@/components/ImageUpload';
 import {
     Camera, PenLine, Settings, Link2, Film, AlertTriangle,
-    Play, Trash2, ChevronUp, ChevronDown, Download, FolderOpen, Sparkles, BookOpen, User, Loader2
+    Play, Trash2, ChevronUp, ChevronDown, Download, FolderOpen, Sparkles, BookOpen, User, Loader2, CheckCircle, Send
 } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { safeJsonParse, safeStringArray } from '@/lib/safeJson';
+import { isUiV2Enabled } from '@/lib/featureFlags';
+import GenerationWizardV2 from '@/features/generate-v2/GenerationWizardV2';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 const WS_BASE_URL = API_BASE_URL.replace('http', 'ws');
@@ -26,14 +32,14 @@ const MODEL_CONFIG = {
         durations: [4, 6, 8],
         defaultDuration: 4,
         aspectRatios: ['9:16', '16:9'],
-        supportsI2V: true,  // Supports image parameter for I2V
+        supportsI2V: true,
         supportsCharacterConsistency: false,
     },
     veo31: {
         name: 'Veo 3.1 (R2V)',
-        durations: [8],  // R2V requires 8 sec
+        durations: [8],
         defaultDuration: 8,
-        aspectRatios: ['16:9'],  // R2V only supports 16:9
+        aspectRatios: ['16:9'],
         supportsI2V: true,
         supportsCharacterConsistency: true,
         consistencyNote: 'R2V: 16:9, 8 сек, 1-3 ref',
@@ -83,23 +89,54 @@ interface Series {
     created_at: string;
 }
 
+interface LoadedProject {
+    id: number;
+    title: string;
+    logline: string;
+    genre: string;
+    total_episodes?: number;
+    episode_duration_sec?: number;
+    seo_title?: string;
+    seo_description?: string;
+    seo_tags_json?: string;
+    status: string;
+    episodes: unknown[];
+}
+
 // LocalStorage keys
 const SERIES_STORAGE_KEY = 'ai_video_factory_series';
 const PROMPTS_STORAGE_KEY = 'ai_video_factory_prompts';
 
-export default function GenerateEpisodePage() {
+export default function GenerateEpisodePageWrapper() {
+    if (isUiV2Enabled) {
+        return <GenerationWizardV2 />;
+    }
+
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-gray-900 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-purple-400" /></div>}>
+            <GenerateEpisodePage />
+        </Suspense>
+    );
+}
+
+function GenerateEpisodePage() {
+    const { t } = useLanguage();
+    const searchParams = useSearchParams();
+
     // Mode state
     const [mode, setMode] = useState<'single' | 'batch' | 'story'>('single');
+
+    // Loaded project state
+    const [loadedProject, setLoadedProject] = useState<LoadedProject | null>(null);
 
     // Single mode state
     const [prompt, setPrompt] = useState('');
     const [duration, setDuration] = useState(4);
     const [aspectRatio, setAspectRatio] = useState('9:16');
     const [model, setModel] = useState<ModelType>('veo3');
-    const [storyModel, setStoryModel] = useState<'minimax' | 'veo31'>('minimax');  // Model for Story Mode
+    const [storyModel, setStoryModel] = useState<'minimax' | 'veo31'>('minimax');
     const [referenceImageUrl, setReferenceImageUrl] = useState<string | null>(null);
 
-    // Reset aspectRatio and referenceImage when switching to Veo3 (doesn't support 1:1 and image-to-video)
     useEffect(() => {
         if (model === 'veo3') {
             if (aspectRatio === '1:1') {
@@ -113,6 +150,10 @@ export default function GenerateEpisodePage() {
     const [isGenerating, setIsGenerating] = useState(false);
     const [result, setResult] = useState<GenerationResult | null>(null);
     const [error, setError] = useState<string | null>(null);
+
+    // Send to Review state
+    const [sendingToReview, setSendingToReview] = useState(false);
+    const [sentToReview, setSentToReview] = useState(false);
 
     // Batch mode state
     const [batchPrompts, setBatchPrompts] = useState<string[]>(['']);
@@ -142,7 +183,6 @@ export default function GenerateEpisodePage() {
     const [characterName, setCharacterName] = useState<string>('');
     const [characterDescription, setCharacterDescription] = useState<string>('');
     const [isConsistencyEnabled, setIsConsistencyEnabled] = useState(true);
-    // Multiple reference images for Veo 3.1 R2V (up to 3)
     const [veoReferenceImages, setVeoReferenceImages] = useState<string[]>([]);
 
     // WebSocket progress state
@@ -150,12 +190,10 @@ export default function GenerateEpisodePage() {
     const wsRef = useRef<WebSocket | null>(null);
     const sessionIdRef = useRef<string>('');
 
-    // Generate unique session ID
     const generateSessionId = useCallback(() => {
         return `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     }, []);
 
-    // Connect to WebSocket for progress updates
     const connectWebSocket = useCallback((sessionId: string) => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.close();
@@ -168,18 +206,18 @@ export default function GenerateEpisodePage() {
         };
 
         ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'progress') {
-                    setGenerationProgress({
-                        stage: data.stage,
-                        progress: data.progress,
-                        message: data.message,
-                        videoUrl: data.video_url,
-                    });
-                }
-            } catch (e) {
-                console.error('[WS] Parse error:', e);
+            const data = safeJsonParse<Record<string, unknown> | null>(event.data, null);
+            if (!data) {
+                console.error('[WS] Parse error: invalid payload');
+                return;
+            }
+            if (data.type === 'progress') {
+                setGenerationProgress({
+                    stage: String(data.stage || ''),
+                    progress: Number(data.progress || 0),
+                    message: String(data.message || ''),
+                    videoUrl: typeof data.video_url === 'string' ? data.video_url : undefined,
+                });
             }
         };
 
@@ -195,7 +233,6 @@ export default function GenerateEpisodePage() {
         return ws;
     }, []);
 
-    // Cleanup WebSocket on unmount
     useEffect(() => {
         return () => {
             if (wsRef.current) {
@@ -207,16 +244,13 @@ export default function GenerateEpisodePage() {
     // Load series from localStorage
     useEffect(() => {
         const stored = localStorage.getItem(SERIES_STORAGE_KEY);
-        if (stored) {
-            const parsed = JSON.parse(stored);
+        const parsed = safeJsonParse<Series[]>(stored, []);
+        if (parsed.length > 0) {
             setSeries(parsed);
-            if (parsed.length > 0) {
-                setCurrentSeries(parsed[0]);
-            }
+            setCurrentSeries(parsed[0]);
         }
     }, []);
 
-    // Save series to localStorage
     const saveSeries = (newSeries: Series[]) => {
         localStorage.setItem(SERIES_STORAGE_KEY, JSON.stringify(newSeries));
         setSeries(newSeries);
@@ -225,8 +259,13 @@ export default function GenerateEpisodePage() {
     // Load prompts from localStorage
     useEffect(() => {
         const storedPrompts = localStorage.getItem(PROMPTS_STORAGE_KEY);
-        if (storedPrompts) {
-            const parsed = JSON.parse(storedPrompts);
+        const parsed = safeJsonParse<{
+            episodes?: Array<{ number: number; title: string; synopsis: string; prompt: string }>;
+            title?: string;
+            logline?: string;
+            idea?: string;
+        } | null>(storedPrompts, null);
+        if (parsed) {
             if (parsed.episodes) setGeneratedEpisodes(parsed.episodes);
             if (parsed.title) setSeriesTitle(parsed.title);
             if (parsed.logline) setSeriesLogline(parsed.logline);
@@ -234,7 +273,6 @@ export default function GenerateEpisodePage() {
         }
     }, []);
 
-    // Save prompts to localStorage when they change
     useEffect(() => {
         if (generatedEpisodes.length > 0) {
             localStorage.setItem(PROMPTS_STORAGE_KEY, JSON.stringify({
@@ -246,7 +284,61 @@ export default function GenerateEpisodePage() {
         }
     }, [generatedEpisodes, seriesTitle, seriesLogline, storyIdea]);
 
-    // Generate single episode with optional custom reference and subject reference (for MiniMax character consistency)
+    // Load project from ?project= query parameter
+    useEffect(() => {
+        const projectId = searchParams.get('project');
+        if (!projectId) return;
+
+        const loadProject = async () => {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                setLoadedProject(data);
+
+                // Auto-select mode based on total_episodes
+                const totalEp = data.total_episodes || 1;
+                if (totalEp > 1) {
+                    setMode('story');
+                    if (data.logline) setStoryIdea(data.logline);
+                    if (data.genre) setStoryGenre(data.genre);
+                    setStoryEpisodesCount(Math.min(totalEp, 10));
+                } else {
+                    setMode('single');
+                    if (data.logline) setPrompt(data.logline);
+                }
+
+                // Auto-set duration from project's episode_duration_sec
+                const epDur = data.episode_duration_sec;
+                if (epDur) {
+                    // Find closest available duration for current model
+                    const findClosest = (durations: number[]) =>
+                        durations.reduce((prev, curr) =>
+                            Math.abs(curr - epDur) < Math.abs(prev - epDur) ? curr : prev
+                        );
+
+                    if (totalEp > 1) {
+                        // Story mode — pick best model by duration match
+                        const minimaxDist = Math.abs(6 - epDur);
+                        const veo31Dist = Math.abs(8 - epDur);
+                        if (veo31Dist < minimaxDist) {
+                            setStoryModel('veo31');
+                        } else {
+                            setStoryModel('minimax');
+                        }
+                    } else {
+                        // Single mode — set duration for selected model
+                        const closest = findClosest(MODEL_CONFIG[model].durations);
+                        setDuration(closest);
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load project:', e);
+            }
+        };
+        loadProject();
+    }, [searchParams]);
+
     const generateEpisode = async (
         episodePrompt: string,
         customRefUrl?: string | null,
@@ -279,10 +371,9 @@ export default function GenerateEpisodePage() {
         return await response.json();
     };
 
-    // Handle single generate
     const handleGenerate = async () => {
         if (!prompt.trim()) {
-            setError('Please enter a prompt');
+            setError(t('generate.errorEmptyPrompt'));
             return;
         }
 
@@ -290,8 +381,8 @@ export default function GenerateEpisodePage() {
         setResult(null);
         setIsGenerating(true);
         setGenerationProgress(null);
+        setSentToReview(false);
 
-        // Setup WebSocket for progress
         const sessionId = generateSessionId();
         sessionIdRef.current = sessionId;
         connectWebSocket(sessionId);
@@ -301,7 +392,6 @@ export default function GenerateEpisodePage() {
             setResult(data);
 
             if (data.success && data.video_url) {
-                // Add to current series
                 addEpisodeToCurrentSeries(prompt, data.video_url, data.duration || duration);
             } else {
                 setError(data.error || 'Generation failed');
@@ -311,18 +401,16 @@ export default function GenerateEpisodePage() {
         } finally {
             setIsGenerating(false);
             setGenerationProgress(null);
-            // Close WebSocket after generation completes
             if (wsRef.current) {
                 wsRef.current.close();
             }
         }
     };
 
-    // Handle batch generate
     const handleBatchGenerate = async () => {
         const validPrompts = batchPrompts.filter(p => p.trim());
         if (validPrompts.length === 0) {
-            setError('Please enter at least one prompt');
+            setError(t('generate.errorEmptyBatch'));
             return;
         }
 
@@ -331,19 +419,16 @@ export default function GenerateEpisodePage() {
         setResult(null);
         setGenerationProgress(null);
 
-        // Collect all generated episodes
         const batchGeneratedEpisodes: Episode[] = [];
 
         for (let i = 0; i < validPrompts.length; i++) {
             setBatchProgress({ current: i + 1, total: validPrompts.length });
 
-            // Setup WebSocket for each episode
             const sessionId = generateSessionId();
             sessionIdRef.current = sessionId;
             connectWebSocket(sessionId);
 
             try {
-                // Continuity disabled - generate each episode independently without reference images
                 const data = await generateEpisode(validPrompts[i], null, null, null, undefined, undefined, undefined, sessionId);
 
                 if (data.success && data.video_url) {
@@ -359,13 +444,11 @@ export default function GenerateEpisodePage() {
                 console.error(`Failed to generate episode ${i + 1}:`, err);
             }
 
-            // Close WebSocket after each episode
             if (wsRef.current) {
                 wsRef.current.close();
             }
         }
 
-        // Add all episodes at once
         if (batchGeneratedEpisodes.length > 0) {
             addMultipleEpisodesToSeries(batchGeneratedEpisodes);
         }
@@ -376,7 +459,6 @@ export default function GenerateEpisodePage() {
         setBatchPrompts(['']);
     };
 
-    // Add multiple episodes to current series at once
     const addMultipleEpisodesToSeries = (episodes: Episode[]) => {
         if (currentSeries) {
             const updated = series.map(s =>
@@ -387,7 +469,6 @@ export default function GenerateEpisodePage() {
             saveSeries(updated);
             setCurrentSeries(updated.find(s => s.id === currentSeries.id) || null);
         } else {
-            // Create new series with all episodes
             const newSeries: Series = {
                 id: Date.now().toString(),
                 name: `Series ${series.length + 1}`,
@@ -399,7 +480,6 @@ export default function GenerateEpisodePage() {
         }
     };
 
-    // Add single episode to current series
     const addEpisodeToCurrentSeries = (episodePrompt: string, videoUrl: string, dur: number) => {
         const episode: Episode = {
             id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -418,7 +498,6 @@ export default function GenerateEpisodePage() {
             saveSeries(updated);
             setCurrentSeries(updated.find(s => s.id === currentSeries.id) || null);
         } else {
-            // Create new series
             const newSeries: Series = {
                 id: Date.now().toString(),
                 name: `Series ${series.length + 1}`,
@@ -430,7 +509,6 @@ export default function GenerateEpisodePage() {
         }
     };
 
-    // Create new series
     const createNewSeries = () => {
         const newSeries: Series = {
             id: Date.now().toString(),
@@ -442,7 +520,6 @@ export default function GenerateEpisodePage() {
         setCurrentSeries(newSeries);
     };
 
-    // Delete episode from series
     const deleteEpisode = (episodeId: string) => {
         if (!currentSeries) return;
         const updated = series.map(s =>
@@ -454,7 +531,6 @@ export default function GenerateEpisodePage() {
         setCurrentSeries(updated.find(s => s.id === currentSeries.id) || null);
     };
 
-    // Reorder episodes
     const moveEpisode = (index: number, direction: 'up' | 'down') => {
         if (!currentSeries) return;
         const episodes = [...currentSeries.episodes];
@@ -470,10 +546,9 @@ export default function GenerateEpisodePage() {
         setCurrentSeries(updated.find(s => s.id === currentSeries.id) || null);
     };
 
-    // Merge series into one video
     const handleMergeSeries = async () => {
         if (!currentSeries || currentSeries.episodes.length < 2) {
-            setError('Need at least 2 episodes to merge');
+            setError(t('generate.errorMerge'));
             return;
         }
 
@@ -495,7 +570,6 @@ export default function GenerateEpisodePage() {
             console.log('Merge response:', data);
 
             if (data.success && data.merged_video_url) {
-                // Download merged video using fetch + blob for cross-origin support
                 try {
                     const videoResponse = await fetch(data.merged_video_url);
                     const blob = await videoResponse.blob();
@@ -508,10 +582,8 @@ export default function GenerateEpisodePage() {
                     link.click();
                     document.body.removeChild(link);
 
-                    // Clean up blob URL
                     setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
                 } catch (downloadErr) {
-                    // Fallback: open in new tab
                     window.open(data.merged_video_url, '_blank');
                 }
             } else {
@@ -524,29 +596,71 @@ export default function GenerateEpisodePage() {
         }
     };
 
-    // Add batch prompt
     const addBatchPrompt = () => {
         setBatchPrompts([...batchPrompts, '']);
     };
 
-    // Remove batch prompt
     const removeBatchPrompt = (index: number) => {
         setBatchPrompts(batchPrompts.filter((_, i) => i !== index));
     };
 
-    // Update batch prompt
     const updateBatchPrompt = (index: number, value: string) => {
         const updated = [...batchPrompts];
         updated[index] = value;
         setBatchPrompts(updated);
     };
 
+    // ==================== SEND TO REVIEW ====================
+
+    const handleSendToReview = async () => {
+        if (!result?.video_url) return;
+
+        setSendingToReview(true);
+        try {
+            let title = prompt.substring(0, 100);
+            let description = '';
+            let tags: string[] = [];
+            let project_id: number | undefined;
+
+            if (loadedProject) {
+                title = loadedProject.seo_title || loadedProject.title || title;
+                description = loadedProject.seo_description || loadedProject.logline || '';
+                project_id = loadedProject.id;
+                if (loadedProject.seo_tags_json) {
+                    tags = safeStringArray(loadedProject.seo_tags_json);
+                }
+            }
+
+            const res = await fetch(`${API_BASE_URL}/api/v1/review/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    video_url: result.video_url,
+                    title,
+                    description,
+                    tags,
+                    project_id: project_id || null,
+                }),
+            });
+
+            if (res.ok) {
+                setSentToReview(true);
+            } else {
+                const data = await res.json();
+                setError(data.detail || 'Failed to send to review');
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to send to review');
+        } finally {
+            setSendingToReview(false);
+        }
+    };
+
     // ==================== STORY MODE FUNCTIONS ====================
 
-    // Generate story prompts from idea using GPT (with character consistency)
     const generateStoryPrompts = async () => {
         if (!storyIdea.trim() || storyIdea.length < 10) {
-            setError('Please enter a story idea (at least 10 characters)');
+            setError(t('generate.errorStoryIdea'));
             return;
         }
 
@@ -560,7 +674,6 @@ export default function GenerateEpisodePage() {
         const modelConfig = MODEL_CONFIG[storyModel];
 
         try {
-            // Use new consistent story endpoint that also generates character image
             const response = await fetch(`${API_BASE_URL}/api/v1/episodes/generate-story-consistent`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -581,7 +694,6 @@ export default function GenerateEpisodePage() {
                 setSeriesLogline(data.logline || '');
                 setGeneratedEpisodes(data.episodes);
 
-                // Set character consistency data
                 if (data.character_image_url) {
                     setCharacterImageUrl(data.character_image_url);
                     setCharacterName(data.character_name || 'Main Character');
@@ -598,17 +710,15 @@ export default function GenerateEpisodePage() {
         }
     };
 
-    // Update generated episode prompt
     const updateGeneratedPrompt = (index: number, newPrompt: string) => {
         const updated = [...generatedEpisodes];
         updated[index] = { ...updated[index], prompt: newPrompt };
         setGeneratedEpisodes(updated);
     };
 
-    // Generate videos from story prompts with character consistency
     const handleStoryGenerate = async () => {
         if (generatedEpisodes.length === 0) {
-            setError('No episodes to generate. Generate prompts first.');
+            setError(t('generate.errorNoEpisodes'));
             return;
         }
 
@@ -619,14 +729,9 @@ export default function GenerateEpisodePage() {
         const generatedVideos: Episode[] = [];
         const modelConfig = MODEL_CONFIG[storyModel];
 
-        // Use uploaded reference image if available, otherwise use auto-generated character image
         const effectiveCharacterImage = referenceImageUrl || characterImageUrl;
 
-        // Character consistency setup based on selected model
-        // - MiniMax S2V-01: uses subject_reference_url for identity consistency
-        // - Veo 3.1 R2V: uses reference_images array (up to 3) for character consistency
         const subjectReference = (isConsistencyEnabled && storyModel === 'minimax') ? effectiveCharacterImage : null;
-        // For Veo 3.1: use veoReferenceImages array if available, otherwise fallback to single effectiveCharacterImage
         const referenceImagesArray = (isConsistencyEnabled && storyModel === 'veo31')
             ? (veoReferenceImages.length > 0 ? veoReferenceImages : (effectiveCharacterImage ? [effectiveCharacterImage] : null))
             : null;
@@ -638,7 +743,6 @@ export default function GenerateEpisodePage() {
         for (let i = 0; i < generatedEpisodes.length; i++) {
             setBatchProgress({ current: i + 1, total: generatedEpisodes.length });
 
-            // Setup WebSocket for each episode
             const sessionId = generateSessionId();
             sessionIdRef.current = sessionId;
             connectWebSocket(sessionId);
@@ -646,17 +750,13 @@ export default function GenerateEpisodePage() {
             try {
                 console.log(`[Story Mode ${storyModel}] Generating episode ${i + 1}/${generatedEpisodes.length}: ${generatedEpisodes[i].prompt.slice(0, 50)}...`);
 
-                // Try up to 2 times (retry on moderation errors)
                 let data = null;
                 for (let attempt = 1; attempt <= 2; attempt++) {
-                    // Generate with model-specific parameters
-                    // subject_reference_url: MiniMax S2V-01 identity consistency
-                    // reference_images: Veo 3.1 R2V character consistency
                     data = await generateEpisode(
                         generatedEpisodes[i].prompt,
-                        null,  // reference_image_url (not used for MiniMax/Veo31)
-                        subjectReference,  // subject_reference_url for MiniMax S2V-01
-                        referenceImagesArray,  // reference_images for Veo 3.1 R2V
+                        null,
+                        subjectReference,
+                        referenceImagesArray,
                         storyModel,
                         modelConfig.defaultDuration,
                         modelConfig.aspectRatios[0],
@@ -665,7 +765,7 @@ export default function GenerateEpisodePage() {
                     console.log(`[Story Mode ${storyModel}] Episode ${i + 1} attempt ${attempt} response:`, { success: data.success, hasVideoUrl: !!data.video_url, error: data.error });
 
                     if (data.success && data.video_url) {
-                        break; // Success!
+                        break;
                     } else if (attempt < 2) {
                         console.log(`[Story Mode ${storyModel}] Episode ${i + 1} failed, retrying in 2 seconds...`);
                         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -688,13 +788,11 @@ export default function GenerateEpisodePage() {
                 console.error(`Failed to generate episode ${i + 1}:`, err);
             }
 
-            // Close WebSocket after each episode
             if (wsRef.current) {
                 wsRef.current.close();
             }
         }
 
-        // Add all to series with custom name
         if (generatedVideos.length > 0) {
             const newSeries: Series = {
                 id: Date.now().toString(),
@@ -709,22 +807,51 @@ export default function GenerateEpisodePage() {
         setIsGenerating(false);
         setBatchProgress(null);
         setGenerationProgress(null);
-        // NOTE: Prompts are NOT cleared - user can edit and regenerate
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900">
+        <div className="min-h-screen bg-[var(--background)]">
             <div className="container mx-auto p-6">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6">
                     <Link href="/" className="text-purple-300 hover:text-purple-100 transition-colors">
-                        ← Back
+                        {t('generate.back')}
                     </Link>
                     <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 text-transparent bg-clip-text">
-                        AI Video Factory
+                        {t('generate.title')}
                     </h1>
-                    <div className="w-16"></div>
+                    <LanguageSwitcher />
                 </div>
+
+                {/* Loaded Project Banner */}
+                {loadedProject && (
+                    <div className="bg-gradient-to-r from-green-500/10 to-purple-500/10 border border-green-500/30 rounded-xl p-4 mb-4">
+                        <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Sparkles className="w-5 h-5 text-green-400" />
+                                    <h3 className="font-medium text-green-400">{t('generate.projectLoaded')}</h3>
+                                    <span className="text-xs bg-gray-700/50 px-2 py-0.5 rounded">ID: {loadedProject.id}</span>
+                                </div>
+                                <p className="text-white font-medium mb-1">{loadedProject.title}</p>
+                                {loadedProject.logline && (
+                                    <p className="text-gray-400 text-sm mb-2">{loadedProject.logline}</p>
+                                )}
+                                {loadedProject.genre && (
+                                    <span className="text-xs text-gray-500">{t('generate.projectGenre', { genre: loadedProject.genre })}</span>
+                                )}
+                                {loadedProject.seo_tags_json && (
+                                    <div className="mt-2 flex flex-wrap gap-1">
+                                        {safeStringArray(loadedProject.seo_tags_json).slice(0, 10).map((tag: string, i: number) => (
+                                            <span key={i} className="text-[10px] bg-green-500/15 text-green-400 px-1.5 py-0.5 rounded">#{tag}</span>
+                                        ))}
+                                    </div>
+                                )}
+                                <p className="text-yellow-400 text-xs mt-2">{t('generate.projectReviewHint')}</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Left Column - Generator */}
@@ -738,7 +865,7 @@ export default function GenerateEpisodePage() {
                                     : 'text-gray-400 hover:text-white'
                                     }`}
                             >
-                                Single Episode
+                                {t('generate.singleEpisode')}
                             </button>
                             <button
                                 onClick={() => setMode('batch')}
@@ -747,7 +874,7 @@ export default function GenerateEpisodePage() {
                                     : 'text-gray-400 hover:text-white'
                                     }`}
                             >
-                                Batch Episodes
+                                {t('generate.batchEpisodes')}
                             </button>
                             <button
                                 onClick={() => setMode('story')}
@@ -756,27 +883,26 @@ export default function GenerateEpisodePage() {
                                     : 'text-gray-400 hover:text-white'
                                     }`}
                             >
-                                Story Mode
+                                {t('generate.storyMode')}
                             </button>
                         </div>
 
-                        {/* Reference Image - Only for Single and Story modes (not used in Batch) */}
+                        {/* Reference Image */}
                         {mode !== 'batch' && (
                         <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
                             <h3 className="text-white font-medium mb-3 flex items-center gap-2">
-                                <Camera className="w-4 h-4" /> Reference Image{mode === 'story' && storyModel === 'veo31' ? 's' : ''}
+                                <Camera className="w-4 h-4" /> {mode === 'story' && storyModel === 'veo31' ? t('generate.referenceImages') : t('generate.referenceImage')}
                                 {mode === 'story' ? (
                                     storyModel === 'veo31' ? (
-                                        <span className="text-purple-400 text-sm">(Up to 3 for R2V)</span>
+                                        <span className="text-purple-400 text-sm">{t('generate.upTo3R2V')}</span>
                                     ) : (
-                                        <span className="text-purple-400 text-sm">(Character for all episodes)</span>
+                                        <span className="text-purple-400 text-sm">{t('generate.characterForAll')}</span>
                                     )
                                 ) : (
-                                    <span className="text-gray-500 text-sm">(Optional)</span>
+                                    <span className="text-gray-500 text-sm">{t('generate.optional')}</span>
                                 )}
                             </h3>
                             {mode === 'story' && storyModel === 'veo31' ? (
-                                /* Veo 3.1 R2V: Multiple reference images (up to 3) */
                                 <div className="space-y-3">
                                     <div className="grid grid-cols-3 gap-3">
                                         {[0, 1, 2].map((index) => (
@@ -820,11 +946,10 @@ export default function GenerateEpisodePage() {
                                         ))}
                                     </div>
                                     <p className="text-gray-500 text-xs">
-                                        Upload 1-3 reference images for character consistency. R2V works best with clear face shots.
+                                        {t('generate.r2vHint')}
                                     </p>
                                 </div>
                             ) : (
-                                /* MiniMax S2V or Single/Batch modes: Single reference image */
                                 <>
                                     <ImageUpload
                                         apiBaseUrl={API_BASE_URL}
@@ -833,8 +958,8 @@ export default function GenerateEpisodePage() {
                                     />
                                     {mode === 'story' && (
                                         <p className="text-gray-500 text-xs mt-2">
-                                            Upload your character image to maintain consistent appearance across all episodes.
-                                            {!referenceImageUrl && ' Or generate prompts first to auto-generate a character.'}
+                                            {t('generate.characterUploadHint')}
+                                            {!referenceImageUrl && t('generate.characterAutoHint')}
                                         </p>
                                     )}
                                 </>
@@ -845,11 +970,11 @@ export default function GenerateEpisodePage() {
                         {/* Single Mode */}
                         {mode === 'single' && (
                             <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
-                                <h3 className="text-white font-medium mb-3 flex items-center gap-2"><PenLine className="w-4 h-4" /> Prompt</h3>
+                                <h3 className="text-white font-medium mb-3 flex items-center gap-2"><PenLine className="w-4 h-4" /> {t('generate.prompt')}</h3>
                                 <textarea
                                     value={prompt}
                                     onChange={(e) => setPrompt(e.target.value)}
-                                    placeholder="A beautiful woman walks through neon-lit Tokyo streets at night..."
+                                    placeholder={t('generate.promptPlaceholder')}
                                     className="w-full h-32 bg-black/30 border border-white/10 rounded-lg p-3 text-white placeholder-gray-500 resize-none focus:outline-none focus:border-purple-500"
                                 />
                             </div>
@@ -859,12 +984,12 @@ export default function GenerateEpisodePage() {
                         {mode === 'batch' && (
                             <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
                                 <div className="flex justify-between items-center mb-3">
-                                    <h3 className="text-white font-medium flex items-center gap-2"><PenLine className="w-4 h-4" /> Episode Prompts</h3>
+                                    <h3 className="text-white font-medium flex items-center gap-2"><PenLine className="w-4 h-4" /> {t('generate.episodePrompts')}</h3>
                                     <button
                                         onClick={addBatchPrompt}
                                         className="text-purple-400 hover:text-purple-300 text-sm"
                                     >
-                                        + Add Episode
+                                        {t('generate.addEpisode')}
                                     </button>
                                 </div>
                                 <div className="space-y-3">
@@ -874,7 +999,7 @@ export default function GenerateEpisodePage() {
                                             <textarea
                                                 value={p}
                                                 onChange={(e) => updateBatchPrompt(i, e.target.value)}
-                                                placeholder={`Episode ${i + 1} prompt...`}
+                                                placeholder={t('generate.episodePlaceholder', { count: i + 1 })}
                                                 className="flex-1 h-20 bg-black/30 border border-white/10 rounded-lg p-3 text-white placeholder-gray-500 resize-none focus:outline-none focus:border-purple-500"
                                             />
                                             {batchPrompts.length > 1 && (
@@ -898,37 +1023,37 @@ export default function GenerateEpisodePage() {
                                 {/* Step 1: Idea Input */}
                                 <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
                                     <h3 className="text-white font-medium mb-3 flex items-center gap-2">
-                                        <Sparkles className="w-4 h-4" /> Story Idea
+                                        <Sparkles className="w-4 h-4" /> {t('generate.storyIdea')}
                                     </h3>
                                     <textarea
                                         value={storyIdea}
                                         onChange={(e) => setStoryIdea(e.target.value)}
-                                        placeholder="Describe your story idea... e.g., 'A detective investigates mysterious disappearances in a small coastal town'"
+                                        placeholder={t('generate.storyIdeaPlaceholder')}
                                         className="w-full h-24 bg-black/30 border border-white/10 rounded-lg p-3 text-white placeholder-gray-500 resize-none focus:outline-none focus:border-purple-500"
                                     />
 
                                     <div className="grid grid-cols-3 gap-4 mt-4">
                                         <div>
-                                            <label className="text-gray-400 text-sm mb-1 block">Genre</label>
+                                            <label className="text-gray-400 text-sm mb-1 block">{t('generate.genre')}</label>
                                             <select
                                                 value={storyGenre}
                                                 onChange={(e) => setStoryGenre(e.target.value)}
                                                 className="w-full bg-gray-800 border border-white/10 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500 font-sans"
                                             >
-                                                <option value="drama">Drama</option>
-                                                <option value="comedy">Comedy</option>
-                                                <option value="thriller">Thriller</option>
-                                                <option value="fantasy">Fantasy</option>
-                                                <option value="romance">Romance</option>
-                                                <option value="action">Action</option>
-                                                <option value="horror">Horror</option>
-                                                <option value="scifi">Sci-Fi</option>
-                                                <option value="mystery">Mystery</option>
-                                                <option value="melodrama">Melodrama</option>
+                                                <option value="drama">{t('generate.genreDrama')}</option>
+                                                <option value="comedy">{t('generate.genreComedy')}</option>
+                                                <option value="thriller">{t('generate.genreThriller')}</option>
+                                                <option value="fantasy">{t('generate.genreFantasy')}</option>
+                                                <option value="romance">{t('generate.genreRomance')}</option>
+                                                <option value="action">{t('generate.genreAction')}</option>
+                                                <option value="horror">{t('generate.genreHorror')}</option>
+                                                <option value="scifi">{t('generate.genreSciFi')}</option>
+                                                <option value="mystery">{t('generate.genreMystery')}</option>
+                                                <option value="melodrama">{t('generate.genreMelodrama')}</option>
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="text-gray-400 text-sm mb-1 block">AI Model</label>
+                                            <label className="text-gray-400 text-sm mb-1 block">{t('generate.aiModel')}</label>
                                             <select
                                                 value={storyModel}
                                                 onChange={(e) => setStoryModel(e.target.value as 'minimax' | 'veo31')}
@@ -939,7 +1064,7 @@ export default function GenerateEpisodePage() {
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="text-gray-400 text-sm mb-1 block">Episodes: {storyEpisodesCount}</label>
+                                            <label className="text-gray-400 text-sm mb-1 block">{t('generate.episodes', { count: storyEpisodesCount })}</label>
                                             <input
                                                 type="range"
                                                 min={1}
@@ -962,11 +1087,11 @@ export default function GenerateEpisodePage() {
                                         {isGeneratingStory ? (
                                             <>
                                                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                                Generating prompts...
+                                                {t('generate.generatingPrompts')}
                                             </>
                                         ) : (
                                             <>
-                                                <Sparkles className="w-4 h-4" /> Generate Episode Prompts
+                                                <Sparkles className="w-4 h-4" /> {t('generate.generateEpisodePrompts')}
                                             </>
                                         )}
                                     </button>
@@ -979,7 +1104,7 @@ export default function GenerateEpisodePage() {
                                             <h3 className="text-white font-medium flex items-center gap-2">
                                                 <BookOpen className="w-4 h-4" /> {seriesTitle}
                                             </h3>
-                                            <span className="text-gray-500 text-sm">{generatedEpisodes.length} episodes</span>
+                                            <span className="text-gray-500 text-sm">{t('generate.episodesCount', { count: generatedEpisodes.length })}</span>
                                         </div>
                                         {seriesLogline && (
                                             <p className="text-gray-400 text-sm mb-4 italic">{seriesLogline}</p>
@@ -990,7 +1115,7 @@ export default function GenerateEpisodePage() {
                                                 <div key={i} className="bg-black/30 rounded-lg p-3">
                                                     <div className="flex justify-between items-center mb-2">
                                                         <span className="text-purple-400 font-medium text-sm">
-                                                            Episode {ep.number}: {ep.title}
+                                                            {t('generate.episodeNumber', { count: ep.number })}{ep.title}
                                                         </span>
                                                     </div>
                                                     <p className="text-gray-500 text-xs mb-2">{ep.synopsis}</p>
@@ -1007,12 +1132,12 @@ export default function GenerateEpisodePage() {
                                     </div>
                                 )}
 
-                                {/* Character Preview (only when auto-generated, not when manual reference uploaded) */}
+                                {/* Character Preview */}
                                 {characterImageUrl && !referenceImageUrl && (
                                     <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
                                         <div className="flex items-center justify-between mb-3">
                                             <h3 className="text-white font-medium flex items-center gap-2">
-                                                <User className="w-4 h-4" /> Main Character
+                                                <User className="w-4 h-4" /> {t('generate.mainCharacter')}
                                             </h3>
                                             <label className="flex items-center gap-2 text-sm cursor-pointer">
                                                 <input
@@ -1021,7 +1146,7 @@ export default function GenerateEpisodePage() {
                                                     onChange={(e) => setIsConsistencyEnabled(e.target.checked)}
                                                     className="w-4 h-4 rounded bg-black/30 border-white/20 text-purple-500 focus:ring-purple-500"
                                                 />
-                                                <span className="text-gray-400">Character Consistency</span>
+                                                <span className="text-gray-400">{t('generate.characterConsistency')}</span>
                                             </label>
                                         </div>
                                         <div className="flex gap-4">
@@ -1033,7 +1158,7 @@ export default function GenerateEpisodePage() {
                                             <div className="flex-1">
                                                 <p className="text-purple-400 font-medium">{characterName}</p>
                                                 <p className="text-gray-400 text-sm mt-1 line-clamp-3">
-                                                    {characterDescription || 'This character will appear consistently across all episodes.'}
+                                                    {characterDescription || t('generate.consistencyDefault')}
                                                 </p>
                                                 {isConsistencyEnabled ? (
                                                     <p className="text-green-400 text-xs mt-2 flex items-center gap-1">
@@ -1041,7 +1166,7 @@ export default function GenerateEpisodePage() {
                                                     </p>
                                                 ) : (
                                                     <p className="text-yellow-400 text-xs mt-2 flex items-center gap-1">
-                                                        <AlertTriangle className="w-3 h-3" /> Consistency disabled - characters may vary
+                                                        <AlertTriangle className="w-3 h-3" /> {t('generate.consistencyDisabled')}
                                                     </p>
                                                 )}
                                             </div>
@@ -1051,39 +1176,39 @@ export default function GenerateEpisodePage() {
                             </div>
                         )}
 
-                        {/* Settings - Only for Single/Batch modes (Story Mode has settings built into AI Model selector) */}
+                        {/* Settings */}
                         {mode !== 'story' && (
                             <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
-                                <h3 className="text-white font-medium mb-3 flex items-center gap-2"><Settings className="w-4 h-4" /> Settings</h3>
+                                <h3 className="text-white font-medium mb-3 flex items-center gap-2"><Settings className="w-4 h-4" /> {t('generate.settings')}</h3>
                                 <div className="grid grid-cols-3 gap-4">
                                     <div>
-                                        <label className="text-gray-400 text-sm mb-1 block">Duration</label>
+                                        <label className="text-gray-400 text-sm mb-1 block">{t('generate.duration')}</label>
                                         <select
                                             value={duration}
                                             onChange={(e) => setDuration(parseInt(e.target.value))}
                                             className="w-full bg-gray-800 border border-white/10 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500 font-sans"
                                         >
-                                            <option value={4} className="bg-gray-800 text-white">4 seconds</option>
-                                            <option value={6} className="bg-gray-800 text-white">6 seconds</option>
-                                            <option value={8} className="bg-gray-800 text-white">8 seconds</option>
+                                            <option value={4} className="bg-gray-800 text-white">{t('generate.seconds', { count: 4 })}</option>
+                                            <option value={6} className="bg-gray-800 text-white">{t('generate.seconds', { count: 6 })}</option>
+                                            <option value={8} className="bg-gray-800 text-white">{t('generate.seconds', { count: 8 })}</option>
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="text-gray-400 text-sm mb-1 block">Aspect Ratio</label>
+                                        <label className="text-gray-400 text-sm mb-1 block">{t('generate.aspectRatio')}</label>
                                         <select
                                             value={aspectRatio}
                                             onChange={(e) => setAspectRatio(e.target.value)}
                                             className="w-full bg-gray-800 border border-white/10 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500 font-sans"
                                         >
-                                            <option value="9:16" className="bg-gray-800 text-white">9:16 (Vertical)</option>
-                                            <option value="16:9" className="bg-gray-800 text-white">16:9 (Horizontal)</option>
+                                            <option value="9:16" className="bg-gray-800 text-white">{t('generate.vertical')}</option>
+                                            <option value="16:9" className="bg-gray-800 text-white">{t('generate.horizontal')}</option>
                                             {model === 'kling' && (
-                                                <option value="1:1" className="bg-gray-800 text-white">1:1 (Square)</option>
+                                                <option value="1:1" className="bg-gray-800 text-white">{t('generate.square')}</option>
                                             )}
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="text-gray-400 text-sm mb-1 block">AI Model</label>
+                                        <label className="text-gray-400 text-sm mb-1 block">{t('generate.aiModel')}</label>
                                         <select
                                             value={model}
                                             onChange={(e) => setModel(e.target.value as 'veo3' | 'kling')}
@@ -1118,18 +1243,18 @@ export default function GenerateEpisodePage() {
                                 <span className="flex items-center justify-center gap-2">
                                     <Loader2 className="w-5 h-5 animate-spin" />
                                     {batchProgress
-                                        ? `Episode ${batchProgress.current}/${batchProgress.total}`
-                                        : 'Generating...'
+                                        ? t('generate.generatingEpisode', { current: batchProgress.current, total: batchProgress.total })
+                                        : t('generate.generating')
                                     }
                                 </span>
                             ) : (
                                 <span className="flex items-center justify-center gap-2">
                                     <Play className="w-5 h-5" />
                                     {mode === 'single'
-                                        ? 'Generate Episode'
+                                        ? t('generate.generateEpisode')
                                         : mode === 'batch'
-                                            ? `Generate ${batchPrompts.filter(p => p.trim()).length} Episodes`
-                                            : `Generate ${generatedEpisodes.length} Story Episodes`
+                                            ? t('generate.generateNEpisodes', { count: batchPrompts.filter(p => p.trim()).length })
+                                            : t('generate.generateStoryEpisodes', { count: generatedEpisodes.length })
                                     }
                                 </span>
                             )}
@@ -1153,7 +1278,7 @@ export default function GenerateEpisodePage() {
                                     />
                                 </div>
                                 <p className="text-gray-500 text-xs mt-2 capitalize">
-                                    Stage: {generationProgress.stage}
+                                    {t('generate.stage', { stage: generationProgress.stage })}
                                 </p>
                             </div>
                         )}
@@ -1167,7 +1292,7 @@ export default function GenerateEpisodePage() {
                         {/* Last Result Preview */}
                         {result?.success && result.video_url && (
                             <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
-                                <h3 className="text-white font-medium mb-3 flex items-center gap-2"><Play className="w-4 h-4" /> Latest Generation</h3>
+                                <h3 className="text-white font-medium mb-3 flex items-center gap-2"><Play className="w-4 h-4" /> {t('generate.latestGeneration')}</h3>
                                 <video
                                     src={result.video_url}
                                     controls
@@ -1176,6 +1301,39 @@ export default function GenerateEpisodePage() {
                                     muted
                                     className="w-full max-w-sm rounded-lg mx-auto"
                                 />
+                                <div className="mt-3 flex justify-center">
+                                    {sentToReview ? (
+                                        <Link
+                                            href="/review"
+                                            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors"
+                                        >
+                                            <CheckCircle className="w-4 h-4" />
+                                            {t('generate.goToReview')}
+                                        </Link>
+                                    ) : (
+                                        <button
+                                            onClick={handleSendToReview}
+                                            disabled={sendingToReview}
+                                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                                                sendingToReview
+                                                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                                    : 'bg-blue-600 hover:bg-blue-500 text-white'
+                                            }`}
+                                        >
+                                            {sendingToReview ? (
+                                                <>
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                    {t('generate.sendingToReview')}
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Send className="w-4 h-4" />
+                                                    {t('generate.sendToReview')}
+                                                </>
+                                            )}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>
@@ -1183,12 +1341,12 @@ export default function GenerateEpisodePage() {
                     {/* Right Column - Series Panel */}
                     <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10 h-fit mt-16">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-white font-medium flex items-center gap-2"><Film className="w-4 h-4" /> Series</h3>
+                            <h3 className="text-white font-medium flex items-center gap-2"><Film className="w-4 h-4" /> {t('generate.series')}</h3>
                             <button
                                 onClick={createNewSeries}
                                 className="text-purple-400 hover:text-purple-300 text-sm"
                             >
-                                + New
+                                {t('generate.newSeries')}
                             </button>
                         </div>
 
@@ -1247,8 +1405,8 @@ export default function GenerateEpisodePage() {
                         {(!currentSeries || currentSeries.episodes.length === 0) && (
                             <div className="text-center text-gray-500 py-8">
                                 <Film className="w-8 h-8 mx-auto mb-2 text-gray-600" />
-                                <p className="text-sm">Generated episodes</p>
-                                <p className="text-sm">will appear here</p>
+                                <p className="text-sm">{t('generate.generatedEpisodes')}</p>
+                                <p className="text-sm">{t('generate.willAppearHere')}</p>
                             </div>
                         )}
 
@@ -1265,10 +1423,10 @@ export default function GenerateEpisodePage() {
                                 {isMerging ? (
                                     <span className="flex items-center justify-center gap-2">
                                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                        Merging...
+                                        {t('generate.merging')}
                                     </span>
                                 ) : (
-                                    <span className="flex items-center justify-center gap-2"><Download className="w-4 h-4" /> Merge & Download Series</span>
+                                    <span className="flex items-center justify-center gap-2"><Download className="w-4 h-4" /> {t('generate.mergeDownload')}</span>
                                 )}
                             </button>
                         )}

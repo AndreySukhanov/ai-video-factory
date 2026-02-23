@@ -15,6 +15,12 @@ import requests
 from PIL import Image
 
 from app.core.config import settings
+from app.core.security import (
+    extract_local_upload_filename,
+    is_internal_backend_asset_url,
+    is_safe_outbound_url,
+    resolve_upload_file_path,
+)
 from app.media import VideoProviderMock, ReplicateVeoProvider, ReplicateKlingProvider
 from app.media.video_provider_pika import PikaVideoProvider
 from app.media.video_provider_minimax import MiniMaxProvider
@@ -25,6 +31,14 @@ from app.api.v1.websocket import get_session_manager
 
 # Catbox upload URL for external access
 CATBOX_API_URL = "https://catbox.moe/user/api.php"
+UPLOADS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+    "uploads",
+)
+
+
+def _allow_private_fetch(url: str) -> bool:
+    return settings.ALLOW_PRIVATE_URL_FETCH or is_internal_backend_asset_url(url, settings.BACKEND_URL)
 
 
 async def upload_to_catbox_from_url(image_url: str) -> Optional[str]:
@@ -39,6 +53,10 @@ async def upload_to_catbox_from_url(image_url: str) -> Optional[str]:
         Public catbox.moe URL or None if failed
     """
     try:
+        if not is_safe_outbound_url(image_url, allow_private=_allow_private_fetch(image_url)):
+            print(f"[CATBOX] Blocked unsafe URL: {image_url}")
+            return None
+
         # Download image
         response = requests.get(image_url, timeout=30)
         response.raise_for_status()
@@ -237,21 +255,15 @@ async def generate_episode(request: EpisodeGenerateRequest):
             if not url:
                 return None
 
-            is_local = False
-            file_name = None
-
-            if url.startswith("/uploads/"):
-                is_local = True
-                file_name = url.replace("/uploads/", "")
-            elif "/uploads/" in url and ("localhost" in url or "127.0.0.1" in url):
-                is_local = True
-                file_name = url.split("/uploads/")[-1]
-
-            if not is_local or not file_name:
+            file_name = extract_local_upload_filename(url)
+            if not file_name:
                 return url  # Return as-is if not local
 
-            uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "uploads")
-            file_path = os.path.join(uploads_dir, file_name)
+            try:
+                file_path = resolve_upload_file_path(UPLOADS_DIR, file_name)
+            except ValueError:
+                print(f"[DEBUG] Rejected unsafe upload path: {file_name}")
+                return None
 
             print(f"[DEBUG] Looking for file: {file_path}")
             print(f"[DEBUG] File exists: {os.path.exists(file_path)}")
@@ -270,9 +282,10 @@ async def generate_episode(request: EpisodeGenerateRequest):
                 print(f"[DEBUG] Cropped image from {original_size} to {len(image_data)} bytes for aspect_ratio={request.aspect_ratio}")
 
             # Determine mime type
-            if file_path.lower().endswith(".png"):
+            suffix = file_path.suffix.lower()
+            if suffix == ".png":
                 mime_type = "image/png"
-            elif file_path.lower().endswith((".jpg", ".jpeg")):
+            elif suffix in {".jpg", ".jpeg"}:
                 mime_type = "image/jpeg"
             else:
                 mime_type = "image/png"
@@ -411,6 +424,9 @@ async def extract_last_frame(request: ExtractFrameRequest):
     print(f"[DEBUG] Extracting last frame from: {request.video_url[:60]}...")
     
     try:
+        if not is_safe_outbound_url(request.video_url, allow_private=_allow_private_fetch(request.video_url)):
+            return ExtractFrameResponse(success=False, error="Unsafe video URL")
+
         with tempfile.TemporaryDirectory() as temp_dir:
             # Download video
             video_path = os.path.join(temp_dir, "video.mp4")
@@ -480,6 +496,8 @@ async def merge_episodes(request: MergeRequest):
                 video_path = os.path.join(temp_dir, f"video_{i}.mp4")
                 
                 print(f"[DEBUG MERGE] Downloading video {i}: {url[:60]}...")
+                if not is_safe_outbound_url(url, allow_private=_allow_private_fetch(url)):
+                    return MergeResponse(success=False, error=f"Unsafe video URL at index {i}")
                 
                 response = requests.get(url, stream=True, timeout=120)
                 response.raise_for_status()

@@ -3,18 +3,19 @@
 import { useProjectWebSocket, JobProgress } from '@/lib/useWebSocket';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ProgressDashboardProps {
     projectId: number | string;
 }
 
-const jobTypeLabels: Record<string, { label: string; icon: string }> = {
-    'GENERATE_STORY': { label: 'Generating Story', icon: '📖' },
-    'GENERATE_SCENES': { label: 'Creating Scenes', icon: '🎬' },
-    'GENERATE_SCENE_PROMPTS': { label: 'Writing Prompts', icon: '✍️' },
-    'GENERATE_SCENE_MEDIA': { label: 'Generating Video', icon: '🎥' },
-    'RENDER_EPISODE': { label: 'Rendering Episode', icon: '🎞️' },
-    'QUALITY_CHECK': { label: 'Quality Check', icon: '✅' },
+const jobTypeIcons: Record<string, string> = {
+    'GENERATE_STORY': '📖',
+    'GENERATE_SCENES': '🎬',
+    'GENERATE_SCENE_PROMPTS': '✍️',
+    'GENERATE_SCENE_MEDIA': '🎥',
+    'RENDER_EPISODE': '🎞️',
+    'QUALITY_CHECK': '✅',
 };
 
 const statusStyles: Record<string, string> = {
@@ -25,15 +26,27 @@ const statusStyles: Record<string, string> = {
 };
 
 function JobCard({ job }: { job: JobProgress }) {
-    const typeInfo = jobTypeLabels[job.type] || { label: job.type, icon: '⚙️' };
+    const { t } = useLanguage();
+
+    const typeLabels: Record<string, string> = {
+        'GENERATE_STORY': t('progress.generatingStory'),
+        'GENERATE_SCENES': t('progress.creatingScenes'),
+        'GENERATE_SCENE_PROMPTS': t('progress.writingPrompts'),
+        'GENERATE_SCENE_MEDIA': t('progress.generatingVideo'),
+        'RENDER_EPISODE': t('progress.renderingEpisode'),
+        'QUALITY_CHECK': t('progress.qualityCheck'),
+    };
+
+    const icon = jobTypeIcons[job.type] || '⚙️';
+    const label = typeLabels[job.type] || job.type;
     const statusStyle = statusStyles[job.status] || statusStyles.queued;
 
     return (
         <div className="border rounded-lg p-4 bg-white dark:bg-gray-800 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex justify-between items-center mb-2">
                 <div className="flex items-center gap-2">
-                    <span className="text-xl">{typeInfo.icon}</span>
-                    <span className="font-medium text-sm">{typeInfo.label}</span>
+                    <span className="text-xl">{icon}</span>
+                    <span className="font-medium text-sm">{label}</span>
                 </div>
                 <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${statusStyle}`}>
                     {job.status.replace('_', ' ')}
@@ -51,13 +64,13 @@ function JobCard({ job }: { job: JobProgress }) {
 
             {job.episode_id && (
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Episode #{job.episode_id}
+                    {t('progress.episode', { id: job.episode_id })}
                 </p>
             )}
 
             {job.error_text && (
                 <p className="text-xs text-red-500 mt-1 truncate" title={job.error_text}>
-                    Error: {job.error_text}
+                    {t('progress.error', { text: job.error_text })}
                 </p>
             )}
         </div>
@@ -65,11 +78,13 @@ function JobCard({ job }: { job: JobProgress }) {
 }
 
 function ConnectionIndicator({ status }: { status: string }) {
+    const { t } = useLanguage();
+
     const statusConfig: Record<string, { color: string; text: string }> = {
-        connected: { color: 'bg-green-500', text: 'Live' },
-        connecting: { color: 'bg-yellow-500 animate-pulse', text: 'Connecting...' },
-        disconnected: { color: 'bg-gray-400', text: 'Offline' },
-        error: { color: 'bg-red-500', text: 'Error' },
+        connected: { color: 'bg-green-500', text: t('progress.live') },
+        connecting: { color: 'bg-yellow-500 animate-pulse', text: t('progress.connecting') },
+        disconnected: { color: 'bg-gray-400', text: t('progress.offline') },
+        error: { color: 'bg-red-500', text: t('progress.errorStatus') },
     };
 
     const config = statusConfig[status] || statusConfig.disconnected;
@@ -83,6 +98,7 @@ function ConnectionIndicator({ status }: { status: string }) {
 }
 
 export default function ProgressDashboard({ projectId }: ProgressDashboardProps) {
+    const { t } = useLanguage();
     const { isConnected, jobsList, connectionStatus } = useProjectWebSocket(projectId);
     const [initialJobs, setInitialJobs] = useState<JobProgress[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -132,7 +148,7 @@ export default function ProgressDashboard({ projectId }: ProgressDashboardProps)
         <div className="space-y-6">
             {/* Header with connection status */}
             <div className="flex justify-between items-center">
-                <h3 className="text-lg font-bold">Generation Progress</h3>
+                <h3 className="text-lg font-bold">{t('progress.title')}</h3>
                 <ConnectionIndicator status={connectionStatus} />
             </div>
 
@@ -140,8 +156,8 @@ export default function ProgressDashboard({ projectId }: ProgressDashboardProps)
             {totalJobs > 0 && (
                 <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4">
                     <div className="flex justify-between text-sm mb-2">
-                        <span className="font-medium">Overall Progress</span>
-                        <span className="text-gray-500">{completedCount}/{totalJobs} tasks</span>
+                        <span className="font-medium">{t('progress.overallProgress')}</span>
+                        <span className="text-gray-500">{t('progress.tasks', { completed: completedCount, total: totalJobs })}</span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
                         <div
@@ -156,7 +172,7 @@ export default function ProgressDashboard({ projectId }: ProgressDashboardProps)
             {activeJobs.length > 0 && (
                 <div>
                     <h4 className="font-bold mb-3 flex items-center gap-2">
-                        <span className="animate-spin">🔄</span> In Progress ({activeJobs.length})
+                        <span className="animate-spin">🔄</span> {t('progress.inProgress', { count: activeJobs.length })}
                     </h4>
                     <div className="grid gap-3">
                         {activeJobs.map(job => <JobCard key={job.id} job={job} />)}
@@ -168,13 +184,13 @@ export default function ProgressDashboard({ projectId }: ProgressDashboardProps)
             {queuedJobs.length > 0 && (
                 <div>
                     <h4 className="font-bold mb-3 text-gray-600 dark:text-gray-400">
-                        ⏳ Queued ({queuedJobs.length})
+                        ⏳ {t('progress.queued', { count: queuedJobs.length })}
                     </h4>
                     <div className="grid gap-2 opacity-70">
                         {queuedJobs.slice(0, 5).map(job => <JobCard key={job.id} job={job} />)}
                         {queuedJobs.length > 5 && (
                             <p className="text-sm text-gray-500 text-center">
-                                +{queuedJobs.length - 5} more in queue
+                                {t('progress.moreInQueue', { count: queuedJobs.length - 5 })}
                             </p>
                         )}
                     </div>
@@ -185,7 +201,7 @@ export default function ProgressDashboard({ projectId }: ProgressDashboardProps)
             {failedJobs.length > 0 && (
                 <div>
                     <h4 className="font-bold mb-3 text-red-600">
-                        ❌ Failed ({failedJobs.length})
+                        ❌ {t('progress.failed', { count: failedJobs.length })}
                     </h4>
                     <div className="grid gap-2">
                         {failedJobs.map(job => <JobCard key={job.id} job={job} />)}
@@ -198,13 +214,13 @@ export default function ProgressDashboard({ projectId }: ProgressDashboardProps)
                 <details className="group">
                     <summary className="cursor-pointer font-bold mb-3 text-green-600 dark:text-green-400 list-none flex items-center gap-2">
                         <span className="transition-transform group-open:rotate-90">▶</span>
-                        ✅ Completed ({completedJobs.length})
+                        ✅ {t('progress.completed', { count: completedJobs.length })}
                     </summary>
                     <div className="grid gap-2 mt-3 opacity-60">
                         {completedJobs.slice(0, 10).map(job => <JobCard key={job.id} job={job} />)}
                         {completedJobs.length > 10 && (
                             <p className="text-sm text-gray-500 text-center">
-                                +{completedJobs.length - 10} more completed
+                                {t('progress.moreCompleted', { count: completedJobs.length - 10 })}
                             </p>
                         )}
                     </div>
@@ -215,7 +231,7 @@ export default function ProgressDashboard({ projectId }: ProgressDashboardProps)
             {jobs.length === 0 && (
                 <div className="text-center py-8 text-gray-500">
                     <p className="text-4xl mb-2">📋</p>
-                    <p>No generation tasks yet</p>
+                    <p>{t('progress.noTasks')}</p>
                 </div>
             )}
         </div>

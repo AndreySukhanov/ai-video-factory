@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { ImagePlus, X, AlertTriangle } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ImageUploadProps {
     onImageUploaded: (url: string) => void;
@@ -16,6 +17,7 @@ export default function ImageUpload({
     apiBaseUrl = 'http://localhost:8000',
     compact = false
 }: ImageUploadProps) {
+    const { t } = useLanguage();
     const [isDragging, setIsDragging] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [preview, setPreview] = useState<string | null>(null);
@@ -40,14 +42,14 @@ export default function ImageUpload({
         // Validate file type
         const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
         if (!allowedTypes.includes(file.type)) {
-            setError('Invalid file type. Use JPG, PNG, WebP, or GIF.');
+            setError(t('imageUpload.invalidType'));
             setIsUploading(false);
             return;
         }
 
         // Validate file size (10MB max)
         if (file.size > 10 * 1024 * 1024) {
-            setError('File too large. Maximum size is 10MB.');
+            setError(t('imageUpload.tooLarge'));
             setIsUploading(false);
             return;
         }
@@ -156,20 +158,20 @@ export default function ImageUpload({
                     {isUploading ? (
                         <div className="flex flex-col items-center gap-2">
                             <div className={`border-3 border-purple-500 border-t-transparent rounded-full animate-spin ${compact ? 'w-6 h-6' : 'w-10 h-10'}`} />
-                            {!compact && <p className="text-gray-500">Uploading...</p>}
+                            {!compact && <p className="text-gray-500">{t('imageUpload.uploading')}</p>}
                         </div>
                     ) : (
                         <>
                             <ImagePlus className={`mx-auto text-gray-400 ${compact ? 'w-6 h-6 mb-1' : 'w-10 h-10 mb-3'}`} />
                             {compact ? (
-                                <p className="text-gray-500 text-xs">+ Add</p>
+                                <p className="text-gray-500 text-xs">{t('imageUpload.add')}</p>
                             ) : (
                                 <>
                                     <p className="text-gray-600 dark:text-gray-300 font-medium">
-                                        Drop image here or click to upload
+                                        {t('imageUpload.dropOrClick')}
                                     </p>
                                     <p className="text-sm text-gray-400 mt-2">
-                                        JPG, PNG, WebP, GIF • Max 10MB
+                                        {t('imageUpload.formats')}
                                     </p>
                                 </>
                             )}
@@ -191,7 +193,7 @@ export default function ImageUpload({
                     </button>
                     {!compact && (
                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3">
-                            <p className="text-white text-sm font-medium">Reference Image</p>
+                            <p className="text-white text-sm font-medium">{t('imageUpload.referenceImage')}</p>
                         </div>
                     )}
                 </div>

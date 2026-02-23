@@ -122,6 +122,7 @@ def _handle_generate_story(db: Session, job: Job, payload: dict):
     
     project.title = story_data.get("series_title", project.title)
     project.logline = story_data.get("logline", project.logline)
+    project.status = "generating"
     
     # Generate character images for consistency
     character_generator = CharacterGenerator()
