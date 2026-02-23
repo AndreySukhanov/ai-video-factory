@@ -5,3 +5,8 @@ from .scene import Scene
 from .asset import Asset
 from .job import Job
 from .character import Character
+from .trend import Trend, StoryIdea, TrendSnapshot
+from .schedule import ScheduledTask
+from .youtube_channel import YouTubeChannel, YouTubeUpload
+from .analytics import VideoAnalytics
+from .review import ReviewItem

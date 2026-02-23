@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { LanguageProvider, type Locale } from "@/contexts/LanguageContext";
+import { isUiV2Enabled } from "@/lib/featureFlags";
+import { cookies } from "next/headers";
 
 const inter = Inter({
-  subsets: ["latin"],
+  subsets: ["latin", "cyrillic"],
 });
 
 export const metadata: Metadata = {
@@ -11,15 +14,24 @@ export const metadata: Metadata = {
   description: "Generate viral vertical micro-dramas with AI",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const cookieLocale = cookieStore.get("locale")?.value;
+  const initialLocale: Locale = cookieLocale === "en" || cookieLocale === "ru" ? cookieLocale : "ru";
+
   return (
-    <html lang="en" className="dark">
-      <body className={`${inter.className} bg-gray-900 text-white antialiased`}>
-        {children}
+    <html lang={initialLocale} className="dark" suppressHydrationWarning>
+      <body
+        className={`${inter.className} bg-gray-900 text-white antialiased`}
+        data-ui-v2={isUiV2Enabled ? "1" : "0"}
+      >
+        <LanguageProvider initialLocale={initialLocale}>
+          {children}
+        </LanguageProvider>
       </body>
     </html>
   );

@@ -181,3 +181,14 @@ DEPLOYMENT.md
 INVESTOR_DECK.md
 docs/STORY_MODE_FOR_INVESTORS.md
 docs/
+
+# Deploy archives
+*.tar
+
+# Temp files
+tmpclaude-*
+nul
+
+# Misc junk
+*.docx
+Gemini_Generated_Image_*

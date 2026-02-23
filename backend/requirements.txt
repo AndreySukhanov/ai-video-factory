@@ -15,3 +15,10 @@ requests
 replicate
 python-multipart
 Pillow
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
+pytrends
+cryptography
+rq-scheduler
+python-telegram-bot

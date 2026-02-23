@@ -2,6 +2,12 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+Create env file:
+
+```bash
+cp .env.example .env.local
+```
+
 First, run the development server:
 
 ```bash
@@ -15,6 +21,11 @@ bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+### UI Feature Flag
+
+- `NEXT_PUBLIC_UI_V2=0` keeps current UI.
+- `NEXT_PUBLIC_UI_V2=1` enables staged UI v2 rollout hooks.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

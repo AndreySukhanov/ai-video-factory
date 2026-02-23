@@ -23,6 +23,35 @@ class Settings(BaseSettings):
 
     # Backend URL for static files
     BACKEND_URL: Optional[str] = None
+    FRONTEND_URL: str = "http://localhost:3000"
+    ALLOW_PRIVATE_URL_FETCH: bool = False
+
+    # Trendwatcher
+    YOUTUBE_API_KEY: Optional[str] = None
+    APIFY_API_TOKEN: Optional[str] = None
+    TREND_FETCH_INTERVAL_HOURS: int = 6
+
+    # YouTube Upload (OAuth 2.0)
+    YOUTUBE_CLIENT_ID: Optional[str] = None
+    YOUTUBE_CLIENT_SECRET: Optional[str] = None
+    YOUTUBE_REDIRECT_URI: str = "http://localhost:8000/api/v1/youtube/auth/callback"
+    ENCRYPTION_KEY: Optional[str] = None  # Fernet key for encrypting tokens
+
+    # Scheduler
+    SCHEDULER_ENABLED: bool = True
+
+    # Analytics & Monitoring
+    TELEGRAM_BOT_TOKEN: Optional[str] = None
+    TELEGRAM_CHAT_ID: Optional[str] = None
+    ALERT_EMAIL: Optional[str] = None
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+
+    # Pipeline
+    AUTO_PIPELINE_MAX_VIDEOS_PER_DAY: int = 6
+    AUTO_PIPELINE_DEFAULT_GENRE: str = ""
 
     model_config = {
         "env_file": ".env",

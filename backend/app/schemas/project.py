@@ -49,9 +49,21 @@ class ProjectCreate(BaseModel):
     episode_duration_sec: int = 60
     reference_image_url: Optional[str] = None  # Optional reference image
 
+class ProjectUpdate(BaseModel):
+    title: Optional[str] = None
+    logline: Optional[str] = None
+    genre: Optional[str] = None
+    status: Optional[str] = None
+    seo_title: Optional[str] = None
+    seo_description: Optional[str] = None
+    seo_tags_json: Optional[str] = None
+
 class Project(ProjectBase):
     id: int
     status: str
+    seo_title: Optional[str] = None
+    seo_description: Optional[str] = None
+    seo_tags_json: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     episodes: List[Episode] = []
