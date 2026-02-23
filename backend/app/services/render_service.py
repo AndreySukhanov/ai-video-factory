@@ -1,6 +1,6 @@
 import json
 from sqlalchemy.orm import Session
-from app.models import Episode, Scene, Asset, Job
+from app.models import Episode, Scene, Asset, Job, Project
 from app.media.video_editor import VideoEditor
 import os
 import tempfile
@@ -128,7 +128,15 @@ def handle_render_episode_job(db: Session, job: Job, payload: dict):
         # Update episode status
         episode.status = "ready"
         db.commit()
-        
+
+        # Check if all episodes of the project are ready → update project status
+        project = db.query(Project).filter(Project.id == episode.project_id).first()
+        if project:
+            all_episodes = db.query(Episode).filter(Episode.project_id == project.id).all()
+            if all_episodes and all(ep.status == "ready" for ep in all_episodes):
+                project.status = "ready"
+                db.commit()
+
         job.status = "done"
         job.result_json = json.dumps({"video_path": video_path})
         db.commit()

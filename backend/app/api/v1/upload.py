@@ -9,6 +9,7 @@ import httpx
 from PIL import Image
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
+from app.core.security import resolve_upload_file_path
 
 router = APIRouter()
 
@@ -122,7 +123,10 @@ async def upload_image(file: UploadFile = File(...)):
 @router.delete("/image/{filename}")
 async def delete_image(filename: str):
     """Delete an uploaded image"""
-    filepath = os.path.join(UPLOAD_DIR, filename)
+    try:
+        filepath = resolve_upload_file_path(UPLOAD_DIR, filename)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="File not found")
