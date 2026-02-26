@@ -23,6 +23,7 @@ class TrendRead(TrendBase):
     fetched_at: Optional[datetime] = None
     published_at: Optional[datetime] = None
     view_count: Optional[int] = None
+    duration_sec: Optional[int] = None
 
     class Config:
         from_attributes = True

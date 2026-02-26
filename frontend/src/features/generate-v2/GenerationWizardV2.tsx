@@ -84,8 +84,12 @@ export default function GenerationWizardV2() {
                 episodes={flow.episodes}
                 form={flow.publishForm}
                 isPublishing={flow.isPublishing}
+                isStitching={flow.isStitching}
+                stitchedVideoUrl={flow.stitchedVideoUrl}
+                stitchedDuration={flow.stitchedDuration}
                 onSelectEpisode={flow.selectPublishEpisode}
                 onChange={flow.updatePublishForm}
+                onStitch={flow.stitchEpisodes}
                 onPublish={flow.publishToReview}
               />
             )}

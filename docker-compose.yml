@@ -54,6 +54,7 @@ services:
         - NEXT_PUBLIC_API_BASE_URL=https://your-domain.com
     environment:
       - NEXT_PUBLIC_API_BASE_URL=https://your-domain.com
+      - HOSTNAME=0.0.0.0
     depends_on:
       - backend
 
