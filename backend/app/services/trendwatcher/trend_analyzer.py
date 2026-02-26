@@ -48,6 +48,16 @@ class TrendAnalyzer:
                          max_per_source: int = 20) -> List[Trend]:
         """Fetch trends from all sources. Clear old region data, insert fresh."""
         # Delete old trends for this region so the page always shows fresh data
+        old_trend_ids = [t.id for t in db.query(Trend.id).filter(Trend.region == region).all()]
+        if old_trend_ids:
+            # Clean up orphaned ideas linked to old trends
+            old_ideas_count = db.query(StoryIdea).filter(
+                StoryIdea.trend_id.in_(old_trend_ids),
+                StoryIdea.status == "pending",
+            ).delete(synchronize_session=False)
+            if old_ideas_count:
+                print(f"[TRENDS] Cleared {old_ideas_count} pending ideas for region {region}")
+
         old_count = db.query(Trend).filter(Trend.region == region).delete()
         db.flush()
         if old_count:
