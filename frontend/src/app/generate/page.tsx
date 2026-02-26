@@ -107,7 +107,11 @@ const PROMPTS_STORAGE_KEY = 'ai_video_factory_prompts';
 
 export default function GenerateEpisodePageWrapper() {
     if (isUiV2Enabled) {
-        return <GenerationWizardV2 />;
+        return (
+            <Suspense fallback={<div className="min-h-screen bg-gray-900 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-purple-400" /></div>}>
+                <GenerationWizardV2 />
+            </Suspense>
+        );
     }
 
     return (
@@ -289,6 +293,14 @@ function GenerateEpisodePage() {
 
         const loadProject = async () => {
             try {
+                // Clear localStorage drafts to avoid conflicts
+                localStorage.removeItem(PROMPTS_STORAGE_KEY);
+                localStorage.removeItem(SERIES_STORAGE_KEY);
+                setGeneratedEpisodes([]);
+                setSeriesTitle('');
+                setSeriesLogline('');
+                setStoryIdea('');
+
                 const res = await fetch(`${API_V1_BASE_URL}/projects/${projectId}`);
                 if (!res.ok) return;
                 const data = await res.json();

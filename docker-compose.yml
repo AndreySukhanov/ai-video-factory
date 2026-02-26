@@ -54,6 +54,7 @@ services:
         - NEXT_PUBLIC_API_BASE_URL=https://aivideo.duckdns.org
     environment:
       - NEXT_PUBLIC_API_BASE_URL=https://aivideo.duckdns.org
+      - HOSTNAME=0.0.0.0
     depends_on:
       - backend
 
