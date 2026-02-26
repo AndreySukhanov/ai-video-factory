@@ -488,7 +488,7 @@ export default function TrendsPage() {
                                     const keywords = safeStringArray(trend.keywords_json);
                                     const config = SOURCE_CONFIG[trend.source] || { label: trend.source, color: 'text-gray-400', badgeClass: 'bg-gray-500/20 text-gray-400 border-gray-500/30' };
                                     return (
-                                        <div key={trend.id} className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 hover:border-purple-500/50 transition-colors">
+                                        <div key={trend.id} className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 hover:border-purple-500/50 transition-colors flex flex-col">
                                             {/* Thumbnail */}
                                             {trend.thumbnail_url && (
                                                 <div className="mb-2 -mx-4 -mt-4 rounded-t-xl overflow-hidden">
@@ -595,7 +595,7 @@ export default function TrendsPage() {
                                                 <button
                                                     onClick={() => handleGenerateFromTrend(trend.id)}
                                                     disabled={generatingTrend === trend.id}
-                                                    className="mt-3 w-full bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 disabled:opacity-50 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-2 transition-colors"
+                                                    className="mt-auto pt-3 w-full bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 disabled:opacity-50 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-2 transition-colors"
                                                 >
                                                     {generatingTrend === trend.id
                                                         ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('trends.analyzingTrend')}</>
@@ -606,7 +606,7 @@ export default function TrendsPage() {
 
                                             {/* Generated result */}
                                             {generatedResults[trend.id] && (
-                                                <div className="mt-3 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                                                <div className="mt-auto pt-3 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
                                                     <div className="flex items-center gap-1.5 mb-2">
                                                         <Sparkles className="w-3.5 h-3.5 text-green-400" />
                                                         <span className="text-[10px] text-green-400 font-medium uppercase">{t('trends.seoGenerated')}</span>
