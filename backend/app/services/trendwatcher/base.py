@@ -20,6 +20,7 @@ class TrendItem:
     published_at: Optional[datetime] = None
     view_count: int = 0
     duration_sec: int = 0  # original video duration in seconds
+    thumbnail_url: str = ""
     competition_level: Optional[float] = None
     opportunity_score: Optional[float] = None
 
