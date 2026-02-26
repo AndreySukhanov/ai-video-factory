@@ -29,6 +29,7 @@ interface TrendItem {
     opportunity_score: number | null;
     view_count: number | null;
     published_at: string | null;
+    thumbnail_url: string | null;
 }
 
 interface TrendGenerateResult {
@@ -488,6 +489,17 @@ export default function TrendsPage() {
                                     const config = SOURCE_CONFIG[trend.source] || { label: trend.source, color: 'text-gray-400', badgeClass: 'bg-gray-500/20 text-gray-400 border-gray-500/30' };
                                     return (
                                         <div key={trend.id} className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 hover:border-purple-500/50 transition-colors">
+                                            {/* Thumbnail */}
+                                            {trend.thumbnail_url && (
+                                                <div className="mb-2 -mx-4 -mt-4 rounded-t-xl overflow-hidden">
+                                                    <img
+                                                        src={trend.thumbnail_url}
+                                                        alt={trend.title}
+                                                        className="w-full h-32 object-cover"
+                                                        loading="lazy"
+                                                    />
+                                                </div>
+                                            )}
                                             {/* Header: title + source badge */}
                                             <div className="flex items-start justify-between mb-2">
                                                 <h3 className="font-medium text-sm line-clamp-2 flex-1">{trend.title}</h3>

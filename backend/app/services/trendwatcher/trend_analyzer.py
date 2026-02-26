@@ -79,6 +79,8 @@ class TrendAnalyzer:
                         existing.keywords_json = json.dumps(item.keywords)
                         if item.duration_sec and not existing.duration_sec:
                             existing.duration_sec = item.duration_sec
+                        if item.thumbnail_url and not existing.thumbnail_url:
+                            existing.thumbnail_url = item.thumbnail_url
 
                         # Classify trend stage based on velocity change
                         if old_velocity > 0:
@@ -104,6 +106,7 @@ class TrendAnalyzer:
                             view_count=item.view_count,
                             published_at=item.published_at,
                             duration_sec=item.duration_sec or None,
+                            thumbnail_url=item.thumbnail_url or None,
                             trend_stage="rising",
                             keywords_json=json.dumps(item.keywords),
                             url=item.url,
