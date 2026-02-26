@@ -27,6 +27,22 @@ def _migrate_add_columns():
                 conn.execute(text("ALTER TABLE trends ADD COLUMN region VARCHAR DEFAULT 'US'"))
                 print("[MIGRATE] Added 'region' column to trends table")
 
+    # Add 'duration_sec' to 'trends' table if missing
+    if "trends" in insp.get_table_names():
+        columns = [c["name"] for c in insp.get_columns("trends")]
+        if "duration_sec" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE trends ADD COLUMN duration_sec INTEGER"))
+                print("[MIGRATE] Added 'duration_sec' column to trends table")
+
+    # Add 'thumbnail_url' to 'trends' table if missing
+    if "trends" in insp.get_table_names():
+        columns = [c["name"] for c in insp.get_columns("trends")]
+        if "thumbnail_url" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE trends ADD COLUMN thumbnail_url VARCHAR"))
+                print("[MIGRATE] Added 'thumbnail_url' column to trends table")
+
     # Add 'youtube_upload_id' to 'review_items' table if missing
     if "review_items" in insp.get_table_names():
         columns = [c["name"] for c in insp.get_columns("review_items")]
