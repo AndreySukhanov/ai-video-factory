@@ -155,6 +155,7 @@ class YouTubeTrendsSource(TrendSource):
                         published_at=published_at,
                         view_count=views,
                         duration_sec=seconds,
+                        thumbnail_url=snippet.get("thumbnails", {}).get("high", snippet.get("thumbnails", {}).get("medium", {})).get("url", ""),
                         keywords=snippet.get("tags", [])[:10] if snippet.get("tags") else [channel],
                         url=video_url,
                     ))

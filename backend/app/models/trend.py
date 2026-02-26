@@ -24,6 +24,7 @@ class Trend(Base):
     published_at = Column(DateTime(timezone=True), nullable=True)  # original video publish time
     trend_stage = Column(String, default="unknown")  # rising, peaking, declining, unknown
     duration_sec = Column(Integer, nullable=True)  # original video duration in seconds
+    thumbnail_url = Column(String, nullable=True)
     competition_level = Column(Float, nullable=True)  # 0.0 - 1.0
     opportunity_score = Column(Float, nullable=True)  # high velocity + low competition
 
