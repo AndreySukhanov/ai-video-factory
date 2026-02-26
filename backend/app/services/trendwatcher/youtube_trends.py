@@ -154,6 +154,7 @@ class YouTubeTrendsSource(TrendSource):
                         velocity_score=velocity,
                         published_at=published_at,
                         view_count=views,
+                        duration_sec=seconds,
                         keywords=snippet.get("tags", [])[:10] if snippet.get("tags") else [channel],
                         url=video_url,
                     ))

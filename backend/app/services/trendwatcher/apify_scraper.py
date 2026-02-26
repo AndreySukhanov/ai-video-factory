@@ -113,6 +113,7 @@ class ApifyScraper(TrendSource):
                 source=self.source_name,
                 category=category or "shorts",
                 score=item.get("viewCount", item.get("views", 0)) / 1000 if item.get("viewCount", item.get("views", 0)) else 0,
+                duration_sec=duration if isinstance(duration, int) else 0,
                 keywords=item.get("tags", [])[:10] if item.get("tags") else [],
                 url=item.get("url", item.get("link", "")),
             ))

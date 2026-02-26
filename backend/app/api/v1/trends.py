@@ -257,6 +257,15 @@ def generate_from_trend(trend_id: int, request: TrendGenerateRequest = None,
     db.add(idea)
     db.flush()
 
+    # Calculate total episodes from original video duration
+    import math
+    episode_duration = request.duration if request else 6
+    original_duration = trend.duration_sec or 0
+    if original_duration > 0:
+        total_episodes = max(1, math.ceil(original_duration / episode_duration))
+    else:
+        total_episodes = 1
+
     # Create Project with SEO fields (no auto-generation — user reviews and generates manually)
     from app.models import Project
 
@@ -265,6 +274,8 @@ def generate_from_trend(trend_id: int, request: TrendGenerateRequest = None,
         logline=idea_text,
         genre=genre,
         target_platform="youtube_shorts",
+        total_episodes=total_episodes,
+        episode_duration_sec=episode_duration,
         status="draft",
         seo_title=seo_title,
         seo_description=seo_description,
