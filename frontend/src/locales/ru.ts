@@ -163,6 +163,12 @@ const ru: Record<string, string> = {
   "generateV2.errorChooseEpisode": "Выберите сгенерированный эпизод перед отправкой",
   "generateV2.noticeSentToReview": "Видео отправлено в очередь ревью",
   "generateV2.errorSendToReview": "Не удалось отправить видео на ревью",
+  "generateV2.stitchAll": "Склеить все эпизоды",
+  "generateV2.stitching": "Склейка эпизодов...",
+  "generateV2.stitched": "Эпизоды склеены!",
+  "generateV2.stitchedDuration": "Общая длительность: {duration} сек",
+  "generateV2.errorStitchFailed": "Не удалось склеить эпизоды",
+  "generateV2.errorNoReadyEpisodes": "Нет готовых эпизодов для склейки",
 
   // ===== TRENDS PAGE =====
   "trends.title": "Обзор трендов",

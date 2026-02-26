@@ -163,6 +163,12 @@ const en: Record<string, string> = {
   "generateV2.errorChooseEpisode": "Choose a generated episode before publishing",
   "generateV2.noticeSentToReview": "Video sent to review queue",
   "generateV2.errorSendToReview": "Failed to send video to review",
+  "generateV2.stitchAll": "Stitch all episodes",
+  "generateV2.stitching": "Stitching episodes...",
+  "generateV2.stitched": "Episodes stitched!",
+  "generateV2.stitchedDuration": "Total duration: {duration}s",
+  "generateV2.errorStitchFailed": "Failed to stitch episodes",
+  "generateV2.errorNoReadyEpisodes": "No ready episodes to stitch",
 
   // ===== TRENDS PAGE =====
   "trends.title": "Trend Explorer",

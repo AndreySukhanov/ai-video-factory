@@ -1,12 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   createReviewItem,
   generateEpisodeClip,
   generateSeriesPlan,
+  mergeVideos,
   GenerationModel,
 } from '@/lib/api/generation';
+import { API_V1_BASE_URL } from '@/lib/apiBase';
 import { safeJsonParse } from '@/lib/safeJson';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { EpisodeDraft, FlowStep, FlowStepId, GenerationDraftSnapshot, IdeaFormState, PublishFormState } from './types';
@@ -84,23 +87,87 @@ function normalizeIdeaForm(value?: Partial<IdeaFormState> | null): IdeaFormState
   };
 }
 
+const VALID_GENRES = ['drama', 'thriller', 'comedy', 'romance', 'mystery', 'scifi', 'action'];
+
+function normalizeGenre(genre: string): string {
+  const lower = genre.toLowerCase();
+  if (VALID_GENRES.includes(lower)) return lower;
+  return 'drama';
+}
+
 export function useGenerationFlow() {
   const { t } = useLanguage();
+  const searchParams = useSearchParams();
   const [currentStep, setCurrentStep] = useState<FlowStepId>('idea');
   const [ideaForm, setIdeaForm] = useState<IdeaFormState>(DEFAULT_IDEA_FORM);
   const [seriesTitle, setSeriesTitle] = useState('');
   const [seriesLogline, setSeriesLogline] = useState('');
   const [episodes, setEpisodes] = useState<EpisodeDraft[]>([]);
   const [publishForm, setPublishForm] = useState<PublishFormState>(DEFAULT_PUBLISH_FORM);
+  const [projectId, setProjectId] = useState<number | null>(null);
   const [isPlanning, setIsPlanning] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isStitching, setIsStitching] = useState(false);
+  const [stitchedVideoUrl, setStitchedVideoUrl] = useState<string | null>(null);
+  const [stitchedDuration, setStitchedDuration] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const hydratedRef = useRef(false);
+  const projectLoadedRef = useRef(false);
 
+  // Load project from ?project=N URL parameter
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const projectParam = searchParams.get('project');
+    if (!projectParam || projectLoadedRef.current) return;
+    projectLoadedRef.current = true;
+
+    const pid = parseInt(projectParam, 10);
+    if (isNaN(pid)) return;
+
+    // Clear localStorage draft to avoid conflicts
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
+
+    fetch(`${API_V1_BASE_URL}/projects/${pid}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Project not found');
+        return res.json();
+      })
+      .then((data) => {
+        setProjectId(data.id);
+        setIdeaForm(
+          normalizeIdeaForm({
+            idea: data.logline || '',
+            genre: normalizeGenre(data.genre || 'drama'),
+            episodesCount: data.total_episodes || 1,
+          }),
+        );
+        setSeriesTitle(data.title || '');
+        setSeriesLogline(data.logline || '');
+        setEpisodes([]);
+        setCurrentStep('idea');
+
+        // Pre-fill publish form with SEO data
+        const tags = safeJsonParse<string[]>(data.seo_tags_json, []);
+        setPublishForm({
+          selectedEpisodeId: '',
+          title: data.seo_title || data.title || '',
+          description: data.seo_description || '',
+          tagsCsv: tags.join(', '),
+        });
+
+        hydratedRef.current = true;
+      })
+      .catch(() => {
+        hydratedRef.current = true;
+      });
+  }, [searchParams]);
+
+  // Load from localStorage (only if no project param)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (searchParams.get('project')) return; // skip if loading project
     const snapshot = safeJsonParse<GenerationDraftSnapshot | null>(
       localStorage.getItem(DRAFT_STORAGE_KEY),
       null,
@@ -113,7 +180,7 @@ export function useGenerationFlow() {
       setCurrentStep(snapshot.currentStep || 'idea');
     }
     hydratedRef.current = true;
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     if (!hydratedRef.current || typeof window === 'undefined') return;
@@ -381,11 +448,45 @@ export function useGenerationFlow() {
     setPublishForm((prev) => ({ ...prev, [key]: value }));
   }, []);
 
+  const stitchEpisodes = useCallback(async () => {
+    setError(null);
+    setNotice(null);
+    const readyEpisodes = episodes.filter((e) => e.status === 'done' && e.videoUrl);
+    if (readyEpisodes.length < 2) {
+      setError(t('generateV2.errorNoReadyEpisodes'));
+      return;
+    }
+
+    const videoUrls = readyEpisodes.map((e) => e.videoUrl!);
+    setIsStitching(true);
+    try {
+      const response = await mergeVideos({ video_urls: videoUrls });
+      if (!response.success || !response.merged_video_url) {
+        throw new Error(response.error || t('generateV2.errorStitchFailed'));
+      }
+      setStitchedVideoUrl(response.merged_video_url);
+      setStitchedDuration(response.total_duration ?? null);
+      setPublishForm((prev) => ({
+        ...prev,
+        title: prev.title || seriesTitle,
+        description: prev.description || seriesLogline,
+      }));
+      setNotice(t('generateV2.stitched'));
+    } catch (stitchError) {
+      setError(stitchError instanceof Error ? stitchError.message : t('generateV2.errorStitchFailed'));
+    } finally {
+      setIsStitching(false);
+    }
+  }, [episodes, seriesTitle, seriesLogline, t]);
+
   const publishToReview = useCallback(async () => {
     setError(null);
     setNotice(null);
+
+    const videoUrl = stitchedVideoUrl;
     const episode = episodes.find((item) => item.id === publishForm.selectedEpisodeId);
-    if (!episode || !episode.videoUrl) {
+
+    if (!videoUrl && (!episode || !episode.videoUrl)) {
       setError(t('generateV2.errorChooseEpisode'));
       return;
     }
@@ -398,11 +499,11 @@ export function useGenerationFlow() {
     setIsPublishing(true);
     try {
       await createReviewItem({
-        video_url: episode.videoUrl,
-        title: publishForm.title.trim() || episode.title,
-        description: publishForm.description.trim() || episode.synopsis,
+        video_url: videoUrl || episode!.videoUrl!,
+        title: publishForm.title.trim() || seriesTitle || episode?.title || '',
+        description: publishForm.description.trim() || seriesLogline || episode?.synopsis || '',
         tags,
-        project_id: null,
+        project_id: projectId,
       });
       setNotice(t('generateV2.noticeSentToReview'));
     } catch (publishError) {
@@ -410,7 +511,7 @@ export function useGenerationFlow() {
     } finally {
       setIsPublishing(false);
     }
-  }, [episodes, publishForm, t]);
+  }, [episodes, publishForm, stitchedVideoUrl, seriesTitle, seriesLogline, projectId, t]);
 
   return {
     steps,
@@ -424,6 +525,9 @@ export function useGenerationFlow() {
     isPlanning,
     isGenerating,
     isPublishing,
+    isStitching,
+    stitchedVideoUrl,
+    stitchedDuration,
     error,
     notice,
     stats,
@@ -437,6 +541,7 @@ export function useGenerationFlow() {
     removeEpisode,
     selectPublishEpisode,
     updatePublishForm,
+    stitchEpisodes,
     publishToReview,
   };
 }
