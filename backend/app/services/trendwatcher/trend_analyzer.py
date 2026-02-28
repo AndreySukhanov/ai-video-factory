@@ -222,26 +222,43 @@ class TrendAnalyzer:
         if content_style:
             niche_instruction += f"\nContent style: {content_style}. Match this visual/tonal style."
 
-        system_prompt = """You are a viral YouTube Shorts content strategist and SEO expert.
-Analyze trending topics and generate compelling micro-drama story ideas (30-60 second videos).
-Each idea should be a complete mini-story that could go viral.
+        system_prompt = """You are a viral pattern analyst and script generator for YouTube Shorts (30-60s videos).
+Your job is to extract PATTERNS from trending content — not just topics — and generate scripts based on those patterns.
+
+A pattern = hook type + narrative formula + emotional trigger.
+
+HOOK TYPES (first 3 seconds — the most critical moment):
+- question: Start with a provocative question ("What would you do if...?")
+- shocking_stat: Open with a surprising fact or number ("97% of people get this wrong")
+- pov: First-person perspective setup ("POV: you just discovered...")
+- cliffhanger: Tease the ending at the start ("I never expected what happened next")
+- contrast: Show before/after or expectation vs reality
+- mistake_warning: "Stop doing X!" or "This mistake is costing you..."
+- pattern_interrupt: Unexpected visual or statement that breaks scrolling autopilot
+- results_preview: Show the end result first, then the journey
+- countdown: "3 things you didn't know about..." — listicle hooks
+- authority: Establish credibility fast ("As a doctor / after 10 years of...")
+- emotional: Raw emotional moment that creates instant empathy
+- curiosity_gap: Incomplete info that demands watching ("She didn't know what was behind the door")
+
+NARRATIVE FORMULAS:
+- Hook → Conflict → Twist → CTA
+- Hook → Problem → Solution → CTA
+- Hook → Build-up → Payoff
+- Hook → Contrast → Reveal → CTA
+- Hook → List (3 items) → Surprise Item → CTA
+
+WORKFLOW:
+1. Analyze the trends to find top PATTERNS (recurring hook types, emotional triggers, narrative structures)
+2. Generate story ideas that apply these patterns to new content
 
 PRIORITIZE trends that are "rising" with low competition — these are the best opportunities.
 
-TITLE PATTERNS that work on Shorts:
-- "POV: [relatable situation]"
-- "Wait for it..."
-- "[Situation] Part X"
-- "Nobody expected what happened next..."
-- "What would you do if..."
-- "The [adjective] [noun] that changed everything"
-
-HOOK TYPES (first 3 seconds of video):
-- question: Start with a provocative question
-- shocking_stat: Open with a surprising fact or number
-- pov: First-person perspective setup
-- cliffhanger: Tease the ending at the start
-- contrast: Show before/after or expectation vs reality
+REGENERABILITY: For each idea, assess if it can be produced with AI only.
+- "yes" = fully producible with AI video/image generation
+- "no: requires real person" = needs a real human on camera
+- "no: visual only" = concept is too abstract for video
+- "no: copyrighted content" = relies on specific IP
 
 Return valid JSON."""
 
@@ -251,21 +268,30 @@ Return valid JSON."""
 
 Generate {max_ideas} YouTube Shorts story ideas. {genre_instruction}{niche_instruction}
 
-For EACH idea, also provide:
-- A hook type for the first 3 seconds
+FIRST identify 2-3 top patterns from the trends, THEN generate ideas applying those patterns.
+
+For EACH idea, provide:
+- A hook type (one of 12 types)
+- A narrative structure formula
+- An emotional trigger
+- Regenerability assessment
 - An SEO-optimized YouTube title (under 100 chars)
 - 5-8 relevant YouTube tags
-- 2 alternative angles (different hook/perspective)
+- 2 alternative angles
 
 Return JSON:
 {{
+  "patterns_found": ["pattern description 1", "pattern description 2"],
   "ideas": [
     {{
       "idea_text": "Complete story idea description (2-3 sentences)",
       "genre": "drama|comedy|horror|thriller|romance|sci-fi|mystery",
       "virality_score": 0.0-1.0,
       "based_on_trends": ["trend title 1"],
-      "hook_type": "question|shocking_stat|pov|cliffhanger|contrast",
+      "hook_type": "question|shocking_stat|pov|cliffhanger|contrast|mistake_warning|pattern_interrupt|results_preview|countdown|authority|emotional|curiosity_gap",
+      "narrative_structure": "Hook → Conflict → Twist → CTA",
+      "emotional_trigger": "curiosity|fear|surprise|empathy|outrage",
+      "regenerable": "yes|no: requires real person|no: visual only|no: copyrighted content",
       "suggested_title": "SEO-optimized YouTube title under 100 chars",
       "suggested_tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
       "variants": [
@@ -311,6 +337,8 @@ Return JSON:
                 suggested_title=idea_data.get("suggested_title"),
                 suggested_tags_json=json.dumps(idea_data.get("suggested_tags", [])),
                 variants_json=json.dumps(idea_data.get("variants", [])),
+                narrative_structure=idea_data.get("narrative_structure"),
+                regenerable=idea_data.get("regenerable"),
             )
             db.add(idea)
             story_ideas.append(idea)

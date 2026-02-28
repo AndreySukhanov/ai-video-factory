@@ -51,6 +51,18 @@ def _migrate_add_columns():
                 conn.execute(text("ALTER TABLE review_items ADD COLUMN youtube_upload_id INTEGER"))
                 print("[MIGRATE] Added 'youtube_upload_id' column to review_items table")
 
+    # Add 'narrative_structure' and 'regenerable' to 'story_ideas' table if missing
+    if "story_ideas" in insp.get_table_names():
+        columns = [c["name"] for c in insp.get_columns("story_ideas")]
+        if "narrative_structure" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE story_ideas ADD COLUMN narrative_structure VARCHAR"))
+                print("[MIGRATE] Added 'narrative_structure' column to story_ideas table")
+        if "regenerable" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE story_ideas ADD COLUMN regenerable VARCHAR"))
+                print("[MIGRATE] Added 'regenerable' column to story_ideas table")
+
 _migrate_add_columns()
 
 app = FastAPI(
