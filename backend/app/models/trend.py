@@ -48,6 +48,8 @@ class StoryIdea(Base):
     suggested_title = Column(String, nullable=True)  # SEO-optimized title
     suggested_tags_json = Column(Text, nullable=True)  # JSON array of suggested tags
     variants_json = Column(Text, nullable=True)  # JSON array of variant angles
+    narrative_structure = Column(String, nullable=True)  # e.g. "Hook → Conflict → Twist → CTA"
+    regenerable = Column(String, nullable=True)  # "yes" or "no: reason"
 
     trend = relationship("Trend", back_populates="ideas")
     project = relationship("Project")
