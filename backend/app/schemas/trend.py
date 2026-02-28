@@ -56,6 +56,8 @@ class StoryIdeaRead(StoryIdeaBase):
     suggested_title: Optional[str] = None
     suggested_tags_json: Optional[str] = None
     variants_json: Optional[str] = None
+    narrative_structure: Optional[str] = None
+    regenerable: Optional[str] = None
 
     class Config:
         from_attributes = True
