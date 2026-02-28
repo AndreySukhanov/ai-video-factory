@@ -56,6 +56,8 @@ interface StoryIdea {
     suggested_title: string | null;
     suggested_tags_json: string | null;
     variants_json: string | null;
+    narrative_structure: string | null;
+    regenerable: string | null;
 }
 
 interface StoryIdeaVariant {
@@ -107,6 +109,13 @@ const HOOK_LABELS: Record<string, string> = {
     pov: 'POV',
     cliffhanger: 'Cliffhanger',
     contrast: 'Contrast',
+    mistake_warning: 'Mistake Warning',
+    pattern_interrupt: 'Pattern Interrupt',
+    results_preview: 'Results Preview',
+    countdown: 'Countdown',
+    authority: 'Authority',
+    emotional: 'Emotional',
+    curiosity_gap: 'Curiosity Gap',
 };
 
 const SORT_OPTIONS = ['velocity', 'opportunity', 'score'] as const;
@@ -696,6 +705,15 @@ export default function TrendsPage() {
                                                         Hook: {HOOK_LABELS[idea.hook_type] || idea.hook_type}
                                                     </span>
                                                 )}
+                                                {idea.regenerable && (
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                                        idea.regenerable.startsWith('yes')
+                                                            ? 'bg-green-500/20 text-green-400'
+                                                            : 'bg-red-500/20 text-red-400'
+                                                    }`}>
+                                                        {idea.regenerable.startsWith('yes') ? 'AI-ready' : idea.regenerable}
+                                                    </span>
+                                                )}
                                                 <div className="ml-auto flex items-center gap-1">
                                                     <Zap className="w-3 h-3 text-yellow-400" />
                                                     <span className="text-xs text-yellow-400">{(idea.virality_score * 100).toFixed(0)}%</span>
@@ -703,7 +721,14 @@ export default function TrendsPage() {
                                             </div>
 
                                             {/* Idea text */}
-                                            <p className="text-sm text-gray-300 mb-3">{idea.idea_text}</p>
+                                            <p className="text-sm text-gray-300 mb-2">{idea.idea_text}</p>
+
+                                            {/* Narrative structure */}
+                                            {idea.narrative_structure && (
+                                                <div className="text-[10px] text-gray-500 mb-3 flex items-center gap-1">
+                                                    <span>📐</span> {idea.narrative_structure}
+                                                </div>
+                                            )}
 
                                             {/* Suggested title */}
                                             {idea.suggested_title && (
