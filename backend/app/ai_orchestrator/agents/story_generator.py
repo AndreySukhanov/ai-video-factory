@@ -1,49 +1,53 @@
 """
-Story Generator Agent - генерирует структуру серии из идеи пользователя.
-Использует OpenRouter с DeepSeek для генерации эпизодов с детальными промтами.
+Story Generator Agent - generates series structure from user idea.
+Uses OpenRouter with DeepSeek for episode generation with Veo 3.1 best practices:
+ANCHOR+VARIABLE pattern, 8-element formula, English-only prompts, audio-first.
 """
 import json
+import re
 from typing import List, Optional
 from pydantic import BaseModel
 from app.core.config import settings
 
 
 class EpisodePrompt(BaseModel):
-    """Сгенерированный эпизод с промтом"""
+    """Generated episode with Veo 3.1 optimized prompt"""
     number: int
     title: str
     synopsis: str
-    visual_prompt: str
+    visual_prompt: str           # full prompt (anchor + variable combined)
+    anchor_prompt: str = ""      # invariant part (camera, character, setting, lighting, style)
+    variable_prompt: str = ""    # unique part (action, dialogue, audio, negative)
 
 
 class SeriesStructure(BaseModel):
-    """Структура сгенерированной серии"""
+    """Generated series structure with Veo 3.1 metadata"""
     series_title: str
     logline: str
     genre: str
-    main_character: str = ""  # Character description for consistency
+    main_character: str = ""
+    character_card: str = ""     # fixed text <= 50 words for every prompt
+    voice_description: str = ""  # "warm female voice, American accent"
+    anchor_prompt: str = ""      # shared anchor for entire series
     episodes: List[EpisodePrompt]
 
 
 class StoryGenerator:
     """
-    Генерирует структуру серии из идеи пользователя.
-    Создаёт детальные визуальные промты для каждого эпизода.
-    Использует OpenRouter с DeepSeek.
+    Generates series structure from user idea.
+    Creates detailed visual prompts for each episode using Veo 3.1 best practices.
     """
-    
+
     def __init__(self):
-        # Check for OpenRouter key first, then fall back to OpenAI
         self.api_key = settings.OPENROUTER_API_KEY or settings.OPENAI_API_KEY
         self.use_openrouter = bool(settings.OPENROUTER_API_KEY)
         self.use_real_api = bool(self.api_key)
         self.client = None
-        
+
         if self.use_real_api:
             try:
                 from openai import OpenAI
                 if self.use_openrouter:
-                    # OpenRouter uses OpenAI-compatible API
                     self.client = OpenAI(
                         api_key=self.api_key,
                         base_url="https://openrouter.ai/api/v1"
@@ -57,7 +61,7 @@ class StoryGenerator:
             except ImportError:
                 print("[STORY GENERATOR] Warning: openai package not installed")
                 self.use_real_api = False
-    
+
     def generate_series(
         self,
         idea: str,
@@ -67,29 +71,16 @@ class StoryGenerator:
         aspect_ratio: str = "9:16"
     ) -> SeriesStructure:
         """
-        Генерирует структуру серии с промтами для каждого эпизода.
-        
-        Args:
-            idea: Основная идея серии от пользователя
-            genre: Жанр (drama, comedy, thriller, fantasy, romance, action)
-            episodes_count: Количество эпизодов (1-10)
-            duration: Длительность каждого эпизода в секундах
-            aspect_ratio: Соотношение сторон видео
-            
-        Returns:
-            SeriesStructure с названием, логлайном и списком эпизодов
+        Generates series structure with Veo 3.1 optimized prompts for each episode.
         """
         if not self.use_real_api or not self.client:
-            return self._generate_mock_series(idea, genre, episodes_count)
-        
-        # Определяем формат видео
+            return self._generate_mock_series(idea, genre, episodes_count, duration, aspect_ratio)
+
         format_info = {
             "9:16": "vertical mobile video (TikTok/Reels style), close-up and medium shots",
             "16:9": "horizontal cinematic video, wide establishing shots",
-            "1:1": "square social media format, centered compositions"
         }
-        
-        # Genre-specific visual styles (moderation-safe descriptions)
+
         genre_styles = {
             "drama": "emotional close-ups, dramatic lighting with shadows, slow camera movements, intimate moments, melancholic or intense mood",
             "comedy": "bright colorful lighting, dynamic camera work, exaggerated expressions, upbeat and playful mood, quick cuts",
@@ -102,53 +93,57 @@ class StoryGenerator:
             "mystery": "film noir lighting, shadows and silhouettes, foggy atmosphere, revealing camera movements, suspenseful pacing",
             "melodrama": "heightened emotions, dramatic lighting contrasts, tearful close-ups, sweeping orchestral mood, intense colors"
         }
-        
+
         genre_style = genre_styles.get(genre.lower(), genre_styles["drama"])
-        
-        system_prompt = f"""You are a professional screenwriter and visual prompt engineer for AI-generated vertical micro-dramas.
-Your task is to create a compelling series structure with detailed visual prompts for each episode.
+
+        system_prompt = f"""You are a professional FILMMAKER crafting video prompts for Google Veo 3.1 AI video generation.
+Your task is to create a compelling series with PRODUCTION-QUALITY visual prompts following the 8-ELEMENT FORMULA.
 
 GENRE STYLE for {genre.upper()}: {genre_style}
 
-CRITICAL - CONTENT MODERATION SAFETY:
-Google Veo 3 has strict content moderation. NEVER use these words in visual_prompt or character descriptions:
+=== CRITICAL: ENGLISH-ONLY PROMPTS ===
+ALL visual_prompt, anchor_prompt, variable_prompt, character_card, voice_description fields MUST be in ENGLISH regardless of input language.
+Title and synopsis can be in the user's language.
+
+=== 8-ELEMENT FORMULA (every prompt must contain ALL 8) ===
+1. [Camera/Shot] - ONE camera movement (slow dolly-in OR gentle pan left, NEVER both — combining causes flicker)
+2. [Character Card] - Fixed character description (<=50 words, same for ALL episodes)
+3. [Action] - What happens in this episode
+4. [Setting] - Location/environment
+5. [Style] - Visual style (cinematic, film grain, etc.)
+6. [Lighting] - Lighting description
+7. [Audio/SFX] - Structured format: "SFX: [sounds]. Ambient: [environment]. Music: [mood/instrument]."
+8. [Constraints/Negative] - "(no subtitles). Negative prompt: text overlays, subtitles, watermark, blurry, low quality, extra limbs, deformed anatomy, mutated."
+
+=== ANCHOR + VARIABLE PATTERN ===
+ANCHOR (IDENTICAL for ALL episodes): camera setup, character_card, setting/location, lighting style, visual style
+VARIABLE (UNIQUE per episode): action/movement, dialogue (colon syntax!), audio/SFX, negative prompt
+
+=== DIALOGUE RULES ===
+- Use COLON syntax: "Character says: dialogue line" — NOT quotes (Veo renders subtitles with quotes)
+- Voice consistency: "In a [voice_description], [character] says: ..."
+- Each dialogue line MUST fit in <=8 seconds of natural speech (~20 words max)
+
+=== CONTENT MODERATION ===
+Google Veo 3.1 has strict content moderation. NEVER use these words in visual_prompt:
 - BANNED: weapon, gun, knife, sword, blood, violence, fight, combat, tactical, military, kill, death, attack, battle
 - INSTEAD USE: athletic wear, sporty outfit, urban style, chase, pursuit, escape, parkour, running, acrobatics, intense moment
 
-CRITICAL - NO COPYRIGHTED CHARACTERS:
-NEVER include copyrighted or famous characters in the story:
-- BANNED: Spider-Man, Batman, Superman, Marvel heroes, DC heroes, Disney characters, Pixar characters, anime characters from famous franchises
-- BANNED: Any character from movies, TV shows, comics, video games
-- If user mentions such characters, create ORIGINAL characters inspired by them but with different names and appearances
-- Example: Instead of "meets Spider-Man" → "meets a mysterious acrobatic hero in red"
+=== NO COPYRIGHTED CHARACTERS ===
+NEVER include copyrighted or famous characters. Create ORIGINAL characters.
 
-CRITICAL - MAIN CHARACTER ALWAYS IN FOCUS:
-The main character MUST be the visual focus of EVERY episode:
-1. Main character must occupy 60-80% of the frame in EVERY shot
-2. Main character must be in the FOREGROUND and CENTER of frame
-3. Other characters (if any) must be in the BACKGROUND, smaller, less detailed
-4. EVERY visual_prompt must end with: "Main character in foreground, center frame, close-up or medium shot"
-5. Camera must ALWAYS focus on the main character's face and actions
-6. If scene involves other characters, describe them vaguely: "a shadowy figure", "a person in the background"
+=== CHARACTER CONSISTENCY ===
+Create ONE detailed character_card (<=50 words) at the start. This EXACT text is prepended to EVERY prompt.
+Include: name, age, ethnicity, hair, eyes, face, distinctive features, clothing.
+For ANIMAL characters: ALWAYS specify "four-legged" or "quadruped" explicitly to prevent extra limbs artifacts.
 
-CRITICAL - CHARACTER CONSISTENCY:
-Without reference images, AI video generators create different people each time. To maintain consistency:
-1. Create ONE detailed character description at the start (name, age, ethnicity, hair color/style, eye color, face shape, distinctive features)
-2. Copy-paste this EXACT character description at the START of EVERY visual_prompt
-3. Use the SAME clothing/outfit throughout the series for recognition
-4. Example: "Mika, 24-year-old Japanese woman, long straight black hair to waist, dark almond eyes, soft oval face, wearing sleek black athletic wear with neon accents"
+=== TECHNICAL CONSTRAINTS ===
+Every visual_prompt MUST end with: "{aspect_ratio}, 720p, {duration}s."
+Format: {format_info.get(aspect_ratio, 'vertical mobile video')}
+Word limit: 80-120 words per visual_prompt
 
-RULES:
-1. Create dramatic, engaging stories with clear hooks matching the {genre} genre
-2. Each episode should have a compelling visual prompt for AI video generation (Veo 3)
-3. Visual prompts must START with the EXACT character description, then setting, lighting, action, camera work
-4. Visual prompts must END with "Main character in foreground, center frame"
-5. APPLY THE GENRE STYLE to every visual prompt - use the specific lighting, mood, and camera work for {genre}
-6. ALWAYS respond in the SAME LANGUAGE as the user's idea
-7. Format: {format_info.get(aspect_ratio, 'vertical mobile video')}
-8. Keep each episode self-contained but connected to the overall story arc
-9. End each episode with a hook to encourage watching the next one
-10. The story must focus ONLY on the main character - avoid scenes where main character is not present"""
+=== INLINE SUBTITLE PREVENTION ===
+Include "(no subtitles)" in EVERY prompt."""
 
         user_request = f"""Create a {episodes_count}-episode micro-drama series based on this idea:
 
@@ -162,28 +157,38 @@ Return JSON with this EXACT structure:
 {{
   "series_title": "Compelling title for the series",
   "logline": "One sentence describing the series",
-  "main_character": "Full detailed description: name, age, ethnicity, hair (color, length, style), eyes (color, shape), face shape, distinctive features, clothing",
+  "main_character": "Full detailed description in English",
+  "character_card": "<=50 words fixed character description IN ENGLISH (name, age, ethnicity, hair, eyes, face, clothing)",
+  "voice_description": "voice type description (e.g. warm raspy female voice, American accent)",
+  "anchor_prompt": "shared camera + character_card + setting + lighting + style (IDENTICAL for all episodes, IN ENGLISH)",
   "episodes": [
     {{
       "number": 1,
       "title": "Episode title",
-      "synopsis": "Brief 1-2 sentence description of what happens",
-      "visual_prompt": "START with the EXACT main_character description, then: setting details, character action, lighting, camera movement, mood. END with 'Main character in foreground, center frame, close-up'. 80-120 words total."
+      "synopsis": "Brief 1-2 sentence description",
+      "anchor_prompt": "copy of the shared anchor_prompt above",
+      "variable_prompt": "unique action + dialogue (colon syntax: Character says: line) + SFX: .../Ambient: .../Music: ... + (no subtitles). Negative prompt: text overlays, subtitles, watermark, blurry, low quality, extra limbs, deformed anatomy, mutated. {aspect_ratio}, 720p, {duration}s.",
+      "visual_prompt": "anchor_prompt + variable_prompt combined into one flowing prompt, 80-120 words, IN ENGLISH"
     }}
   ]
 }}
 
-CRITICAL RULES FOR visual_prompt:
-1. MUST start with the EXACT same character description (copy from main_character)
-2. MUST end with "Main character in foreground, center frame, close-up or medium shot"
-3. Main character must be the ONLY focus - no other characters in foreground
-4. If other characters needed, describe them vaguely and place in background
-5. NO copyrighted characters (Marvel, DC, Disney, etc.) - create original characters instead"""
+CRITICAL RULES:
+1. ALL prompts in ENGLISH regardless of input language
+2. character_card <= 50 words, same for ALL episodes
+3. ONE camera movement per episode (never combine)
+4. Dialogue uses colon syntax: Character says: line (NOT quotes)
+5. Each dialogue line <= 20 words (~8 sec speech)
+6. Include (no subtitles) inline in every prompt
+7. Negative prompt uses NOUNS: "text overlays, subtitles, extra limbs" NOT "no cartoon, don't draw"
+8. Structured audio: SFX: ..., Ambient: ..., Music: ...
+9. End every visual_prompt with: {aspect_ratio}, 720p, {duration}s.
+10. Main character is visual focus of EVERY episode"""
 
         try:
             print(f"[STORY GENERATOR] Generating {episodes_count} episodes for: {idea[:50]}...")
             print(f"[STORY GENERATOR] Using model: {self.model}")
-            
+
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -191,13 +196,14 @@ CRITICAL RULES FOR visual_prompt:
                     {"role": "user", "content": user_request}
                 ],
                 temperature=0.8,
-                max_tokens=4000
+                max_tokens=4000,
+                timeout=60,
             )
-            
+
             raw_content = response.choices[0].message.content
             print(f"[STORY GENERATOR] Raw response length: {len(raw_content) if raw_content else 0}")
             print(f"[STORY GENERATOR] Raw response first 500 chars: {raw_content[:500] if raw_content else 'EMPTY'}")
-            
+
             # Clean markdown code blocks if present
             if raw_content:
                 if "```json" in raw_content:
@@ -205,51 +211,44 @@ CRITICAL RULES FOR visual_prompt:
                 elif "```" in raw_content:
                     raw_content = raw_content.replace("```", "")
                 raw_content = raw_content.strip()
-            
+
             # Try to extract and parse JSON with error recovery
             result = {}
             if raw_content and "{" in raw_content:
                 try:
-                    # Extract JSON block
                     json_str = raw_content[raw_content.find("{"):raw_content.rfind("}")+1]
                     if json_str:
                         result = json.loads(json_str)
                 except json.JSONDecodeError as e:
                     print(f"[STORY GENERATOR] JSON parse error: {e}, trying to fix...")
-                    # Try to fix truncated JSON by closing brackets
                     json_str = raw_content[raw_content.find("{"):]
-                    # Count open/close brackets
                     open_curly = json_str.count("{")
                     close_curly = json_str.count("}")
                     open_square = json_str.count("[")
                     close_square = json_str.count("]")
-                    # Add missing closers
                     json_str += "]" * (open_square - close_square)
                     json_str += "}" * (open_curly - close_curly)
                     try:
                         result = json.loads(json_str)
                         print(f"[STORY GENERATOR] Fixed JSON successfully!")
                     except:
-                        # Last resort: try to parse partial episodes using more flexible regex
-                        import re
-                        # More flexible regex that handles multi-line content
                         episodes_match = re.findall(
                             r'"number"\s*:\s*(\d+).*?"title"\s*:\s*"([^"]+)".*?"synopsis"\s*:\s*"([^"]+)".*?"visual_prompt"\s*:\s*"((?:[^"\\]|\\.)*)"|'
                             r'"number"\s*:\s*(\d+).*?"visual_prompt"\s*:\s*"((?:[^"\\]|\\.)*)"',
-                            raw_content, 
+                            raw_content,
                             re.DOTALL | re.MULTILINE
                         )
                         if episodes_match:
                             episodes_data = []
                             for m in episodes_match:
-                                if m[0]:  # First pattern match (full)
+                                if m[0]:
                                     episodes_data.append({
-                                        "number": int(m[0]), 
-                                        "title": m[1], 
-                                        "synopsis": m[2], 
+                                        "number": int(m[0]),
+                                        "title": m[1],
+                                        "synopsis": m[2],
                                         "visual_prompt": m[3].replace('\\"', '"').replace('\\n', ' ')
                                     })
-                                elif m[4]:  # Second pattern (minimal)
+                                elif m[4]:
                                     episodes_data.append({
                                         "number": int(m[4]),
                                         "title": f"Episode {m[4]}",
@@ -263,37 +262,81 @@ CRITICAL RULES FOR visual_prompt:
                                     "episodes": episodes_data
                                 }
                                 print(f"[STORY GENERATOR] Extracted {len(episodes_data)} episodes via regex")
-            
+
+            # Extract new Veo 3.1 fields
+            character_card = result.get("character_card", "")
+            voice_description = result.get("voice_description", "")
+            series_anchor_prompt = result.get("anchor_prompt", "")
+            main_character = result.get("main_character", "")
+
+            # Auto-build character_card if LLM didn't provide one
+            if not character_card and main_character:
+                print("[STORY GENERATOR] No character_card from LLM, auto-building...")
+                character_card = self.build_character_card(main_character, genre)
+
             # Parse episodes
             episodes = []
-            main_character = result.get("main_character", "")
+            tech_suffix = f"{aspect_ratio}, 720p, {duration}s."
 
             for ep_data in result.get("episodes", []):
                 visual_prompt = ep_data.get("visual_prompt", "")
+                ep_anchor = ep_data.get("anchor_prompt", series_anchor_prompt)
+                ep_variable = ep_data.get("variable_prompt", "")
 
-                # Ensure prompt starts with main character description
-                if main_character and not visual_prompt.lower().startswith(main_character[:20].lower()):
-                    visual_prompt = f"{main_character}. {visual_prompt}"
+                # If visual_prompt is empty but we have anchor+variable, combine them
+                if not visual_prompt and ep_anchor and ep_variable:
+                    visual_prompt = f"{ep_anchor}. {ep_variable}"
 
-                # Ensure prompt ends with focus instruction
-                focus_phrase = "Main character in foreground, center frame, close-up"
-                if focus_phrase.lower() not in visual_prompt.lower():
-                    visual_prompt = f"{visual_prompt.rstrip('.')}. {focus_phrase}."
+                # Inject character_card at start if not present
+                if character_card and character_card.lower()[:20] not in visual_prompt.lower():
+                    visual_prompt = f"{character_card}. {visual_prompt}"
+                elif main_character and not character_card:
+                    if not visual_prompt.lower().startswith(main_character[:20].lower()):
+                        visual_prompt = f"{main_character}. {visual_prompt}"
+
+                # Append tech constraints if missing
+                if aspect_ratio not in visual_prompt and "720p" not in visual_prompt:
+                    visual_prompt = f"{visual_prompt.rstrip('.')}. {tech_suffix}"
+
+                # Append (no subtitles) if missing
+                if "(no subtitles)" not in visual_prompt.lower():
+                    # Insert before Negative prompt if present
+                    if "negative prompt:" in visual_prompt.lower():
+                        visual_prompt = visual_prompt.replace("Negative prompt:", "(no subtitles). Negative prompt:")
+                        visual_prompt = visual_prompt.replace("negative prompt:", "(no subtitles). Negative prompt:")
+                    else:
+                        visual_prompt = visual_prompt.rstrip('.') + ". (no subtitles)."
+
+                # Append default negative prompt if missing
+                if "negative prompt:" not in visual_prompt.lower():
+                    visual_prompt = visual_prompt.rstrip('.') + ". Negative prompt: text overlays, subtitles, watermark, blurry, low quality, extra limbs, deformed anatomy, mutated."
+
+                # Append default audio if missing
+                if not any(w in visual_prompt.lower() for w in ['sfx:', 'ambient:', 'music:']):
+                    # Insert before negative prompt
+                    neg_idx = visual_prompt.lower().find("(no subtitles)")
+                    if neg_idx == -1:
+                        neg_idx = visual_prompt.lower().find("negative prompt:")
+                    if neg_idx > 0:
+                        visual_prompt = visual_prompt[:neg_idx] + "SFX: subtle environmental sounds. Ambient: quiet atmosphere. Music: soft background score. " + visual_prompt[neg_idx:]
+                    else:
+                        visual_prompt += " SFX: subtle environmental sounds. Ambient: quiet atmosphere. Music: soft background score."
 
                 episodes.append(EpisodePrompt(
                     number=ep_data.get("number", len(episodes) + 1),
                     title=ep_data.get("title", f"Episode {len(episodes) + 1}"),
                     synopsis=ep_data.get("synopsis", ""),
-                    visual_prompt=visual_prompt
+                    visual_prompt=visual_prompt,
+                    anchor_prompt=ep_anchor,
+                    variable_prompt=ep_variable
                 ))
-            
+
             # Quality check and auto-fix prompts
             if episodes:
                 print(f"[STORY GENERATOR] Running quality check on {len(episodes)} episodes...")
                 from .quality_checker import get_quality_checker
                 quality_checker = get_quality_checker()
 
-                # Convert to dict format for quality checker
                 prompts_data = [
                     {
                         'number': ep.number,
@@ -303,11 +346,9 @@ CRITICAL RULES FOR visual_prompt:
                     }
                     for ep in episodes
                 ]
-                
-                # Check and fix
+
                 fixed_prompts, reports = quality_checker.check_and_fix_prompts(prompts_data, main_character)
-                
-                # Update episodes with fixed prompts
+
                 for i, (ep, fixed) in enumerate(zip(episodes, fixed_prompts)):
                     if fixed.get('visual_prompt') != ep.visual_prompt:
                         print(f"[STORY GENERATOR] Episode {ep.number} prompt was auto-fixed")
@@ -315,44 +356,108 @@ CRITICAL RULES FOR visual_prompt:
                             number=ep.number,
                             title=ep.title,
                             synopsis=ep.synopsis,
-                            visual_prompt=fixed.get('visual_prompt', ep.visual_prompt)
+                            visual_prompt=fixed.get('visual_prompt', ep.visual_prompt),
+                            anchor_prompt=ep.anchor_prompt,
+                            variable_prompt=ep.variable_prompt
                         )
-            
+
             series = SeriesStructure(
                 series_title=result.get("series_title", "Untitled Series"),
                 logline=result.get("logline", ""),
                 genre=genre,
-                main_character=result.get("main_character", ""),
+                main_character=main_character,
+                character_card=character_card,
+                voice_description=voice_description,
+                anchor_prompt=series_anchor_prompt,
                 episodes=episodes
             )
-            
+
             print(f"[STORY GENERATOR] Created series: {series.series_title} with {len(episodes)} episodes")
+            print(f"[STORY GENERATOR] Character card: {character_card[:80]}" if character_card else "[STORY GENERATOR] No character card")
+            print(f"[STORY GENERATOR] Anchor prompt: {series_anchor_prompt[:80]}" if series_anchor_prompt else "[STORY GENERATOR] No anchor prompt")
             return series
-            
+
         except Exception as e:
             print(f"[STORY GENERATOR] Error: {e}, using mock")
-            return self._generate_mock_series(idea, genre, episodes_count)
-    
+            return self._generate_mock_series(idea, genre, episodes_count, duration, aspect_ratio)
+
+    def build_character_card(self, description: str, genre: str = "drama") -> str:
+        """
+        Auto-generate a character_card (<=50 words) from a free-form description via LLM.
+        Used when LLM didn't return a character_card in series generation.
+        """
+        if not self.use_real_api or not self.client:
+            # Basic extraction: take first 50 words
+            words = description.split()[:50]
+            return " ".join(words)
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": (
+                        "You create character cards for AI video generation (Veo 3.1). "
+                        "A character card is a FIXED visual description (<=50 words, ENGLISH ONLY) "
+                        "that is prepended to EVERY video prompt for consistency. "
+                        "Include: name, age, ethnicity, hair (color/style), eyes, face shape, "
+                        "distinctive features, clothing. Be specific and visual. "
+                        "Return ONLY the character card text, nothing else."
+                    )},
+                    {"role": "user", "content": (
+                        f"Create a character card (<=50 words, English) from this description:\n\n"
+                        f"{description}\n\nGenre: {genre}"
+                    )}
+                ],
+                temperature=0.5,
+                max_tokens=100,
+                timeout=30,
+            )
+            card = response.choices[0].message.content.strip()
+            # Remove quotes if LLM wrapped it
+            card = card.strip('"').strip("'")
+            # Enforce 50-word limit
+            words = card.split()
+            if len(words) > 50:
+                card = " ".join(words[:50])
+            print(f"[STORY GENERATOR] Built character card: {card[:80]}...")
+            return card
+        except Exception as e:
+            print(f"[STORY GENERATOR] Character card generation failed: {e}")
+            words = description.split()[:50]
+            return " ".join(words)
+
     def _generate_mock_series(
         self,
         idea: str,
         genre: str,
-        episodes_count: int
+        episodes_count: int,
+        duration: int = 4,
+        aspect_ratio: str = "9:16"
     ) -> SeriesStructure:
-        """Генерирует mock-серию когда API недоступен"""
+        """Generates mock series when API is unavailable"""
+        character_card = "Alex, 28-year-old person, short brown hair, green eyes, oval face, wearing casual dark jacket and jeans"
+        anchor = f"Medium shot, slow dolly-in. {character_card}. Urban city street, golden hour lighting, cinematic film grain"
+        tech_suffix = f"{aspect_ratio}, 720p, {duration}s."
+
         episodes = []
         for i in range(episodes_count):
+            variable = f"Character walks forward with determination. SFX: footsteps on pavement. Ambient: distant city traffic. Music: soft piano melody. (no subtitles). Negative prompt: text overlays, subtitles, watermark, blurry, low quality, extra limbs, deformed anatomy, mutated. {tech_suffix}"
             episodes.append(EpisodePrompt(
                 number=i + 1,
                 title=f"Episode {i + 1}",
                 synopsis=f"Part {i + 1} of the story based on: {idea[:50]}",
-                visual_prompt=f"{idea}. Episode {i + 1}. Cinematic vertical video, professional lighting, shallow depth of field, high quality."
+                visual_prompt=f"{anchor}. {variable}",
+                anchor_prompt=anchor,
+                variable_prompt=variable
             ))
-        
+
         return SeriesStructure(
             series_title=f"Series: {idea[:30]}",
             logline=idea,
             genre=genre,
+            character_card=character_card,
+            voice_description="calm neutral voice",
+            anchor_prompt=anchor,
             episodes=episodes
         )
 

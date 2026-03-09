@@ -30,6 +30,7 @@ interface TrendItem {
     view_count: number | null;
     published_at: string | null;
     thumbnail_url: string | null;
+    content_type: string;
 }
 
 interface TrendGenerateResult {
@@ -103,6 +104,15 @@ const SOURCE_CONFIG: Record<string, { label: string; icon: string; color: string
     },
 };
 
+const CONTENT_TYPE_CONFIG: Record<string, { label: string; badgeClass: string }> = {
+    ai_generated: { label: 'AI Generated', badgeClass: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+    animation: { label: 'Animation', badgeClass: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
+    story: { label: 'Story', badgeClass: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+    skit: { label: 'Skit', badgeClass: 'bg-green-500/20 text-green-400 border-green-500/30' },
+    music_video: { label: 'Music', badgeClass: 'bg-pink-500/20 text-pink-300 border-pink-500/30' },
+    other: { label: 'Other', badgeClass: 'bg-gray-500/20 text-gray-400 border-gray-500/30' },
+};
+
 const HOOK_LABELS: Record<string, string> = {
     question: 'Question',
     shocking_stat: 'Shocking Stat',
@@ -139,6 +149,7 @@ export default function TrendsPage() {
     const [genreFilter, setGenreFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [sourceFilter, setSourceFilter] = useState('');
+    const [contentTypeFilter, setContentTypeFilter] = useState('');
     const [sortBy, setSortBy] = useState<SortBy>('velocity');
     const [activeTab, setActiveTab] = useState<'trends' | 'ideas'>('trends');
     const [error, setError] = useState('');
@@ -150,8 +161,28 @@ export default function TrendsPage() {
         return counts;
     }, [trends]);
 
+    const contentTypeCounts = useMemo(() => {
+        const counts: Record<string, number> = {};
+        trends.forEach(t => {
+            const ct = t.content_type || 'other';
+            counts[ct] = (counts[ct] || 0) + 1;
+        });
+        return counts;
+    }, [trends]);
+
+    const actionableCount = useMemo(() => {
+        return trends.filter(t => ['ai_generated', 'animation', 'story', 'skit', 'music_video'].includes(t.content_type || '')).length;
+    }, [trends]);
+
     const filteredAndSortedTrends = useMemo(() => {
-        const filtered = sourceFilter ? trends.filter(t => t.source === sourceFilter) : trends;
+        let filtered = sourceFilter ? trends.filter(t => t.source === sourceFilter) : trends;
+        if (contentTypeFilter) {
+            if (contentTypeFilter === '_actionable') {
+                filtered = filtered.filter(t => ['ai_generated', 'animation', 'story', 'skit', 'music_video'].includes(t.content_type || ''));
+            } else {
+                filtered = filtered.filter(t => (t.content_type || 'other') === contentTypeFilter);
+            }
+        }
         const sorted = [...filtered];
         switch (sortBy) {
             case 'velocity':
@@ -165,7 +196,7 @@ export default function TrendsPage() {
                 break;
         }
         return sorted;
-    }, [trends, sourceFilter, sortBy]);
+    }, [trends, sourceFilter, contentTypeFilter, sortBy]);
 
     const fetchTrendsList = useCallback(async () => {
         setLoading(true);
@@ -253,7 +284,7 @@ export default function TrendsPage() {
             const res = await fetch(`${API_V1_BASE_URL}/trends/ideas/${ideaId}/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ model: 'veo3', duration: 6, aspect_ratio: '9:16' }),
+                body: JSON.stringify({ model: 'seedance', duration: 6, aspect_ratio: '9:16' }),
             });
             const data = await res.json();
             if (data.success) await fetchIdeasList();
@@ -268,7 +299,7 @@ export default function TrendsPage() {
             const res = await fetch(`${API_V1_BASE_URL}/trends/${trendId}/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ genre: 'drama', model: 'veo3', duration: 6, aspect_ratio: '9:16' }),
+                body: JSON.stringify({ genre: 'drama', model: 'seedance', duration: 6, aspect_ratio: '9:16' }),
             });
             const data: TrendGenerateResult = await res.json();
             if (data.success) {
@@ -481,6 +512,31 @@ export default function TrendsPage() {
                             </div>
                         )}
 
+                        {/* Content type filter */}
+                        {trends.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2 mb-5">
+                                <span className="text-xs text-gray-500 mr-1">{t('trends.contentType')}:</span>
+                                <button onClick={() => setContentTypeFilter('')}
+                                    className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${!contentTypeFilter ? 'bg-purple-600/30 border-purple-500/50 text-purple-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-500'}`}>
+                                    {t('trends.allTypes')} ({trends.length})
+                                </button>
+                                <button onClick={() => setContentTypeFilter(contentTypeFilter === '_actionable' ? '' : '_actionable')}
+                                    className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${contentTypeFilter === '_actionable' ? 'bg-emerald-600/30 border-emerald-500/50 text-emerald-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-500'}`}>
+                                    {t('trends.aiReproducible')} ({actionableCount})
+                                </button>
+                                {Object.entries(contentTypeCounts).map(([ct, count]) => {
+                                    const cfg = CONTENT_TYPE_CONFIG[ct] || CONTENT_TYPE_CONFIG.other;
+                                    return (
+                                        <button key={ct}
+                                            onClick={() => setContentTypeFilter(contentTypeFilter === ct ? '' : ct)}
+                                            className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${contentTypeFilter === ct ? cfg.badgeClass : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-500'}`}>
+                                            {cfg.label} ({count})
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
                         {loading ? (
                             <div className="flex items-center justify-center py-20">
                                 <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
@@ -509,13 +565,20 @@ export default function TrendsPage() {
                                                     />
                                                 </div>
                                             )}
-                                            {/* Header: title + source badge */}
+                                            {/* Header: title + badges */}
                                             <div className="flex items-start justify-between mb-2">
                                                 <h3 className="font-medium text-sm line-clamp-2 flex-1">{trend.title}</h3>
-                                                <span className={`ml-2 flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${config.badgeClass}`}>
-                                                    <SourceIcon source={trend.source} className="w-3 h-3" />
-                                                    {config.label}
-                                                </span>
+                                                <div className="flex flex-col items-end gap-1 ml-2">
+                                                    <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${config.badgeClass}`}>
+                                                        <SourceIcon source={trend.source} className="w-3 h-3" />
+                                                        {config.label}
+                                                    </span>
+                                                    {trend.content_type && trend.content_type !== 'other' && (
+                                                        <span className={`text-[10px] px-2 py-0.5 rounded-full border whitespace-nowrap ${(CONTENT_TYPE_CONFIG[trend.content_type] || CONTENT_TYPE_CONFIG.other).badgeClass}`}>
+                                                            {(CONTENT_TYPE_CONFIG[trend.content_type] || CONTENT_TYPE_CONFIG.other).label}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
 
                                             {trend.description && (
