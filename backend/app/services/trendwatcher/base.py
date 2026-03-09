@@ -23,6 +23,9 @@ class TrendItem:
     thumbnail_url: str = ""
     competition_level: Optional[float] = None
     opportunity_score: Optional[float] = None
+    # Content type classification for AI-reproducibility filtering
+    # story, animation, ai_generated, skit, educational, music_video, other
+    content_type: str = "other"
 
     def __post_init__(self):
         if self.fetched_at is None:

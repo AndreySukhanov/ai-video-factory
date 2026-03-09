@@ -5,21 +5,32 @@ import json
 
 class LLMClient:
     """
-    Client for interacting with OpenAI LLM
+    Client for interacting with LLM (OpenRouter/DeepSeek or OpenAI fallback)
     """
-    
+
     def __init__(self):
-        self.api_key = settings.OPENAI_API_KEY
+        self.api_key = settings.OPENROUTER_API_KEY or settings.OPENAI_API_KEY
+        self.use_openrouter = bool(settings.OPENROUTER_API_KEY)
         self.use_real_api = bool(self.api_key)
-        
+
         if self.use_real_api:
             try:
                 from openai import OpenAI
-                self.client = OpenAI(api_key=self.api_key)
+                if self.use_openrouter:
+                    self.client = OpenAI(
+                        api_key=self.api_key,
+                        base_url="https://openrouter.ai/api/v1"
+                    )
+                    self.model = "deepseek/deepseek-chat-v3-0324"
+                    print("[LLM CLIENT] Using OpenRouter with DeepSeek V3")
+                else:
+                    self.client = OpenAI(api_key=self.api_key)
+                    self.model = "gpt-4-turbo-preview"
+                    print("[LLM CLIENT] Using OpenAI")
             except ImportError:
-                print("Warning: openai package not installed, using mock")
+                print("[LLM CLIENT] Warning: openai package not installed, using mock")
                 self.use_real_api = False
-    
+
     def generate_structured_output(
         self,
         system_prompt: str,
@@ -30,27 +41,28 @@ class LLMClient:
         Generate structured JSON output from LLM
         """
         if not self.use_real_api:
-            print("Using mock LLM response (no API key)")
+            print("[LLM CLIENT] Using mock response (no API key)")
             return self._mock_response(user_prompt)
-        
+
         try:
-            print(f"Calling OpenAI API...")
+            print(f"[LLM CLIENT] Calling {self.model}...")
             response = self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
                 response_format={"type": "json_object"},
-                temperature=0.7
+                temperature=0.7,
+                timeout=90,
             )
-            
+
             result = json.loads(response.choices[0].message.content)
-            print(f"OpenAI API response received")
+            print(f"[LLM CLIENT] Response received")
             return result
-            
+
         except Exception as e:
-            print(f"OpenAI API error: {e}, falling back to mock")
+            print(f"[LLM CLIENT] API error: {e}, falling back to mock")
             return self._mock_response(user_prompt)
     
     def _mock_response(self, prompt: str) -> Dict[str, Any]:

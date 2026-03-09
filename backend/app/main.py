@@ -63,6 +63,30 @@ def _migrate_add_columns():
                 conn.execute(text("ALTER TABLE story_ideas ADD COLUMN regenerable VARCHAR"))
                 print("[MIGRATE] Added 'regenerable' column to story_ideas table")
 
+    # Add 'character_card', 'voice_description', 'seed' to 'characters' table if missing
+    if "characters" in insp.get_table_names():
+        columns = [c["name"] for c in insp.get_columns("characters")]
+        if "character_card" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE characters ADD COLUMN character_card TEXT"))
+                print("[MIGRATE] Added 'character_card' column to characters table")
+        if "voice_description" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE characters ADD COLUMN voice_description VARCHAR"))
+                print("[MIGRATE] Added 'voice_description' column to characters table")
+        if "seed" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE characters ADD COLUMN seed INTEGER"))
+                print("[MIGRATE] Added 'seed' column to characters table")
+
+    # Add 'content_type' to 'trends' table if missing
+    if "trends" in insp.get_table_names():
+        columns = [c["name"] for c in insp.get_columns("trends")]
+        if "content_type" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE trends ADD COLUMN content_type VARCHAR DEFAULT 'other'"))
+                print("[MIGRATE] Added 'content_type' column to trends table")
+
 _migrate_add_columns()
 
 app = FastAPI(

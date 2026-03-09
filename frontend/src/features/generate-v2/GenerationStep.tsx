@@ -1,4 +1,4 @@
-import { Loader2, RefreshCw, Video } from 'lucide-react';
+import { Loader2, RefreshCw, Video, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, ProgressBar } from '@/components/ui';
 import { EpisodeDraft } from './types';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -8,6 +8,8 @@ interface GenerationStepProps {
   isGenerating: boolean;
   onRunQueue: () => void;
   onRetryEpisode: (id: string) => void;
+  onMoveEpisode?: (id: string, direction: 'up' | 'down') => void;
+  onRegenerateEpisode?: (id: string) => void;
 }
 
 function statusBadgeVariant(status: EpisodeDraft['status']): 'muted' | 'success' | 'danger' | 'warning' {
@@ -22,6 +24,8 @@ export default function GenerationStep({
   isGenerating,
   onRunQueue,
   onRetryEpisode,
+  onMoveEpisode,
+  onRegenerateEpisode,
 }: GenerationStepProps) {
   const { t } = useLanguage();
   const completed = episodes.filter((episode) => episode.status === 'done').length;
@@ -52,10 +56,33 @@ export default function GenerationStep({
       </Card>
 
       <div className="space-y-3">
-        {episodes.map((episode) => (
+        {episodes.map((episode, idx) => (
           <Card key={episode.id}>
             <CardContent className="p-4">
               <div className="flex flex-col md:flex-row gap-4">
+                {/* Reorder arrows */}
+                {onMoveEpisode && (
+                  <div className="flex md:flex-col items-center justify-center gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => onMoveEpisode(episode.id, 'up')}
+                      disabled={idx === 0 || isGenerating}
+                      className="text-white/40 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed p-1 rounded hover:bg-white/10 transition-colors"
+                      title={t('generateV2.moveUp')}
+                    >
+                      <ChevronUp className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onMoveEpisode(episode.id, 'down')}
+                      disabled={idx === episodes.length - 1 || isGenerating}
+                      className="text-white/40 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed p-1 rounded hover:bg-white/10 transition-colors"
+                      title={t('generateV2.moveDown')}
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-medium text-sm">{t('generateV2.episodeN', { count: episode.number })}</span>
@@ -74,14 +101,20 @@ export default function GenerationStep({
                   )}
                 </div>
               </div>
-              {episode.status === 'error' && (
-                <div className="mt-3">
+              <div className="mt-3 flex gap-2">
+                {episode.status === 'error' && (
                   <Button size="sm" variant="secondary" onClick={() => onRetryEpisode(episode.id)}>
                     <RefreshCw className="w-3 h-3" />
                     {t('generateV2.retry')}
                   </Button>
-                </div>
-              )}
+                )}
+                {onRegenerateEpisode && episode.status === 'done' && (
+                  <Button size="sm" variant="secondary" onClick={() => onRegenerateEpisode(episode.id)} disabled={isGenerating}>
+                    <RotateCcw className="w-3 h-3" />
+                    {t('generateV2.regenerate')}
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
         ))}

@@ -28,6 +28,14 @@ export interface EpisodeDraft {
   status: EpisodeStatus;
   videoUrl?: string;
   error?: string;
+  anchorPrompt?: string;       // shared across all episodes
+  variablePrompt?: string;     // unique per episode
+  previewUrl?: string;         // fast preview URL (Phase 2)
+  variants?: string[];         // multiple variant URLs (Phase 2)
+  selectedVariantIndex?: number;
+  qualityMode?: 'fast' | 'standard';
+  firstFrameUrl?: string;      // first frame image for transition
+  lastFrameUrl?: string;       // last frame image for transition
 }
 
 export interface PublishFormState {
@@ -43,4 +51,9 @@ export interface GenerationDraftSnapshot {
   seriesTitle: string;
   seriesLogline: string;
   currentStep: FlowStepId;
+  characterCard?: string;
+  voiceDescription?: string;
+  anchorPrompt?: string;
+  storyboardFrames?: string[];
+  referenceImages?: string[];
 }
