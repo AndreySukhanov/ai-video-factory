@@ -67,6 +67,15 @@ export default function GenerationWizardV2() {
                 onIdeaChange={flow.updateIdeaForm}
                 onEpisodeChange={flow.updateEpisodeField}
                 onRunGeneration={flow.runQueue}
+                onRunStoryboard={flow.runStoryboard}
+                isStoryboarding={flow.isStoryboarding}
+                storyboardFrames={flow.storyboardFrames}
+                imageModel={flow.imageModel}
+                onImageModelChange={flow.setImageModel}
+                referenceImages={flow.referenceImages}
+                onReferenceImagesChange={flow.setReferenceImages}
+                referenceLocalUrls={flow.referenceLocalUrls}
+                onReferenceLocalUrlsChange={flow.setReferenceLocalUrls}
               />
             )}
 
@@ -76,6 +85,8 @@ export default function GenerationWizardV2() {
                 isGenerating={flow.isGenerating}
                 onRunQueue={flow.runQueue}
                 onRetryEpisode={flow.retryEpisode}
+                onMoveEpisode={flow.moveEpisode}
+                onRegenerateEpisode={flow.regenerateEpisode}
               />
             )}
 
@@ -101,6 +112,8 @@ export default function GenerationWizardV2() {
             isGenerating={flow.isGenerating}
             onRetryEpisode={flow.retryEpisode}
             onDeleteEpisode={flow.removeEpisode}
+            onMoveEpisode={flow.moveEpisode}
+            onRegenerateEpisode={flow.regenerateEpisode}
           />
         </div>
       </div>

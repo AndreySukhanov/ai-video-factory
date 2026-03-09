@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
     CheckCircle, XCircle, Upload, RefreshCw, Eye, Loader2,
-    ArrowLeft, Tag, Zap, Calendar, Play, Globe
+    ArrowLeft, Tag, Zap, Calendar, Play, Globe, Trash2
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
@@ -186,6 +186,24 @@ export default function ReviewPage() {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || 'Publish failed');
+            await fetchQueue();
+        } catch (e: unknown) {
+            setError(toErrorMessage(e));
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleDelete = async (itemId: number) => {
+        if (!confirm(t('review.confirmDelete'))) return;
+        setActionLoading(itemId);
+        setError('');
+        try {
+            const res = await fetch(`${API_V1_BASE_URL}/review/${itemId}`, {
+                method: 'DELETE',
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Delete failed');
             await fetchQueue();
         } catch (e: unknown) {
             setError(toErrorMessage(e));
@@ -477,6 +495,13 @@ export default function ReviewPage() {
                                                         <CheckCircle className="w-3 h-3" /> {t('review.publishedOnYT')}
                                                     </span>
                                                 )}
+                                                <button
+                                                    onClick={() => handleDelete(item.id)}
+                                                    disabled={isLoading}
+                                                    className="bg-red-900/30 hover:bg-red-700/50 disabled:opacity-50 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 text-red-400 hover:text-red-300 transition-colors ml-auto"
+                                                >
+                                                    <Trash2 className="w-3 h-3" /> {t('review.delete')}
+                                                </button>
                                             </div>
                                         </div>
                                     </div>

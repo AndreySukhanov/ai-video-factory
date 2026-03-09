@@ -27,6 +27,7 @@ class Trend(Base):
     thumbnail_url = Column(String, nullable=True)
     competition_level = Column(Float, nullable=True)  # 0.0 - 1.0
     opportunity_score = Column(Float, nullable=True)  # high velocity + low competition
+    content_type = Column(String, default="other")  # story, animation, ai_generated, skit, educational, music_video, other
 
     ideas = relationship("StoryIdea", back_populates="trend")
 
