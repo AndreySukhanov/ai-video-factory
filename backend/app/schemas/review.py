@@ -53,5 +53,5 @@ class ReviewRejectRequest(BaseModel):
 
 class ReviewActionResponse(BaseModel):
     success: bool
-    item: ReviewItemRead
+    item: Optional[ReviewItemRead] = None
     message: str = ""

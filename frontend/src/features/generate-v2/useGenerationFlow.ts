@@ -4,10 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   createReviewItem,
+  extractLastFrame,
   generateEpisodeClip,
   generateSeriesPlan,
+  generateStoryboard,
   mergeVideos,
   GenerationModel,
+  ImageModel,
 } from '@/lib/api/generation';
 import { API_V1_BASE_URL } from '@/lib/apiBase';
 import { safeJsonParse } from '@/lib/safeJson';
@@ -17,14 +20,19 @@ import { EpisodeDraft, FlowStep, FlowStepId, GenerationDraftSnapshot, IdeaFormSt
 const DRAFT_STORAGE_KEY = 'ai_video_factory_generate_v2_draft';
 
 const STEP_ORDER: FlowStepId[] = ['idea', 'episodes', 'generation', 'publish'];
-const SINGLE_EPISODE_MODELS: GenerationModel[] = ['veo3', 'kling'];
-const SERIES_MODELS: GenerationModel[] = ['minimax', 'veo31'];
+const SINGLE_EPISODE_MODELS: GenerationModel[] = ['seedance', 'laozhang', 'vertex', 'kling'];
+const SERIES_MODELS: GenerationModel[] = ['seedance', 'laozhang', 'vertex', 'minimax'];
 const MODEL_DURATIONS: Record<GenerationModel, number[]> = {
-  veo3: [4, 6, 8],
-  veo31: [4, 6, 8],
   kling: [5, 10],
   minimax: [6],
+  laozhang: [4, 6, 8],
+  gemini: [4, 6, 8],
+  vertex: [4, 6, 8],
+  seedance: [4, 5, 8, 10, 15],
 };
+
+// Veo 3.1 does NOT support 1:1 aspect ratio
+const VEO31_ALLOWED_ASPECTS = ['9:16', '16:9'];
 
 const DEFAULT_IDEA_FORM: IdeaFormState = {
   idea: '',
@@ -56,8 +64,9 @@ function normalizeEpisodesCount(value: number): number {
 }
 
 function pickDefaultModelForCount(episodesCount: number): GenerationModel {
-  return episodesCount > 1 ? 'minimax' : 'veo3';
+  return episodesCount > 1 ? 'seedance' : 'seedance';
 }
+
 
 function normalizeModelForCount(model: GenerationModel, episodesCount: number): GenerationModel {
   const allowedModels = episodesCount > 1 ? SERIES_MODELS : SINGLE_EPISODE_MODELS;
@@ -72,6 +81,14 @@ function normalizeDurationForModel(duration: number, model: GenerationModel): nu
     : allowedDurations.reduce((prev, curr) => (Math.abs(curr - duration) < Math.abs(prev - duration) ? curr : prev));
 }
 
+function normalizeAspectForModel(aspectRatio: string, model: GenerationModel): string {
+  // Veo 3.1 / LaoZhang does not support 1:1
+  if ((model === 'laozhang' || model === 'gemini' || model === 'vertex') && !VEO31_ALLOWED_ASPECTS.includes(aspectRatio)) {
+    return '9:16';
+  }
+  return aspectRatio;
+}
+
 function normalizeIdeaForm(value?: Partial<IdeaFormState> | null): IdeaFormState {
   const merged: IdeaFormState = {
     ...DEFAULT_IDEA_FORM,
@@ -84,6 +101,7 @@ function normalizeIdeaForm(value?: Partial<IdeaFormState> | null): IdeaFormState
     episodesCount,
     model,
     duration: normalizeDurationForModel(merged.duration, model),
+    aspectRatio: normalizeAspectForModel(merged.aspectRatio, model),
   };
 }
 
@@ -111,10 +129,25 @@ export function useGenerationFlow() {
   const [isStitching, setIsStitching] = useState(false);
   const [stitchedVideoUrl, setStitchedVideoUrl] = useState<string | null>(null);
   const [stitchedDuration, setStitchedDuration] = useState<number | null>(null);
+  const [isStoryboarding, setIsStoryboarding] = useState(false);
+  const [storyboardFrames, setStoryboardFrames] = useState<string[]>([]);
+  const [storyboardSeed, setStoryboardSeed] = useState<number | null>(null);
+  const [imageModel, setImageModel] = useState<ImageModel>('gemini');
+  const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [referenceLocalUrls, setReferenceLocalUrls] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const hydratedRef = useRef(false);
   const projectLoadedRef = useRef(false);
+
+  // Ref to always have fresh episodes (avoids stale closure in sequential queue)
+  const episodesRef = useRef(episodes);
+  useEffect(() => { episodesRef.current = episodes; }, [episodes]);
+
+  // Veo 3.1 series metadata
+  const [characterCard, setCharacterCard] = useState<string | null>(null);
+  const [voiceDescription, setVoiceDescription] = useState<string | null>(null);
+  const [anchorPrompt, setAnchorPrompt] = useState<string | null>(null);
 
   // Load project from ?project=N URL parameter
   useEffect(() => {
@@ -126,7 +159,6 @@ export function useGenerationFlow() {
     const pid = parseInt(projectParam, 10);
     if (isNaN(pid)) return;
 
-    // Clear localStorage draft to avoid conflicts
     localStorage.removeItem(DRAFT_STORAGE_KEY);
 
     fetch(`${API_V1_BASE_URL}/projects/${pid}`)
@@ -148,7 +180,6 @@ export function useGenerationFlow() {
         setEpisodes([]);
         setCurrentStep('idea');
 
-        // Pre-fill publish form with SEO data
         const tags = safeJsonParse<string[]>(data.seo_tags_json, []);
         setPublishForm({
           selectedEpisodeId: '',
@@ -164,10 +195,10 @@ export function useGenerationFlow() {
       });
   }, [searchParams]);
 
-  // Load from localStorage (only if no project param)
+  // Load from localStorage
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (searchParams.get('project')) return; // skip if loading project
+    if (searchParams.get('project')) return;
     const snapshot = safeJsonParse<GenerationDraftSnapshot | null>(
       localStorage.getItem(DRAFT_STORAGE_KEY),
       null,
@@ -178,6 +209,11 @@ export function useGenerationFlow() {
       setSeriesTitle(snapshot.seriesTitle || '');
       setSeriesLogline(snapshot.seriesLogline || '');
       setCurrentStep(snapshot.currentStep || 'idea');
+      setCharacterCard(snapshot.characterCard || null);
+      setVoiceDescription(snapshot.voiceDescription || null);
+      setAnchorPrompt(snapshot.anchorPrompt || null);
+      setStoryboardFrames(Array.isArray(snapshot.storyboardFrames) ? snapshot.storyboardFrames : []);
+      setReferenceImages(Array.isArray(snapshot.referenceImages) ? snapshot.referenceImages : []);
     }
     hydratedRef.current = true;
   }, [searchParams]);
@@ -190,9 +226,14 @@ export function useGenerationFlow() {
       episodes,
       seriesTitle,
       seriesLogline,
+      characterCard: characterCard || undefined,
+      voiceDescription: voiceDescription || undefined,
+      anchorPrompt: anchorPrompt || undefined,
+      storyboardFrames: storyboardFrames.length > 0 ? storyboardFrames : undefined,
+      referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
     };
     localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(snapshot));
-  }, [currentStep, episodes, ideaForm, seriesLogline, seriesTitle]);
+  }, [currentStep, episodes, ideaForm, seriesLogline, seriesTitle, characterCard, voiceDescription, anchorPrompt, storyboardFrames, referenceImages]);
 
   const steps = useMemo<FlowStep[]>(
     () =>
@@ -252,6 +293,7 @@ export function useGenerationFlow() {
           episodesCount: normalizedEpisodesCount,
           model: normalizedModel,
           duration: normalizeDurationForModel(prev.duration, normalizedModel),
+          aspectRatio: normalizeAspectForModel(prev.aspectRatio, normalizedModel),
         };
       }
 
@@ -261,6 +303,7 @@ export function useGenerationFlow() {
           ...next,
           model: normalizedModel,
           duration: normalizeDurationForModel(prev.duration, normalizedModel),
+          aspectRatio: normalizeAspectForModel(prev.aspectRatio, normalizedModel),
         };
       }
 
@@ -268,6 +311,13 @@ export function useGenerationFlow() {
         return {
           ...next,
           duration: normalizeDurationForModel(Number(value), prev.model),
+        };
+      }
+
+      if (key === 'aspectRatio') {
+        return {
+          ...next,
+          aspectRatio: normalizeAspectForModel(value as string, prev.model),
         };
       }
 
@@ -295,6 +345,12 @@ export function useGenerationFlow() {
     setSeriesLogline('');
     setEpisodes([]);
     setPublishForm(DEFAULT_PUBLISH_FORM);
+    setCharacterCard(null);
+    setVoiceDescription(null);
+    setAnchorPrompt(null);
+    setStoryboardFrames([]);
+    setReferenceImages([]);
+    setReferenceLocalUrls([]);
     setError(null);
     setNotice(null);
     if (typeof window !== 'undefined') {
@@ -324,6 +380,11 @@ export function useGenerationFlow() {
         throw new Error(response.error || t('generateV2.errorGenerateEpisodes'));
       }
 
+      // Store Veo 3.1 metadata
+      setCharacterCard(response.character_card || null);
+      setVoiceDescription(response.voice_description || null);
+      setAnchorPrompt(response.anchor_prompt || null);
+
       const nextEpisodes = (response.episodes || []).map((episode) => ({
         id: createEpisodeId(episode.number),
         number: episode.number,
@@ -331,6 +392,8 @@ export function useGenerationFlow() {
         synopsis: episode.synopsis,
         prompt: episode.prompt,
         status: 'queued' as const,
+        anchorPrompt: episode.anchor_prompt,
+        variablePrompt: episode.variable_prompt,
       }));
 
       setSeriesTitle(response.series_title || t('generateV2.untitledSeries'));
@@ -348,7 +411,9 @@ export function useGenerationFlow() {
 
   const runEpisodeGeneration = useCallback(
     async (episodeId: string): Promise<boolean> => {
-      const episode = episodes.find((item) => item.id === episodeId);
+      // Read fresh episodes from ref to avoid stale closure during sequential queue
+      const freshEpisodes = episodesRef.current;
+      const episode = freshEpisodes.find((item) => item.id === episodeId);
       if (!episode) return false;
       if (!episode.prompt.trim()) {
         setEpisodes((prev) => updateEpisodeById(prev, episodeId, { status: 'error', error: t('generateV2.errorPromptEmpty') }));
@@ -357,24 +422,84 @@ export function useGenerationFlow() {
 
       setEpisodes((prev) => updateEpisodeById(prev, episodeId, { status: 'generating', error: undefined }));
       try {
+        // === Reference image selection ===
+        let referenceImageUrl: string | undefined;
+        const isSeriesMode = ideaForm.episodesCount > 1;
+        const supportsReferences = ['gemini', 'vertex', 'seedance', 'laozhang'].includes(ideaForm.model);
+        const storyboardFrame = storyboardFrames[episode.number - 1];
+
+        // Priority 1: Storyboard keyframe — ONLY for episode 1 (seeds the visual style)
+        // Episodes 2+ use frame chaining for real continuity from actual video frames
+        if (storyboardFrame && supportsReferences && episode.number === 1) {
+          referenceImageUrl = storyboardFrame;
+          console.log(`[I2V] Using storyboard keyframe for episode 1: ${storyboardFrame}`);
+          setNotice(t('generateV2.usingStoryboardFrame', { count: episode.number }));
+        }
+        // Priority 2: Frame chaining for E2+ (extract last frame from previous video)
+        else if (isSeriesMode && supportsReferences && episode.number > 1) {
+          const latestEpisodes = episodesRef.current;
+          const prevEpisode = latestEpisodes.find((e) => e.number === episode.number - 1 && e.status === 'done' && e.videoUrl);
+          if (prevEpisode?.videoUrl) {
+            try {
+              console.log(`[FRAME CHAIN] Extracting last frame from episode ${prevEpisode.number}...`);
+              const frameResult = await extractLastFrame({ video_url: prevEpisode.videoUrl });
+              if (frameResult.success && frameResult.frame_url) {
+                referenceImageUrl = frameResult.frame_url;
+                console.log(`[FRAME CHAIN] Got frame for episode ${episode.number}: ${frameResult.frame_url}`);
+                setNotice(t('generateV2.frameChainingExtracted', { count: episode.number }));
+              }
+            } catch (frameErr) {
+              console.warn('[FRAME CHAIN] Frame extraction failed, continuing without:', frameErr);
+            }
+          }
+        }
+
+        // Priority 3: User-uploaded reference photo for E1 (when no storyboard)
+        if (!referenceImageUrl && supportsReferences && episode.number === 1) {
+          const userRefs = referenceImages.filter((url) => url.trim());
+          if (userRefs.length > 0) {
+            referenceImageUrl = userRefs[0];
+            console.log(`[I2V] Using uploaded reference photo for episode 1: ${userRefs[0]}`);
+          }
+        }
+
+        // Duration: force 8s ONLY for frame-chaining fallback (fl models need it)
+        // Storyboard keyframes and user photos work fine with user-selected duration
+        const isFrameChainFallback = referenceImageUrl && !storyboardFrame && episode.number > 1;
+        const duration = isFrameChainFallback ? 8 : ideaForm.duration;
+
+        // ALWAYS use full prompt — no motion-only replacement
+        const promptText = episode.prompt.trim();
+
+        // First/last frame override: if episode has explicit firstFrameUrl, use it
+        const firstFrameUrl = episode.firstFrameUrl?.trim() || referenceImageUrl;
+        const lastFrameUrl = episode.lastFrameUrl?.trim() || undefined;
+
+        // Filter valid reference images
+        const validRefImages = referenceImages.filter((url) => url.trim());
+
+        // Single attempt — retry manually via "Повторить" button
         const response = await generateEpisodeClip({
-          prompt: episode.prompt.trim(),
-          duration: ideaForm.duration,
+          prompt: promptText,
+          duration: lastFrameUrl ? 8 : duration, // transition mode forces 8s
           aspect_ratio: ideaForm.aspectRatio,
           model: ideaForm.model as GenerationModel,
+          reference_image_url: firstFrameUrl,
+          last_frame_image_url: lastFrameUrl,
+          reference_images: validRefImages.length > 0 ? validRefImages : undefined,
+          generate_audio: ideaForm.model !== 'laozhang' && ideaForm.model !== 'vertex',
         });
 
         if (!response.success || !response.video_url) {
           throw new Error(response.error || t('generateV2.errorNoVideoUrl'));
         }
 
-        setEpisodes((prev) =>
-          updateEpisodeById(prev, episodeId, {
-            status: 'done',
-            videoUrl: response.video_url,
-            error: undefined,
-          }),
-        );
+        episodesRef.current = updateEpisodeById(episodesRef.current, episodeId, {
+          status: 'done',
+          videoUrl: response.video_url,
+          error: undefined,
+        });
+        setEpisodes(episodesRef.current);
         return true;
       } catch (generationError) {
         setEpisodes((prev) =>
@@ -386,7 +511,7 @@ export function useGenerationFlow() {
         return false;
       }
     },
-    [episodes, ideaForm.aspectRatio, ideaForm.duration, ideaForm.model, t],
+    [ideaForm.aspectRatio, ideaForm.duration, ideaForm.model, ideaForm.episodesCount, storyboardFrames, referenceImages, t],
   );
 
   const runQueue = useCallback(async () => {
@@ -396,7 +521,12 @@ export function useGenerationFlow() {
     setIsGenerating(true);
     try {
       let hasSuccess = false;
-      const queue = episodes.map((episode) => episode.id);
+      // Only generate episodes that need generation (skip already done ones)
+      const queue = episodes
+        .filter((ep) => ep.status !== 'done' || !ep.videoUrl)
+        .map((ep) => ep.id);
+      // Count already-done episodes as success
+      if (episodes.some((ep) => ep.status === 'done' && ep.videoUrl)) hasSuccess = true;
       for (const episodeId of queue) {
         const ok = await runEpisodeGeneration(episodeId);
         if (ok) hasSuccess = true;
@@ -431,6 +561,42 @@ export function useGenerationFlow() {
     );
   }, []);
 
+  const moveEpisode = useCallback((episodeId: string, direction: 'up' | 'down') => {
+    setEpisodes((prev) => {
+      const idx = prev.findIndex((ep) => ep.id === episodeId);
+      if (idx < 0) return prev;
+      const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+      // Renumber after swap
+      return next.map((ep, i) => ({ ...ep, number: i + 1 }));
+    });
+    // Invalidate stitched video since order changed
+    setStitchedVideoUrl(null);
+    setStitchedDuration(null);
+  }, []);
+
+  const regenerateEpisode = useCallback(
+    async (episodeId: string) => {
+      setError(null);
+      setNotice(null);
+      // Reset episode to queued, keeping the same prompt
+      setEpisodes((prev) =>
+        updateEpisodeById(prev, episodeId, { status: 'queued', videoUrl: undefined, error: undefined }),
+      );
+      episodesRef.current = episodesRef.current.map((ep) =>
+        ep.id === episodeId ? { ...ep, status: 'queued' as const, videoUrl: undefined, error: undefined } : ep,
+      );
+      // Invalidate stitched video
+      setStitchedVideoUrl(null);
+      setStitchedDuration(null);
+      // Run generation with the same prompt (character card, anchor prompt preserved)
+      await runEpisodeGeneration(episodeId);
+    },
+    [runEpisodeGeneration],
+  );
+
   const selectPublishEpisode = useCallback(
     (episodeId: string) => {
       const episode = episodes.find((item) => item.id === episodeId);
@@ -447,6 +613,27 @@ export function useGenerationFlow() {
   const updatePublishForm = useCallback(<K extends keyof PublishFormState>(key: K, value: PublishFormState[K]) => {
     setPublishForm((prev) => ({ ...prev, [key]: value }));
   }, []);
+
+  const upgradeToStandard = useCallback(
+    async (_episodeId: string, _variantsCount: number = 2): Promise<boolean> => {
+      return false;
+    },
+    [],
+  );
+
+  const selectVariant = useCallback(
+    (episodeId: string, variantIndex: number) => {
+      const episode = episodes.find((item) => item.id === episodeId);
+      if (!episode?.variants || variantIndex >= episode.variants.length) return;
+      setEpisodes((prev) =>
+        updateEpisodeById(prev, episodeId, {
+          videoUrl: episode.variants![variantIndex],
+          selectedVariantIndex: variantIndex,
+        }),
+      );
+    },
+    [episodes],
+  );
 
   const stitchEpisodes = useCallback(async () => {
     setError(null);
@@ -513,6 +700,35 @@ export function useGenerationFlow() {
     }
   }, [episodes, publishForm, stitchedVideoUrl, seriesTitle, seriesLogline, projectId, t]);
 
+  // ── Storyboard (Gemini Flash / Seedream 4.5) ──
+  const runStoryboard = useCallback(async () => {
+    if (episodes.length === 0) return;
+    setIsStoryboarding(true);
+    setError(null);
+    try {
+      const prompts = episodes.map((ep) => ep.prompt);
+      // Use local URLs for storyboard (backend reads files from disk, not via HTTP)
+      const localRefs = referenceLocalUrls.filter((url) => url.trim());
+      const resp = await generateStoryboard({
+        anchor_prompt: anchorPrompt || '',
+        character_card: characterCard || '',
+        episode_prompts: prompts,
+        aspect_ratio: ideaForm.aspectRatio,
+        seed: storyboardSeed ?? undefined,
+        image_model: imageModel,
+        reference_image_urls: localRefs.length > 0 ? localRefs : undefined,
+      });
+      if (!resp.success) throw new Error(resp.error || 'Storyboard failed');
+      setStoryboardFrames(resp.keyframes);
+      if (resp.seed) setStoryboardSeed(resp.seed);
+      setNotice(t('generateV2.storyboardReady', { count: String(resp.keyframes.filter(Boolean).length) }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Storyboard error');
+    } finally {
+      setIsStoryboarding(false);
+    }
+  }, [episodes, anchorPrompt, characterCard, ideaForm.aspectRatio, storyboardSeed, imageModel, referenceLocalUrls, t]);
+
   return {
     steps,
     currentStep,
@@ -531,6 +747,9 @@ export function useGenerationFlow() {
     error,
     notice,
     stats,
+    characterCard,
+    voiceDescription,
+    anchorPrompt,
     updateIdeaForm,
     updateEpisodeField,
     goStep,
@@ -539,9 +758,22 @@ export function useGenerationFlow() {
     runQueue,
     retryEpisode,
     removeEpisode,
+    moveEpisode,
+    regenerateEpisode,
     selectPublishEpisode,
     updatePublishForm,
+    upgradeToStandard,
+    selectVariant,
     stitchEpisodes,
     publishToReview,
+    runStoryboard,
+    isStoryboarding,
+    storyboardFrames,
+    imageModel,
+    setImageModel,
+    referenceImages,
+    setReferenceImages,
+    referenceLocalUrls,
+    setReferenceLocalUrls,
   };
 }

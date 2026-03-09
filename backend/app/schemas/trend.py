@@ -17,6 +17,7 @@ class TrendBase(BaseModel):
     trend_stage: str = "unknown"
     competition_level: Optional[float] = None
     opportunity_score: Optional[float] = None
+    content_type: str = "other"
 
 class TrendRead(TrendBase):
     id: int
@@ -77,7 +78,7 @@ class IdeaApproveResponse(BaseModel):
 
 class IdeaGenerateRequest(BaseModel):
     genre: str = ""
-    model: str = "veo3"
+    model: str = "seedance"
     duration: int = 6
     aspect_ratio: str = "9:16"
 
@@ -91,7 +92,7 @@ class IdeaGenerateResponse(BaseModel):
 # --- Trend Generate (Phase 9) ---
 class TrendGenerateRequest(BaseModel):
     genre: str = "drama"
-    model: str = "veo3"
+    model: str = "seedance"
     duration: int = 6
     aspect_ratio: str = "9:16"
 

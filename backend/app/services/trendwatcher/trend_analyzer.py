@@ -81,6 +81,9 @@ class TrendAnalyzer:
                             existing.duration_sec = item.duration_sec
                         if item.thumbnail_url and not existing.thumbnail_url:
                             existing.thumbnail_url = item.thumbnail_url
+                        ct = getattr(item, 'content_type', None)
+                        if ct and ct != 'other':
+                            existing.content_type = ct
 
                         # Classify trend stage based on velocity change
                         if old_velocity > 0:
@@ -110,6 +113,7 @@ class TrendAnalyzer:
                             trend_stage="rising",
                             keywords_json=json.dumps(item.keywords),
                             url=item.url,
+                            content_type=getattr(item, 'content_type', 'other'),
                         )
                         db.add(trend)
 
@@ -180,6 +184,9 @@ class TrendAnalyzer:
 
         print(f"[TRENDS] Enriched top {top_n} trends with competition data")
 
+    # Content types that are reproducible with AI video generation
+    ACTIONABLE_TYPES = {"ai_generated", "animation", "story", "skit", "music_video"}
+
     def analyze_trends(self, db: Session, trends: List[Trend] = None,
                        max_ideas: int = 5, genre: str = "",
                        channel_niche: str = "", niche_keywords: list = None,
@@ -193,11 +200,19 @@ class TrendAnalyzer:
             print("[TRENDS] No trends to analyze")
             return []
 
+        # Filter: prioritize AI-reproducible content types
+        actionable = [t for t in trends if getattr(t, 'content_type', 'other') in self.ACTIONABLE_TYPES]
+        other = [t for t in trends if t not in actionable]
+        # Use actionable first, then fill up with others (LLM will filter further)
+        trends = (actionable + other)[:30]
+        print(f"[TRENDS] Actionable: {len(actionable)}, other: {len(other)}, sending {len(trends)} to LLM")
+
         # Build enriched trend summary for LLM
         trend_texts = []
         for t in trends:
             keywords = json.loads(t.keywords_json) if t.keywords_json else []
-            parts = [f"- {t.title} (source: {t.source}, score: {t.score:.0f}"]
+            ct = getattr(t, 'content_type', 'other') or 'other'
+            parts = [f"- {t.title} (source: {t.source}, type: {ct}, score: {t.score:.0f}"]
             if t.velocity_score:
                 parts.append(f", velocity: {t.velocity_score:.0f} views/hr")
             if t.trend_stage and t.trend_stage != "unknown":
@@ -222,8 +237,21 @@ class TrendAnalyzer:
         if content_style:
             niche_instruction += f"\nContent style: {content_style}. Match this visual/tonal style."
 
-        system_prompt = """You are a viral pattern analyst and script generator for YouTube Shorts (30-60s videos).
-Your job is to extract PATTERNS from trending content — not just topics — and generate scripts based on those patterns.
+        system_prompt = """You are a viral pattern analyst and script generator for AI-generated YouTube Shorts (30-60s videos).
+
+CRITICAL CONTEXT: We produce videos using AI video generation (Veo 3.1, Seedance, Kling).
+We can create: animated characters, realistic human actors (AI-generated), cartoon worlds, dramatic scenes, nature, sci-fi environments, fantasy.
+We CANNOT create: real celebrity likenesses, specific branded products, real news footage, specific real locations that need to be exact, live sports.
+
+Your job: extract PATTERNS from trending AI-reproducible content and generate ideas that WE CAN PRODUCE with AI video tools.
+
+CONTENT TYPES in the trends data:
+- ai_generated: Already made with AI tools — HIGHEST priority, proven audience demand
+- animation: Cartoon/animated content — we can recreate this perfectly
+- story: Narrative-driven content (POV, drama, storytime) — great for AI actors
+- skit: Comedy sketches — reproducible with AI characters
+- music_video: Visual music content — AI can generate atmospheric visuals
+- other: May or may not be reproducible — analyze carefully
 
 A pattern = hook type + narrative formula + emotional trigger.
 
@@ -249,16 +277,14 @@ NARRATIVE FORMULAS:
 - Hook → List (3 items) → Surprise Item → CTA
 
 WORKFLOW:
-1. Analyze the trends to find top PATTERNS (recurring hook types, emotional triggers, narrative structures)
-2. Generate story ideas that apply these patterns to new content
+1. Focus on trends with type: ai_generated, animation, story, skit — these are proven to work AND we can produce them
+2. Extract PATTERNS (recurring hooks, emotions, narrative arcs) from those trends
+3. Generate ideas that apply those patterns — every idea MUST be producible with AI video generation
+4. Skip trends about news, real celebrities, product reviews, sports — we cannot reproduce those
 
-PRIORITIZE trends that are "rising" with low competition — these are the best opportunities.
+PRIORITIZE: "rising" stage + low competition + ai_generated/animation/story type.
 
-REGENERABILITY: For each idea, assess if it can be produced with AI only.
-- "yes" = fully producible with AI video/image generation
-- "no: requires real person" = needs a real human on camera
-- "no: visual only" = concept is too abstract for video
-- "no: copyrighted content" = relies on specific IP
+REGENERABILITY: ALL ideas should be "yes" (fully AI-producible). If you can't make an idea AI-producible, don't include it.
 
 Return valid JSON."""
 
@@ -317,10 +343,12 @@ Return JSON:
             print(f"[TRENDS] LLM analysis error: {e}")
             ideas_data = []
 
-        # Clear old pending ideas before saving new ones
-        old_pending = db.query(StoryIdea).filter(StoryIdea.status == "pending").delete()
-        if old_pending:
-            print(f"[TRENDS] Cleared {old_pending} old pending ideas")
+        # Clear old ideas that have no linked project (pending, approved, or generated without project)
+        old_ideas = db.query(StoryIdea).filter(
+            StoryIdea.project_id.is_(None)
+        ).delete()
+        if old_ideas:
+            print(f"[TRENDS] Cleared {old_ideas} old ideas without projects")
 
         # Save story ideas to DB
         story_ideas = []

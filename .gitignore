@@ -169,6 +169,8 @@ backend/test_*.py
 .secrets
 *.pem
 *.key
+vertex-sa-key.json
+*-sa-key*.json
 
 # Unnecessary docs
 .gemini/
@@ -188,6 +190,10 @@ docs/
 # Temp files
 tmpclaude-*
 nul
+tmp/
+
+# Backend generated static (storyboard frames, generated videos)
+backend/static/
 
 # Misc junk
 *.docx

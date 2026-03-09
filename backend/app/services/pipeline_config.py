@@ -17,7 +17,7 @@ class PipelineConfig:
     default_genre: str = settings.AUTO_PIPELINE_DEFAULT_GENRE
 
     # Video generation settings
-    default_model: str = "veo3"
+    default_model: str = "seedance"
     default_duration: int = 6
     default_aspect_ratio: str = "9:16"
 

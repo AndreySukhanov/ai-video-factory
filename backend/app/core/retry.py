@@ -38,13 +38,13 @@ class RetryConfig:
         "504",
     )
     # Strings that indicate non-retryable errors (fail fast)
+    # Note: "moderation" removed — handled by PromptSoftener at generation level
     non_retryable_messages: Tuple[str, ...] = (
         "invalid",
         "not found",
         "unauthorized",
         "forbidden",
         "bad request",
-        "moderation",  # Content moderation - need different prompt
     )
 
 

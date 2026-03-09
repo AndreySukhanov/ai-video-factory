@@ -46,7 +46,8 @@ class ReplicateKlingProvider(VideoProvider):
         *, 
         aspect_ratio: str = "9:16",
         reference_image_url: Optional[str] = None,
-        resolution: str = "720p"
+        resolution: str = "720p",
+        **kwargs,
     ) -> str:
         """
         Generate video clip using Replicate Kling

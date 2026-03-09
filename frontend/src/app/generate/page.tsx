@@ -25,23 +25,6 @@ interface GenerationProgress {
 
 // Model configurations with constraints
 const MODEL_CONFIG = {
-    veo3: {
-        name: 'Veo 3 Fast',
-        durations: [4, 6, 8],
-        defaultDuration: 4,
-        aspectRatios: ['9:16', '16:9'],
-        supportsI2V: true,
-        supportsCharacterConsistency: false,
-    },
-    veo31: {
-        name: 'Veo 3.1 (R2V)',
-        durations: [8],
-        defaultDuration: 8,
-        aspectRatios: ['16:9'],
-        supportsI2V: true,
-        supportsCharacterConsistency: true,
-        consistencyNote: 'R2V: 16:9, 8 сек, 1-3 ref',
-    },
     kling: {
         name: 'Kling 2.6',
         durations: [5, 10],
@@ -135,19 +118,12 @@ function GenerateEpisodePage() {
     const [prompt, setPrompt] = useState('');
     const [duration, setDuration] = useState(4);
     const [aspectRatio, setAspectRatio] = useState('9:16');
-    const [model, setModel] = useState<ModelType>('veo3');
-    const [storyModel, setStoryModel] = useState<'minimax' | 'veo31'>('minimax');
+    const [model, setModel] = useState<ModelType>('minimax');
+    const [storyModel, setStoryModel] = useState<'minimax'>('minimax');
     const [referenceImageUrl, setReferenceImageUrl] = useState<string | null>(null);
 
     useEffect(() => {
-        if (model === 'veo3') {
-            if (aspectRatio === '1:1') {
-                setAspectRatio('9:16');
-            }
-            if (referenceImageUrl) {
-                setReferenceImageUrl(null);
-            }
-        }
+        // Model-specific aspect ratio constraints
     }, [model]);
     const [isGenerating, setIsGenerating] = useState(false);
     const [result, setResult] = useState<GenerationResult | null>(null);
@@ -328,14 +304,8 @@ function GenerateEpisodePage() {
                         );
 
                     if (totalEp > 1) {
-                        // Story mode — pick best model by duration match
-                        const minimaxDist = Math.abs(6 - epDur);
-                        const veo31Dist = Math.abs(8 - epDur);
-                        if (veo31Dist < minimaxDist) {
-                            setStoryModel('veo31');
-                        } else {
-                            setStoryModel('minimax');
-                        }
+                        // Story mode — always use minimax
+                        setStoryModel('minimax');
                     } else {
                         // Single mode — set duration for selected model
                         const closest = findClosest(MODEL_CONFIG[model].durations);
@@ -751,7 +721,7 @@ function GenerateEpisodePage() {
         const effectiveCharacterImage = referenceImageUrl || characterImageUrl;
 
         const subjectReference = (isConsistencyEnabled && storyModel === 'minimax') ? effectiveCharacterImage : null;
-        const referenceImagesArray = (isConsistencyEnabled && storyModel === 'veo31')
+        const referenceImagesArray = (false)
             ? (veoReferenceImages.length > 0 ? veoReferenceImages : (effectiveCharacterImage ? [effectiveCharacterImage] : null))
             : null;
 
@@ -910,78 +880,23 @@ function GenerateEpisodePage() {
                         {mode !== 'batch' && (
                         <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
                             <h3 className="text-white font-medium mb-3 flex items-center gap-2">
-                                <Camera className="w-4 h-4" /> {mode === 'story' && storyModel === 'veo31' ? t('generate.referenceImages') : t('generate.referenceImage')}
+                                <Camera className="w-4 h-4" /> {t('generate.referenceImage')}
                                 {mode === 'story' ? (
-                                    storyModel === 'veo31' ? (
-                                        <span className="text-purple-400 text-sm">{t('generate.upTo3R2V')}</span>
-                                    ) : (
-                                        <span className="text-purple-400 text-sm">{t('generate.characterForAll')}</span>
-                                    )
+                                    <span className="text-purple-400 text-sm">{t('generate.characterForAll')}</span>
                                 ) : (
                                     <span className="text-gray-500 text-sm">{t('generate.optional')}</span>
                                 )}
                             </h3>
-                            {mode === 'story' && storyModel === 'veo31' ? (
-                                <div className="space-y-3">
-                                    <div className="grid grid-cols-3 gap-3">
-                                        {[0, 1, 2].map((index) => (
-                                            <div key={index} className="relative">
-                                                {veoReferenceImages[index] ? (
-                                                    <div className="relative group">
-                                                        <img
-                                                            src={veoReferenceImages[index]}
-                                                            alt={`Reference ${index + 1}`}
-                                                            className="w-full h-24 object-cover rounded-lg border border-white/20"
-                                                        />
-                                                        <button
-                                                            onClick={() => {
-                                                                const newImages = [...veoReferenceImages];
-                                                                newImages.splice(index, 1);
-                                                                setVeoReferenceImages(newImages);
-                                                            }}
-                                                            className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        >
-                                                            ✕
-                                                        </button>
-                                                        <span className="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">
-                                                            {index + 1}
-                                                        </span>
-                                                    </div>
-                                                ) : veoReferenceImages.length === index ? (
-                                                    <ImageUpload
-                                                        apiBaseUrl={API_BASE_URL}
-                                                        onImageUploaded={(url) => {
-                                                            setVeoReferenceImages([...veoReferenceImages, url]);
-                                                        }}
-                                                        onImageRemoved={() => {}}
-                                                        compact={true}
-                                                    />
-                                                ) : (
-                                                    <div className="w-full h-24 bg-black/20 rounded-lg border border-dashed border-white/10 flex items-center justify-center text-gray-600 text-xs">
-                                                        {index + 1}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <p className="text-gray-500 text-xs">
-                                        {t('generate.r2vHint')}
-                                    </p>
-                                </div>
-                            ) : (
-                                <>
-                                    <ImageUpload
-                                        apiBaseUrl={API_BASE_URL}
-                                        onImageUploaded={(url) => setReferenceImageUrl(url)}
-                                        onImageRemoved={() => setReferenceImageUrl(null)}
-                                    />
-                                    {mode === 'story' && (
-                                        <p className="text-gray-500 text-xs mt-2">
-                                            {t('generate.characterUploadHint')}
-                                            {!referenceImageUrl && t('generate.characterAutoHint')}
-                                        </p>
-                                    )}
-                                </>
+                            <ImageUpload
+                                apiBaseUrl={API_BASE_URL}
+                                onImageUploaded={(url) => setReferenceImageUrl(url)}
+                                onImageRemoved={() => setReferenceImageUrl(null)}
+                            />
+                            {mode === 'story' && (
+                                <p className="text-gray-500 text-xs mt-2">
+                                    {t('generate.characterUploadHint')}
+                                    {!referenceImageUrl && t('generate.characterAutoHint')}
+                                </p>
                             )}
                         </div>
                         )}
@@ -1075,11 +990,10 @@ function GenerateEpisodePage() {
                                             <label className="text-gray-400 text-sm mb-1 block">{t('generate.aiModel')}</label>
                                             <select
                                                 value={storyModel}
-                                                onChange={(e) => setStoryModel(e.target.value as 'minimax' | 'veo31')}
+                                                onChange={(e) => setStoryModel(e.target.value as 'minimax')}
                                                 className="w-full bg-gray-800 border border-white/10 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500 font-sans"
                                             >
                                                 <option value="minimax">MiniMax (6 сек, 9:16)</option>
-                                                <option value="veo31">Veo 3.1 (8 сек, 16:9)</option>
                                             </select>
                                         </div>
                                         <div>
@@ -1230,10 +1144,10 @@ function GenerateEpisodePage() {
                                         <label className="text-gray-400 text-sm mb-1 block">{t('generate.aiModel')}</label>
                                         <select
                                             value={model}
-                                            onChange={(e) => setModel(e.target.value as 'veo3' | 'kling')}
+                                            onChange={(e) => setModel(e.target.value as ModelType)}
                                             className="w-full bg-gray-800 border border-white/10 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500 font-sans"
                                         >
-                                            <option value="veo3" className="bg-gray-800 text-white">Veo 3 (Google)</option>
+                                            <option value="minimax" className="bg-gray-800 text-white">MiniMax (S2V)</option>
                                             <option value="kling" className="bg-gray-800 text-white">Kling AI (Kuaishou)</option>
                                         </select>
                                     </div>

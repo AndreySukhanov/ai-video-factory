@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 from app.models import Project, Job, Episode, Scene, Asset
 from app.ai_orchestrator.llm_client import LLMClient
 from app.ai_orchestrator.agents import StoryAgent, EpisodeAgent, ShotPromptAgent
-from app.media import VideoProviderMock, ReplicateVeoProvider
+from app.media import VideoProviderMock
+from app.media.video_provider_minimax import MiniMaxProvider
 from app.media.video_provider_pika import PikaVideoProvider
 from app.core.config import settings
 
@@ -15,10 +16,10 @@ story_agent = StoryAgent(llm_client)
 episode_agent = EpisodeAgent(llm_client)
 shot_prompt_agent = ShotPromptAgent(llm_client)
 
-# Video provider selection (priority: Replicate > Pika/fal.ai > Mock)
+# Video provider selection (priority: Replicate MiniMax > Pika/fal.ai > Mock)
 if settings.REPLICATE_API_TOKEN:
-    video_provider = ReplicateVeoProvider()
-    print("[VIDEO] Using Replicate Veo 3 Fast for video generation")
+    video_provider = MiniMaxProvider()
+    print("[VIDEO] Using MiniMax Video-01 via Replicate for video generation")
 elif settings.VIDEO_API_KEY or settings.FAL_KEY:
     video_provider = PikaVideoProvider()
     print("[VIDEO] Using Pika via fal.ai for video generation")
@@ -128,6 +129,10 @@ def _handle_generate_story(db: Session, job: Job, payload: dict):
     character_generator = CharacterGenerator()
     characters_data = story_data.get("characters", [])
     
+    # Build character cards via LLM if not already provided
+    from app.ai_orchestrator.agents import get_story_generator
+    story_gen = get_story_generator()
+
     for char_data in characters_data:
         try:
             # Generate character image
@@ -136,19 +141,27 @@ def _handle_generate_story(db: Session, job: Job, payload: dict):
                 description=char_data.get("description", ""),
                 style="realistic"
             )
-            
+
+            # Auto-generate character_card for Veo 3.1
+            char_card = char_data.get("character_card", "")
+            if not char_card and char_data.get("description"):
+                char_card = story_gen.build_character_card(
+                    char_data["description"], project.genre or "drama"
+                )
+
             character = Character(
                 project_id=project.id,
                 name=char_data.get("name"),
                 role=char_data.get("role", "support"),
                 description=char_data.get("description"),
                 reference_image_url=char_result["image_url"],
-                appearance_prompt=char_result["prompt"]
+                appearance_prompt=char_result["prompt"],
+                character_card=char_card or None,
+                voice_description=char_data.get("voice_description"),
             )
             db.add(character)
         except Exception as e:
             print(f"Warning: Failed to generate character {char_data.get('name')}: {e}")
-            # Create character without image
             character = Character(
                 project_id=project.id,
                 name=char_data.get("name"),
@@ -352,16 +365,19 @@ def _handle_generate_scene_media(db: Session, job: Job, payload: dict):
         primary_reference = project.reference_image_url
         reference_images.append(project.reference_image_url)
     
-    # Build enhanced prompt with character consistency instructions
+    # Build enhanced prompt with character card injection (Veo 3.1 best practice)
     enhanced_prompt = scene.visual_prompt
     if characters_in_scene:
-        char_descriptions = []
+        cards = []
         for char in characters_in_scene:
-            if char.appearance_prompt:
-                char_descriptions.append(f"{char.name}: {char.appearance_prompt}")
-        
-        if char_descriptions:
-            enhanced_prompt = f"{scene.visual_prompt}\n\nCHARACTER APPEARANCES (maintain exactly):\n" + "\n".join(char_descriptions)
+            # Prefer character_card (Veo 3.1 optimized), fall back to appearance_prompt
+            card = char.character_card or char.appearance_prompt
+            if card:
+                cards.append(card)
+
+        if cards:
+            # Prepend character cards to the prompt (Veo 3.1: character description first)
+            enhanced_prompt = f"{'. '.join(cards)}. {scene.visual_prompt}"
     
     # Generate video with reference
     video_url = video_provider.generate_clip(

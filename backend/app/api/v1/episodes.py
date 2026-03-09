@@ -22,10 +22,9 @@ from app.core.security import (
     is_safe_outbound_url,
     resolve_upload_file_path,
 )
-from app.media import VideoProviderMock, ReplicateVeoProvider, ReplicateKlingProvider
+from app.media import VideoProviderMock, ReplicateKlingProvider
 from app.media.video_provider_pika import PikaVideoProvider
 from app.media.video_provider_minimax import MiniMaxProvider
-from app.media.video_provider_veo31 import Veo31Provider
 from app.media.character_generator import CharacterGenerator
 from app.ai_orchestrator.agents import get_prompt_enhancer, get_story_generator
 from app.api.v1.websocket import get_session_manager
@@ -83,6 +82,60 @@ async def upload_to_catbox_from_url(image_url: str) -> Optional[str]:
 
     except Exception as e:
         print(f"[CATBOX] Error uploading from URL: {e}")
+        return None
+
+
+def _resolve_local_file_path(url: str) -> Optional[str]:
+    """Resolve a localhost URL to a local file path. Supports /uploads/ and /static/."""
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    path = parsed.path if parsed.scheme else url
+
+    # /uploads/xxx.jpg
+    if path.startswith("/uploads/"):
+        file_name = extract_local_upload_filename(url)
+        if file_name:
+            try:
+                return str(resolve_upload_file_path(UPLOADS_DIR, file_name))
+            except ValueError:
+                return None
+
+    # /static/storyboard/xxx.png, /static/generated/xxx.mp4
+    if path.startswith("/static/"):
+        rel = path.lstrip("/")
+        if ".." in rel or "\\" in rel:
+            return None
+        full_path = os.path.join(STATIC_DIR, rel.replace("static/", "", 1))
+        if os.path.isfile(full_path):
+            return full_path
+
+    return None
+
+
+async def upload_local_to_catbox(url: str) -> Optional[str]:
+    """If URL points to a local file, upload it to catbox and return public URL."""
+    local_path = _resolve_local_file_path(url)
+    if not local_path:
+        return None
+
+    def _upload_sync() -> Optional[str]:
+        with open(local_path, "rb") as f:
+            content = f.read()
+        filename = os.path.basename(local_path)
+        files = {"fileToUpload": (filename, content)}
+        data = {"reqtype": "fileupload"}
+        resp = requests.post(CATBOX_API_URL, files=files, data=data, timeout=60)
+        if resp.status_code == 200 and resp.text.startswith("https://"):
+            catbox_url = resp.text.strip()
+            print(f"[CATBOX] Local file uploaded: {local_path} → {catbox_url}")
+            return catbox_url
+        print(f"[CATBOX] Upload failed for {local_path}: {resp.text[:100]}")
+        return None
+
+    try:
+        return await asyncio.to_thread(_upload_sync)
+    except Exception as e:
+        print(f"[CATBOX] Error uploading local file: {e}")
         return None
 
 
@@ -148,6 +201,24 @@ def crop_image_to_aspect_ratio(image_data: bytes, target_aspect_ratio: str) -> b
     return output.getvalue()
 
 
+def _download_video_locally(video_url: str) -> str:
+    """Download video from remote URL to local static dir (Veo retention = 2 days)."""
+    video_filename = f"gen_{uuid.uuid4().hex[:12]}.mp4"
+    generated_dir = os.path.join(STATIC_DIR, "generated")
+    os.makedirs(generated_dir, exist_ok=True)
+    local_path = os.path.join(generated_dir, video_filename)
+
+    resp = requests.get(video_url, timeout=120)
+    resp.raise_for_status()
+    with open(local_path, "wb") as f:
+        f.write(resp.content)
+
+    base_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+    local_url = f"{base_url}/static/generated/{video_filename}"
+    print(f"[AUTO-DOWNLOAD] Saved {len(resp.content)} bytes to {local_url}")
+    return local_url
+
+
 router = APIRouter()
 
 
@@ -158,19 +229,29 @@ class EpisodeGenerateRequest(BaseModel):
     duration: int = Field(default=4, description="Video duration in seconds (4/6/8 for Veo; 5/10 for Kling; 6 for MiniMax)")
     aspect_ratio: str = Field(default="9:16", description="Video aspect ratio")
     reference_image_url: Optional[str] = Field(default=None, description="Optional reference image URL (first frame for I2V)")
+    last_frame_image_url: Optional[str] = Field(default=None, description="Last frame image URL for transition videos (Veo 3.1 -fl models)")
     subject_reference_url: Optional[str] = Field(default=None, description="Character reference for identity consistency (MiniMax S2V-01)")
     reference_images: Optional[List[str]] = Field(default=None, description="1-3 reference images for Veo 3.1 R2V character consistency")
-    model: str = Field(default="veo3", description="Video model: veo3, veo31, kling, or minimax")
+    model: str = Field(default="seedance", description="Video model: seedance, laozhang, vertex, gemini, kling, or minimax")
     session_id: Optional[str] = Field(default=None, description="WebSocket session ID for progress updates")
+    seed: Optional[int] = Field(default=None, description="Fixed seed for visual stability")
+    negative_prompt: Optional[str] = Field(default=None, description="Negative prompt (noun format: text overlays, subtitles, cartoon)")
+    quality_mode: str = Field(default="fast", description="Quality mode: fast or standard. For gemini/vertex.")
+    generate_audio: bool = Field(default=True, description="Generate audio with video. Disable for cheaper LaoZhang ($0.10/s vs $0.15/s)")
+    variants_count: int = Field(default=1, ge=1, le=4, description="Number of variants to generate (for standard mode)")
+    use_timestamps: bool = Field(default=False, description="Use multi-shot timestamp prompting (gemini/vertex, duration>=6)")
+    narrative_structure: Optional[str] = Field(default=None, description="Narrative structure for timestamp prompting")
 
 
 class EpisodeGenerateResponse(BaseModel):
     """Response body for episode generation"""
     success: bool
     video_url: Optional[str] = None
+    variants: Optional[List[str]] = None  # Multiple video URLs when variants_count > 1
     status: str
     duration: Optional[int] = None
     generation_time: Optional[float] = None
+    quality_mode: Optional[str] = None
     error: Optional[str] = None
 
 
@@ -189,18 +270,49 @@ class MergeResponse(BaseModel):
     error: Optional[str] = None
 
 
+# Static dir for auto-downloaded videos
+STATIC_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+    "static",
+)
+
+
 # Initialize video provider
-def get_video_provider(model: str = "veo3"):
+def get_video_provider(model: str = "seedance", reference_image_url: str = None, aspect_ratio: str = "9:16", quality_mode: str = "fast", generate_audio: bool = True):
     """Get the configured video provider based on model choice"""
+    # Vertex AI provider (Google Cloud — supports generateAudio=false for cheaper no-audio)
+    if model == "vertex":
+        from app.media.video_provider_vertex import VertexVeoProvider
+        has_ref = bool(reference_image_url)
+        use_fast = (quality_mode == "fast")
+        return VertexVeoProvider(use_fast=use_fast, use_fl=has_ref, aspect_ratio=aspect_ratio, generate_audio=generate_audio)
+
+    # Gemini API provider (direct Google access, no intermediary)
+    if model == "gemini":
+        from app.media.video_provider_gemini import GeminiVeoProvider
+        has_ref = bool(reference_image_url)
+        use_fast = (quality_mode == "fast")
+        return GeminiVeoProvider(use_fast=use_fast, use_fl=has_ref, aspect_ratio=aspect_ratio)
+
+    # Seedance 2.0 via LaoZhang ($0.05/video, up to 9 reference images)
+    if model == "seedance":
+        from app.media.video_provider_seedance import SeedanceProvider
+        return SeedanceProvider(aspect_ratio=aspect_ratio)
+
+    # LaoZhang provider (opt-in, requires API key)
+    # Supports full matrix including landscape-fast (cheaper 16:9!)
+    # NOTE: LaoZhang does NOT support -fl models (403), but accepts image param on standard models
+    if model == "laozhang":
+        from app.media.video_provider_laozhang import LaoZhangVeoProvider
+        return LaoZhangVeoProvider(use_fast=(quality_mode == "fast"), use_fl=False, aspect_ratio=aspect_ratio)
+
     if settings.REPLICATE_API_TOKEN:
         if model == "minimax":
             return MiniMaxProvider()
-        elif model == "veo31":
-            return Veo31Provider(use_fast=True)
         elif model == "kling":
             return ReplicateKlingProvider()
         else:
-            return ReplicateVeoProvider()
+            return MiniMaxProvider()
     elif settings.VIDEO_API_KEY or settings.FAL_KEY:
         return PikaVideoProvider()
     else:
@@ -248,22 +360,42 @@ async def generate_episode(request: EpisodeGenerateRequest):
     await send_progress(session_id, "starting", 5, "Starting video generation...")
 
     try:
-        video_provider = get_video_provider(request.model)
+        video_provider = get_video_provider(
+            model=request.model,
+            reference_image_url=request.reference_image_url or request.last_frame_image_url,
+            aspect_ratio=request.aspect_ratio,
+            quality_mode=request.quality_mode,
+            generate_audio=request.generate_audio,
+        )
 
-        # Helper function to convert local uploads to base64 data URI
+        # Helper function to convert local uploads/static assets to base64 data URI
         def convert_local_to_base64(url: Optional[str], crop_aspect: bool = True) -> Optional[str]:
             if not url:
                 return None
 
+            # Try /uploads/ path first
             file_name = extract_local_upload_filename(url)
-            if not file_name:
-                return url  # Return as-is if not local
-
-            try:
-                file_path = resolve_upload_file_path(UPLOADS_DIR, file_name)
-            except ValueError:
-                print(f"[DEBUG] Rejected unsafe upload path: {file_name}")
-                return None
+            if file_name:
+                try:
+                    file_path = resolve_upload_file_path(UPLOADS_DIR, file_name)
+                except ValueError:
+                    print(f"[DEBUG] Rejected unsafe upload path: {file_name}")
+                    return None
+            else:
+                # Try /static/ paths (storyboard frames, extracted frames)
+                from urllib.parse import urlparse
+                parsed = urlparse(url)
+                path = parsed.path if parsed.scheme else url
+                if path.startswith("/static/"):
+                    from pathlib import Path
+                    rel = path.lstrip("/")
+                    # Validate: only allow known subdirs, no ..
+                    if ".." in rel or "\\" in rel:
+                        print(f"[DEBUG] Rejected unsafe static path: {rel}")
+                        return None
+                    file_path = Path(STATIC_DIR) / rel.replace("static/", "", 1)
+                else:
+                    return url  # Return as-is if not local
 
             print(f"[DEBUG] Looking for file: {file_path}")
             print(f"[DEBUG] File exists: {os.path.exists(file_path)}")
@@ -298,7 +430,16 @@ async def generate_episode(request: EpisodeGenerateRequest):
 
         # Process reference image URL (first frame for I2V)
         await send_progress(session_id, "processing", 10, "Processing reference images...")
-        reference_url = convert_local_to_base64(request.reference_image_url, crop_aspect=True)
+
+        # Seedance/LaoZhang need public URLs (catbox), not base64 data URIs
+        needs_public_url = request.model in ("seedance", "laozhang")
+
+        if needs_public_url and request.reference_image_url:
+            # Upload local file to catbox for external API access
+            catbox_url = await upload_local_to_catbox(request.reference_image_url)
+            reference_url = catbox_url or request.reference_image_url
+        else:
+            reference_url = convert_local_to_base64(request.reference_image_url, crop_aspect=True)
 
         # Process subject reference URL (character identity for MiniMax S2V-01)
         # Don't crop subject reference - keep original proportions for face detection
@@ -306,47 +447,147 @@ async def generate_episode(request: EpisodeGenerateRequest):
 
         print(f"[DEBUG] Calling video provider with ref_url: {reference_url is not None}, subject_ref: {subject_reference_url is not None}")
 
+        # Timestamp prompting: convert to multi-shot format if requested
+        prompt_text = request.prompt
+        if request.use_timestamps and request.model in ("gemini", "vertex", "laozhang") and request.duration >= 6:
+            from app.ai_orchestrator.agents.timestamp_prompt_builder import get_timestamp_builder
+            ts_builder = get_timestamp_builder()
+            prompt_text = await asyncio.to_thread(
+                ts_builder.build_timestamp_prompt,
+                scene_description=request.prompt,
+                character_card="",
+                duration=request.duration,
+                narrative_structure=request.narrative_structure or "hook_conflict_twist_cta",
+                aspect_ratio=request.aspect_ratio,
+            )
+            print(f"[DEBUG] Timestamp prompt built: {prompt_text[:120]}...")
+
         # Enhance prompt via GPT before sending to video provider
+        # I2V mode: if reference image provided, prompt should describe motion only
+        is_i2v = bool(reference_url)
         await send_progress(session_id, "enhancing", 20, "Enhancing prompt with AI...")
         prompt_enhancer = get_prompt_enhancer()
         enhanced_prompt = await asyncio.to_thread(
             prompt_enhancer.enhance_prompt,
-            user_prompt=request.prompt,
+            user_prompt=prompt_text,
             aspect_ratio=request.aspect_ratio,
             duration=request.duration,
+            is_i2v=is_i2v,
         )
+
+        # Append negative prompt if provided by client
+        if request.negative_prompt and 'negative prompt:' not in enhanced_prompt.lower():
+            enhanced_prompt = enhanced_prompt.rstrip('.') + f'. Negative prompt: {request.negative_prompt}.'
+
         await send_progress(session_id, "generating", 35, f"Generating video with {request.model.upper()}...")
 
         # Generate video with enhanced prompt
-        # MiniMax supports subject_reference for character consistency (S2V-01)
-        # MiniMax with subject_reference for character consistency (S2V-01)
         clip_kwargs = {
             "visual_prompt": enhanced_prompt,
             "duration_sec": request.duration,
             "aspect_ratio": request.aspect_ratio,
             "reference_image_url": reference_url,
         }
+
+        # Last frame for transition videos (Veo 3.1 -fl models)
+        if request.last_frame_image_url:
+            last_frame_url = convert_local_to_base64(request.last_frame_image_url, crop_aspect=True)
+            if last_frame_url:
+                clip_kwargs["last_frame_image_url"] = last_frame_url
+                clip_kwargs["duration_sec"] = 8  # transitions require 8s
+                print(f"[DEBUG] Transition mode: first+last frame, forcing 8s duration")
+
+        # Reference images for character/style consistency (up to 3)
+        if request.reference_images:
+            valid_refs = [url for url in request.reference_images if url and url.strip()]
+            if valid_refs:
+                clip_kwargs["reference_images"] = valid_refs[:3]
+                print(f"[DEBUG] {len(valid_refs[:3])} reference images attached")
+
+        # MiniMax with subject_reference for character consistency (S2V-01)
         if request.model == "minimax" and subject_reference_url:
             clip_kwargs["subject_reference_url"] = subject_reference_url
-        # Veo 3.1 with reference_images for character consistency (R2V)
-        elif request.model == "veo31" and request.reference_images:
-            clip_kwargs["reference_images"] = request.reference_images
+        # Pass negative prompt to provider
+        if request.negative_prompt:
+            clip_kwargs["negative_prompt"] = request.negative_prompt
 
-        video_url = await asyncio.to_thread(video_provider.generate_clip, **clip_kwargs)
-        
-        print(f"[DEBUG] Generated video_url: {video_url[:100] if video_url else 'None'}...")
+        # Pass audio preference only to providers that support it
+        if request.model in ("gemini", "vertex", "laozhang", "seedance"):
+            clip_kwargs["generate_audio"] = request.generate_audio
+
+        variants_count = 1
+        variant_urls: List[str] = []
+
+        for variant_idx in range(variants_count):
+            if variants_count > 1:
+                await send_progress(session_id, "generating", 35 + (variant_idx * 50 // variants_count),
+                                    f"Generating variant {variant_idx + 1}/{variants_count}...")
+
+            video_url = None
+            try:
+                video_url = await asyncio.to_thread(video_provider.generate_clip, **clip_kwargs)
+                if not video_url:
+                    raise ValueError("Empty video_url returned")
+            except Exception as gen_err:
+                # === Prompt Softening: detect moderation rejection → LLM rewrite → retry once ===
+                from app.ai_orchestrator.agents.prompt_softener import is_moderation_error, get_prompt_softener
+                error_str = str(gen_err)
+                if is_moderation_error(error_str):
+                    print(f"[SOFTENER] Moderation rejection detected: {error_str[:120]}")
+                    await send_progress(session_id, "softening", 50, "Prompt blocked by moderation, softening...")
+                    softener = get_prompt_softener()
+                    softened_prompt = await softener.soften(clip_kwargs.get("visual_prompt", ""), error_str)
+                    clip_kwargs["visual_prompt"] = softened_prompt
+                    try:
+                        video_url = await asyncio.to_thread(video_provider.generate_clip, **clip_kwargs)
+                        if not video_url:
+                            raise ValueError("Empty video_url after softening")
+                        print(f"[SOFTENER] Retry succeeded after softening")
+                    except Exception as soft_err:
+                        print(f"[SOFTENER] Retry after softening also failed: {soft_err}")
+                        gen_err = soft_err
+
+                # Vertex → Gemini API fallback
+                if not video_url and request.model == "vertex" and settings.GEMINI_API_KEY:
+                    print(f"[FALLBACK] Vertex failed ({gen_err}), switching to Gemini API...")
+                    await send_progress(session_id, "generating", 40, "Vertex error, switching to Gemini API fallback...")
+                    from app.media.video_provider_gemini import GeminiVeoProvider
+                    has_ref = bool(request.reference_image_url)
+                    use_fast = (request.quality_mode == "fast")
+                    fallback = GeminiVeoProvider(use_fast=use_fast, use_fl=has_ref, aspect_ratio=request.aspect_ratio)
+                    video_url = await asyncio.to_thread(fallback.generate_clip, **clip_kwargs)
+                    print(f"[FALLBACK] Gemini API succeeded: {video_url[:80] if video_url else 'None'}")
+                elif not video_url:
+                    raise
+
+            print(f"[DEBUG] Generated video_url (variant {variant_idx + 1}): {video_url[:100] if video_url else 'None'}...")
+
+            # Auto-download video to local server (Veo retention = 2 days!)
+            local_video_url = video_url
+            if video_url and request.model in ("gemini", "vertex", "seedance", "laozhang"):
+                try:
+                    await send_progress(session_id, "downloading", 85, "Saving video locally...")
+                    local_video_url = await asyncio.to_thread(_download_video_locally, video_url)
+                    print(f"[DEBUG] Video saved locally: {local_video_url}")
+                except Exception as dl_err:
+                    print(f"[DEBUG] Video auto-download failed (using remote URL): {dl_err}")
+                    local_video_url = video_url
+
+            variant_urls.append(local_video_url)
 
         generation_time = round(time.time() - start_time, 2)
 
-        # Send completion progress
-        await send_progress(session_id, "completed", 100, "Video generation complete!", video_url)
+        primary_url = variant_urls[0] if variant_urls else None
+        await send_progress(session_id, "completed", 100, "Video generation complete!", primary_url)
 
         return EpisodeGenerateResponse(
             success=True,
-            video_url=video_url,
+            video_url=primary_url,
+            variants=variant_urls if len(variant_urls) > 1 else None,
             status="completed",
             duration=request.duration,
-            generation_time=generation_time
+            generation_time=generation_time,
+            quality_mode=None
         )
         
     except ValueError as e:
@@ -376,7 +617,7 @@ async def get_generation_status():
     provider_status = "ready"
     
     if settings.REPLICATE_API_TOKEN:
-        provider_name = "replicate_veo3"
+        provider_name = "replicate_minimax"
         provider_status = "ready"
     elif settings.FAL_KEY:
         provider_name = "pika_fal"
@@ -389,7 +630,8 @@ async def get_generation_status():
         "provider": provider_name,
         "status": provider_status,
         "supported_durations": [4, 6, 8],
-        "supported_aspect_ratios": ["9:16", "16:9", "1:1"]
+        "supported_aspect_ratios": ["9:16", "16:9"],
+        "model_restrictions": {}
     }
 
 
@@ -464,6 +706,135 @@ async def extract_last_frame(request: ExtractFrameRequest):
     except Exception as e:
         print(f"[DEBUG] Extract frame error: {str(e)}")
         return ExtractFrameResponse(success=False, error=str(e))
+
+class ExtendRequest(BaseModel):
+    """Request for extending a video"""
+    video_url: str = Field(..., description="URL of the video to extend")
+    prompt: str = Field(default="Continue the scene with natural motion", description="Motion prompt for continuation")
+    extensions_count: int = Field(default=1, ge=1, le=20, description="Number of 7s extensions (1-20)")
+    aspect_ratio: str = Field(default="9:16", description="Video aspect ratio")
+    quality_mode: str = Field(default="fast", description="Quality mode: fast or standard")
+
+
+class ExtendResponse(BaseModel):
+    """Response for video extension"""
+    success: bool
+    extended_video_url: Optional[str] = None
+    total_duration: Optional[float] = None
+    segments_count: Optional[int] = None
+    error: Optional[str] = None
+
+
+@router.post("/extend", response_model=ExtendResponse)
+async def extend_video(request: ExtendRequest):
+    """
+    Extend a video by generating continuation clips from the last frame.
+    Each extension adds ~7 seconds. Max 20 extensions (148s total).
+    Uses Veo 3.1 frame chaining (-fl model).
+    """
+    print(f"[EXTEND] Request: {request.extensions_count} extensions for {request.video_url[:60]}...")
+
+    try:
+        from app.media.video_extender import VeoVideoExtender
+        extender = VeoVideoExtender()
+
+        result = await asyncio.to_thread(
+            extender.extend_video,
+            video_url=request.video_url,
+            prompt=request.prompt,
+            extensions_count=request.extensions_count,
+            aspect_ratio=request.aspect_ratio,
+            quality_mode=request.quality_mode,
+        )
+
+        return ExtendResponse(
+            success=True,
+            extended_video_url=result["extended_video_url"],
+            total_duration=result.get("total_duration"),
+            segments_count=result.get("segments_count"),
+        )
+    except Exception as e:
+        print(f"[EXTEND] Error: {str(e)}")
+        return ExtendResponse(success=False, error=str(e))
+
+
+class StoryboardRequest(BaseModel):
+    """Request for generating storyboard keyframes"""
+    anchor_prompt: str = Field(default="", description="Shared visual anchor (camera, character, setting)")
+    character_card: str = Field(default="", description="Fixed character appearance (<=50 words)")
+    episode_prompts: List[str] = Field(..., description="Visual prompts per episode (variable parts)")
+    aspect_ratio: str = Field(default="9:16", description="Image aspect ratio")
+    seed: Optional[int] = Field(default=None, description="Fixed seed for consistency (auto if None)")
+    image_model: str = Field(default="gemini", description="Image provider: 'gemini' (Nano Banana $0.003), 'seedream' (Seedream 4.5 $0.045), or 'flux' (FLUX Schnell $0.003)")
+    reference_image_urls: List[str] = Field(default_factory=list, description="User-uploaded reference photos (character, location)")
+
+
+class StoryboardResponse(BaseModel):
+    """Response with storyboard keyframe URLs"""
+    success: bool
+    keyframes: List[str] = Field(default_factory=list, description="Image URLs per episode")
+    seed: Optional[int] = None
+    error: Optional[str] = None
+
+
+@router.post("/storyboard", response_model=StoryboardResponse)
+async def generate_storyboard(request: StoryboardRequest):
+    """
+    Generate storyboard keyframes for episodes.
+    Supports three providers: Gemini Flash (cheap), Seedream 4.5 (higher quality), FLUX Schnell (Replicate).
+    """
+    print(f"[STORYBOARD] Request: {len(request.episode_prompts)} frames, model={request.image_model}, seed={request.seed}")
+
+    try:
+        if request.image_model == "seedream":
+            if not settings.LAOZHANG_API_KEY:
+                return StoryboardResponse(success=False, error="LAOZHANG_API_KEY not configured (required for Seedream)")
+            from app.media.image_provider_seedream import SeedreamImageProvider
+            provider = SeedreamImageProvider()
+        elif request.image_model == "flux":
+            if not settings.REPLICATE_API_TOKEN:
+                return StoryboardResponse(success=False, error="REPLICATE_API_TOKEN not configured (required for FLUX)")
+            from app.media.image_provider_flux import FluxImageProvider
+            provider = FluxImageProvider()
+        else:
+            if not settings.GEMINI_API_KEY:
+                return StoryboardResponse(success=False, error="GEMINI_API_KEY not configured")
+            from app.media.image_provider_gemini import GeminiImageProvider
+            provider = GeminiImageProvider()
+
+        import random
+        seed = request.seed or random.randint(1, 999999)
+
+        # Filter valid reference URLs
+        valid_refs = [u for u in request.reference_image_urls if u and u.strip()]
+
+        keyframes = await asyncio.to_thread(
+            provider.generate_storyboard,
+            anchor_prompt=request.anchor_prompt,
+            episode_prompts=request.episode_prompts,
+            aspect_ratio=request.aspect_ratio,
+            seed=seed,
+            character_card=request.character_card,
+            reference_image_urls=valid_refs if valid_refs else None,
+        )
+
+        valid_count = sum(1 for k in keyframes if k)
+        if valid_count == 0:
+            return StoryboardResponse(
+                success=False,
+                keyframes=[],
+                error=f"All {len(keyframes)} frames failed to generate. Try a different image model.",
+            )
+
+        return StoryboardResponse(
+            success=True,
+            keyframes=keyframes,
+            seed=seed,
+        )
+    except Exception as e:
+        print(f"[STORYBOARD] Error: {str(e)}")
+        return StoryboardResponse(success=False, error=str(e))
+
 
 @router.post("/merge", response_model=MergeResponse)
 async def merge_episodes(request: MergeRequest):
@@ -565,6 +936,8 @@ class EpisodePromptData(BaseModel):
     title: str
     synopsis: str
     prompt: str
+    anchor_prompt: Optional[str] = None
+    variable_prompt: Optional[str] = None
 
 
 class SeriesGenerateResponse(BaseModel):
@@ -573,6 +946,9 @@ class SeriesGenerateResponse(BaseModel):
     series_title: Optional[str] = None
     logline: Optional[str] = None
     genre: Optional[str] = None
+    character_card: Optional[str] = None
+    voice_description: Optional[str] = None
+    anchor_prompt: Optional[str] = None
     episodes: List[EpisodePromptData] = []
     error: Optional[str] = None
 
@@ -614,18 +990,23 @@ async def generate_series(request: SeriesGenerateRequest):
                 number=ep.number,
                 title=ep.title,
                 synopsis=ep.synopsis,
-                prompt=ep.visual_prompt
+                prompt=ep.visual_prompt,
+                anchor_prompt=ep.anchor_prompt or None,
+                variable_prompt=ep.variable_prompt or None
             )
             for ep in series.episodes
         ]
-        
+
         print(f"[SERIES GENERATOR] Generated series: {series.series_title} with {len(episodes)} episodes")
-        
+
         return SeriesGenerateResponse(
             success=True,
             series_title=series.series_title,
             logline=series.logline,
             genre=series.genre,
+            character_card=series.character_card or None,
+            voice_description=series.voice_description or None,
+            anchor_prompt=series.anchor_prompt or None,
             episodes=episodes
         )
         

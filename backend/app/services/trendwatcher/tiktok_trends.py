@@ -12,23 +12,23 @@ class TikTokTrendsSource(TrendSource):
 
     # Region-specific hashtags and search queries
     REGION_HASHTAGS = {
-        "US": ["trending", "viral", "fyp"],
-        "GB": ["trending", "viral", "fyp", "uktrending"],
-        "RU": ["тренды", "рек", "рекомендации", "viral"],
-        "DE": ["trending", "viral", "foryou", "deutsch"],
-        "JP": ["おすすめ", "バズる", "trending", "viral"],
-        "BR": ["viral", "trending", "fyp", "brasil"],
-        "IN": ["trending", "viral", "fyp", "india"],
+        "US": ["aiart", "aigenerated", "animation", "microdrama", "storytime"],
+        "GB": ["aiart", "aigenerated", "animation", "microdrama", "storytime"],
+        "RU": ["нейросеть", "ииарт", "анимация", "микродрама", "сторителлинг"],
+        "DE": ["kigeneration", "animation", "kurzfilm", "microdrama"],
+        "JP": ["AI生成", "アニメ", "ショートドラマ", "マイクロドラマ"],
+        "BR": ["iagerativa", "animacao", "microdrama", "historiacurta"],
+        "IN": ["aigenerated", "animation", "microdrama", "storytime"],
     }
 
     REGION_QUERIES = {
-        "US": ["trending story", "viral drama", "POV", "wait for it"],
-        "GB": ["trending story UK", "viral drama", "POV british"],
-        "RU": ["тренды тикток", "вирусное видео", "POV русский", "драма"],
-        "DE": ["trending deutsch", "viral drama", "POV deutsch"],
-        "JP": ["トレンド", "バズ動画", "viral japan"],
-        "BR": ["trending brasil", "viral drama", "POV brasil"],
-        "IN": ["trending india", "viral story", "POV india"],
+        "US": ["AI generated story", "AI animation viral", "microdrama POV", "skit comedy story"],
+        "GB": ["AI generated story UK", "animation drama", "microdrama POV"],
+        "RU": ["нейросеть видео", "ИИ генерация", "микродрама POV", "анимация история"],
+        "DE": ["KI generiert video", "animation story deutsch", "microdrama"],
+        "JP": ["AI生成動画", "アニメストーリー", "マイクロドラマ"],
+        "BR": ["IA video gerado", "animação drama", "microdrama brasil"],
+        "IN": ["AI generated video india", "animation story hindi", "microdrama POV"],
     }
 
     @property
@@ -161,6 +161,8 @@ class TikTokTrendsSource(TrendSource):
             if sound_name:
                 description += f" | {sound_name}"
 
+            content_type = self._classify_content_type(title, hashtags)
+
             trends.append(TrendItem(
                 title=title[:200],
                 description=description,
@@ -172,6 +174,7 @@ class TikTokTrendsSource(TrendSource):
                 view_count=plays,
                 keywords=hashtags[:10],
                 url=url,
+                content_type=content_type,
             ))
 
             if len(trends) >= max_results:
@@ -180,6 +183,25 @@ class TikTokTrendsSource(TrendSource):
         trends.sort(key=lambda t: t.velocity_score, reverse=True)
         print(f"[TRENDS] TikTok: fetched {len(trends)} videos")
         return trends
+
+    @staticmethod
+    def _classify_content_type(title: str, hashtags: list) -> str:
+        text = f"{title} {' '.join(hashtags)}".lower()
+        ai_kw = ["ai", "aigenerat", "aiart", "sora", "runway", "midjourney", "kling",
+                  "нейросеть", "ии", "ki generi", "ia gerad", "ai生成"]
+        anim_kw = ["animation", "animated", "cartoon", "anime", "3d", "анимация", "мультик", "アニメ", "animação"]
+        story_kw = ["story", "storytime", "microdrama", "pov", "drama", "short film",
+                     "история", "микродрама", "драма", "ドラマ", "história"]
+        skit_kw = ["skit", "sketch", "comedy skit", "скетч", "юмор"]
+        if any(kw in text for kw in ai_kw):
+            return "ai_generated"
+        if any(kw in text for kw in anim_kw):
+            return "animation"
+        if any(kw in text for kw in story_kw):
+            return "story"
+        if any(kw in text for kw in skit_kw):
+            return "skit"
+        return "other"
 
     @staticmethod
     def _format_count(n: int) -> str:

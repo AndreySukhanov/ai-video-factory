@@ -254,6 +254,17 @@ def regenerate_video(item_id: int, db: Session = Depends(get_db)):
     )
 
 
+@router.delete("/{item_id}", response_model=ReviewActionResponse)
+def delete_review_item(item_id: int, db: Session = Depends(get_db)):
+    """Permanently delete a review item."""
+    item = db.query(ReviewItem).filter(ReviewItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Review item not found")
+    db.delete(item)
+    db.commit()
+    return ReviewActionResponse(success=True, item=None, message="Deleted")
+
+
 @router.post("/{item_id}/publish", response_model=ReviewActionResponse)
 def publish_video(item_id: int, db: Session = Depends(get_db)):
     """Change an uploaded private video to public on YouTube."""

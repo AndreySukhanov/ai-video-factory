@@ -1,4 +1,4 @@
-import { Clock3, RefreshCw, AlertTriangle, Trash2 } from 'lucide-react';
+import { Clock3, RefreshCw, AlertTriangle, Trash2, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, ProgressBar } from '@/components/ui';
 import { EpisodeDraft, FlowStepId } from './types';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -9,9 +9,11 @@ interface StatusPanelProps {
   isGenerating: boolean;
   onRetryEpisode: (id: string) => void;
   onDeleteEpisode: (id: string) => void;
+  onMoveEpisode?: (id: string, direction: 'up' | 'down') => void;
+  onRegenerateEpisode?: (id: string) => void;
 }
 
-export default function StatusPanel({ currentStep, episodes, isGenerating, onRetryEpisode, onDeleteEpisode }: StatusPanelProps) {
+export default function StatusPanel({ currentStep, episodes, isGenerating, onRetryEpisode, onDeleteEpisode, onMoveEpisode, onRegenerateEpisode }: StatusPanelProps) {
   const { t } = useLanguage();
   const done = episodes.filter((episode) => episode.status === 'done').length;
   const failed = episodes.filter((episode) => episode.status === 'error').length;
@@ -59,14 +61,50 @@ export default function StatusPanel({ currentStep, episodes, isGenerating, onRet
         </CardHeader>
         <CardContent className="space-y-2 max-h-[55vh] overflow-auto">
           {episodes.length === 0 && <div className="text-sm text-[var(--muted)]">{t('generateV2.noEpisodesYet')}</div>}
-          {episodes.map((episode) => (
+          {episodes.map((episode, idx) => (
             <div key={episode.id} className="rounded-[var(--radius-sm)] border border-white/10 bg-[var(--surface-2)]/60 p-3">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-xs font-medium">E{episode.number}: {episode.title || t('review.untitled')}</div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  {onMoveEpisode && (
+                    <div className="flex flex-col -my-1">
+                      <button
+                        type="button"
+                        onClick={() => onMoveEpisode(episode.id, 'up')}
+                        disabled={idx === 0 || isGenerating}
+                        className="text-white/40 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed p-0.5"
+                        title={t('generateV2.moveUp')}
+                      >
+                        <ChevronUp className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onMoveEpisode(episode.id, 'down')}
+                        disabled={idx === episodes.length - 1 || isGenerating}
+                        className="text-white/40 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed p-0.5"
+                        title={t('generateV2.moveDown')}
+                      >
+                        <ChevronDown className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                  <div className="text-xs font-medium">E{episode.number}: {episode.title || t('review.untitled')}</div>
+                </div>
+                <div className="flex items-center gap-1">
                   <Badge variant={episode.status === 'done' ? 'success' : episode.status === 'error' ? 'danger' : 'muted'}>
                     {statusLabel(episode.status)}
                   </Badge>
+                  {onRegenerateEpisode && episode.status === 'done' && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onRegenerateEpisode(episode.id)}
+                      disabled={isGenerating}
+                      aria-label={t('generateV2.regenerate')}
+                      title={t('generateV2.regenerate')}
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="ghost"

@@ -21,6 +21,18 @@ class Settings(BaseSettings):
     VIDEO_API_KEY: Optional[str] = None
     VIDEO_API_BASE_URL: Optional[str] = None
 
+    # Google Gemini API (direct Veo 3.1 access via AI Studio key)
+    GEMINI_API_KEY: Optional[str] = None
+
+    # Google Vertex AI (Veo 3.1 with generateAudio toggle — cheaper no-audio mode)
+    VERTEX_PROJECT_ID: Optional[str] = None
+    VERTEX_SA_KEY_PATH: Optional[str] = None  # Path to service account JSON key
+    VERTEX_REGION: str = "us-central1"
+
+    # LaoZhang (alternative Veo proxy — no charge on failure, batch, 24h lifetime)
+    LAOZHANG_API_KEY: Optional[str] = None
+    LAOZHANG_BASE_URL: str = "https://api.laozhang.ai/v1"
+
     # Backend URL for static files
     BACKEND_URL: Optional[str] = None
     FRONTEND_URL: str = "http://localhost:3000"
