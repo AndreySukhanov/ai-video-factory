@@ -1,3 +1,4 @@
+import re
 import xml.etree.ElementTree as ET
 from typing import List
 from datetime import datetime
@@ -18,19 +19,103 @@ class GoogleTrendsSource(TrendSource):
     }
 
     REGION_SEED_KEYWORDS = {
-        "US": ["viral video", "trending shorts", "funny video", "drama story", "horror short"],
-        "RU": ["вирусное видео", "тренды шортс", "смешное видео", "драма история", "ужасы короткометражка"],
-        "DE": ["virales video", "trending shorts", "lustiges video", "drama kurzfilm"],
-        "JP": ["バイラル動画", "トレンドショート", "面白い動画", "ドラマストーリー"],
-        "BR": ["vídeo viral", "trending shorts", "vídeo engraçado", "drama história"],
-        "IN": ["viral video", "trending shorts hindi", "funny video india", "drama story"],
+        "US": ["AI video", "AI art", "animated story", "cute animal story", "neural network"],
+        "RU": ["нейросеть видео", "ИИ арт", "анимация история", "милые животные", "нейросетьзахватитмир"],
+        "DE": ["KI video", "KI kunst", "animation geschichte", "süße tiere"],
+        "JP": ["AI動画", "AI生成", "アニメストーリー", "かわいい動物"],
+        "BR": ["IA vídeo", "IA arte", "animação história", "animais fofos"],
+        "IN": ["AI video", "AI art", "animated story", "cute animal story"],
     }
 
-    DEFAULT_SEED_KEYWORDS = ["viral video", "trending shorts", "funny video", "drama story", "horror short"]
+    DEFAULT_SEED_KEYWORDS = ["AI video", "AI art", "animated story", "cute animal story", "neural network"]
+
+    # Topics suitable for AI video generation (keep these)
+    AI_FRIENDLY_KEYWORDS = [
+        # AI / tech
+        "ai", "artificial intelligence", "chatgpt", "openai", "midjourney", "sora",
+        "neural network", "deep learning", "robot", "deepfake",
+        "нейросеть", "ии", "искусственный интеллект", "робот",
+        # Entertainment / storytelling
+        "movie", "film", "animation", "anime", "cartoon", "pixar", "disney",
+        "horror", "sci-fi", "fantasy", "superhero", "marvel", "dc",
+        "фильм", "кино", "мультфильм", "анимация", "аниме", "ужасы", "фантастика",
+        # Animals (cute stories)
+        "dog", "puppy", "cat", "kitten", "animal", "pet", "cute",
+        "собака", "щенок", "кот", "котёнок", "животное", "милый",
+        # Emotional / story topics
+        "story", "mystery", "legend", "myth", "fairytale", "miracle",
+        "история", "легенда", "миф", "сказка", "чудо", "тайна",
+        # Science / nature (visualizable)
+        "space", "ocean", "dinosaur", "volcano", "earthquake", "tornado",
+        "cosmos", "planet", "black hole", "universe",
+        "космос", "океан", "динозавр", "вулкан", "планета", "вселенная",
+        # Viral visual content
+        "optical illusion", "satisfying", "transformation", "before after",
+        "what if", "did you know", "amazing facts",
+    ]
+
+    # Topics NOT suitable for AI video (reject these)
+    NON_AI_KEYWORDS = [
+        # Sports
+        "nfl", "nba", "nhl", "mlb", "premier league", "champions league",
+        "la liga", "bundesliga", "serie a", "ligue 1", "ucl",
+        "football", "basketball", "baseball", "hockey", "soccer", "cricket",
+        "tennis", "golf", "boxing", "ufc", "mma", "wrestling", "wwe",
+        "playoff", "tournament", "championship", "draft", "trade",
+        "super bowl", "world cup", "olympics",
+        "лч", "лига чемпионов", "рпл", "кхл", "футбол", "баскетбол",
+        "хоккей", "бокс", "борьба", "чемпионат",
+        # Sports people patterns
+        "quarterback", "touchdown", "goal scorer", "transfer",
+        # Politics / news
+        "election", "senate", "congress", "governor", "mayor",
+        "trump", "biden", "выборы", "сенат", "депутат",
+        # Stock market / finance
+        "stock", "nasdaq", "dow jones", "s&p 500", "crypto",
+        "bitcoin", "earnings", "ipo", "акции", "биржа",
+        # Weather / mundane
+        "weather forecast", "road closure", "traffic",
+        "погода", "пробки",
+        # Specific sports entities
+        "lakers", "celtics", "warriors", "cowboys", "eagles", "chiefs",
+        "yankees", "dodgers", "49ers", "packers", "bills", "ravens",
+        "mbappe", "mbappé", "реал мадрид", "real madrid", "psg",
+        "chelsea", "manchester", "barcelona", "juventus",
+        "winline", "винлайн", "fonbet", "фонбет", "okko",
+        "fotmob",
+    ]
 
     @property
     def source_name(self) -> str:
         return "google_trends"
+
+    @staticmethod
+    def _keyword_in_text(text: str, keyword: str) -> bool:
+        """Check if keyword appears as a whole word/phrase in text (not as substring)."""
+        if keyword.startswith('#'):
+            return keyword in text
+        return bool(re.search(r'\b' + re.escape(keyword) + r'\b', text))
+
+    def _is_ai_friendly(self, title: str, description: str = "") -> bool:
+        """Check if a Google Trend topic is suitable for AI video creation."""
+        text = f"{title} {description}".lower()
+
+        # Reject if clearly non-AI content (sports, politics, finance)
+        if any(self._keyword_in_text(text, kw) for kw in self.NON_AI_KEYWORDS):
+            return False
+
+        # Accept if has AI-friendly keywords
+        if any(self._keyword_in_text(text, kw) for kw in self.AI_FRIENDLY_KEYWORDS):
+            return True
+
+        # For remaining: accept only if the topic sounds like it could be
+        # a story, visual concept, or entertainment — not dry news
+        # Heuristic: short titles (1-2 words) are usually person names or teams = reject
+        words = title.strip().split()
+        if len(words) <= 2:
+            return False
+
+        return False
 
     def fetch_trends(self, region: str = "US", category: str = "", max_results: int = 20) -> List[TrendItem]:
         """
@@ -69,18 +154,27 @@ class GoogleTrendsSource(TrendSource):
             items = root.findall(".//item")
 
             trends = []
-            for idx, item in enumerate(items[:max_results]):
+            skipped = 0
+            for idx, item in enumerate(items):
+                if len(trends) >= max_results:
+                    break
+
                 title = item.findtext("title", "").strip()
                 if not title:
+                    continue
+
+                # Extract news snippet for description
+                news_title = item.findtext(".//ht:news_item_title", "", ns)
+                description = news_title if news_title else f"Trending: {title}"
+
+                # Filter: only AI-friendly topics
+                if not self._is_ai_friendly(title, description):
+                    skipped += 1
                     continue
 
                 # Extract traffic estimate
                 traffic_text = item.findtext("ht:approx_traffic", "0", ns)
                 traffic = self._parse_traffic(traffic_text)
-
-                # Extract news snippet for description
-                news_title = item.findtext(".//ht:news_item_title", "", ns)
-                description = news_title if news_title else f"Trending: {title}"
 
                 # Extract image
                 picture = item.findtext("ht:picture", "", ns)
@@ -101,7 +195,7 @@ class GoogleTrendsSource(TrendSource):
                     url=f"https://trends.google.com/trends/explore?q={quote_plus(title)}&geo={geo}",
                 ))
 
-            print(f"[TRENDS] Google Trends (RSS): fetched {len(trends)} from {region}")
+            print(f"[TRENDS] Google Trends (RSS): fetched {len(trends)} from {region} (skipped {skipped} non-AI)")
             return trends
 
         except Exception as e:
@@ -115,14 +209,18 @@ class GoogleTrendsSource(TrendSource):
             pytrends = TrendReq(hl=hl, tz=360, timeout=(10, 25))
             trending = pytrends.trending_searches(pn=self._map_region(region))
             trends = []
-            for idx, row in trending.head(max_results).iterrows():
+            for idx, row in trending.head(max_results * 3).iterrows():
+                if len(trends) >= max_results:
+                    break
                 keyword = row[0]
+                if not self._is_ai_friendly(keyword):
+                    continue
                 trends.append(TrendItem(
                     title=keyword,
                     description=f"Trending search: {keyword}",
                     source=self.source_name,
                     category=category or "general",
-                    score=max_results - idx,
+                    score=max_results - len(trends),
                     keywords=[keyword],
                     url=f"https://trends.google.com/trends/explore?q={quote_plus(keyword)}",
                 ))
@@ -157,6 +255,9 @@ class GoogleTrendsSource(TrendSource):
                             (isinstance(value, str) and "Breakout" in str(value)) or
                             (isinstance(value, (int, float)) and value >= 5000)
                         )
+
+                        if not self._is_ai_friendly(query):
+                            continue
 
                         cat = "breakout" if is_breakout else (category or "related")
                         base_score = 10000 if is_breakout else (float(value) if isinstance(value, (int, float)) else 0)

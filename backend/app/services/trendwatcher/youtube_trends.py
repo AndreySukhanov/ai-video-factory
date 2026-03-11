@@ -1,3 +1,4 @@
+import re
 from typing import List
 from datetime import datetime, timedelta, timezone
 from .base import TrendSource, TrendItem
@@ -15,64 +16,152 @@ class YouTubeTrendsSource(TrendSource):
         "MX": "es", "AR": "es", "CL": "es",
     }
 
-    # Region-specific search queries targeting AI-reproducible content:
-    # stories, animations, AI-generated, skits, micro-dramas
+    # Unicode script ranges for language filtering
+    LANG_SCRIPTS = {
+        "ru": re.compile(r'[\u0400-\u04FF]'),   # Cyrillic
+        "en": re.compile(r'[a-zA-Z]'),           # Latin
+        "de": re.compile(r'[a-zA-ZäöüßÄÖÜ]'),   # Latin + German
+        "fr": re.compile(r'[a-zA-ZàâéèêëïîôùûüÿçœæÀÂÉÈÊËÏÎÔÙÛÜŸÇŒÆ]'),
+        "es": re.compile(r'[a-zA-ZñáéíóúüÑÁÉÍÓÚÜ¿¡]'),
+        "pt": re.compile(r'[a-zA-ZãõáéíóúâêôàçÃÕÁÉÍÓÚÂÊÔÀÇ]'),
+        "ja": re.compile(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]'),  # Hiragana+Katakana+Kanji
+        "ko": re.compile(r'[\uAC00-\uD7AF\u1100-\u11FF]'),  # Hangul
+        "hi": re.compile(r'[\u0900-\u097F]'),    # Devanagari
+        "tr": re.compile(r'[a-zA-ZçğıöşüÇĞİÖŞÜ]'),
+        "it": re.compile(r'[a-zA-ZàèéìíîòóùúÀÈÉÌÍÎÒÓÙÚ]'),
+        "pl": re.compile(r'[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]'),
+        "nl": re.compile(r'[a-zA-Z]'),
+    }
+
+    # Non-Latin/non-target scripts to reject when they dominate the title
+    _INDIC_SCRIPTS = re.compile(
+        r'[\u0900-\u097F'    # Devanagari (Hindi)
+        r'\u0980-\u09FF'     # Bengali
+        r'\u0A00-\u0A7F'     # Gurmukhi (Punjabi)
+        r'\u0A80-\u0AFF'     # Gujarati
+        r'\u0B00-\u0B7F'     # Oriya/Odia
+        r'\u0B80-\u0BFF'     # Tamil
+        r'\u0C00-\u0C7F'     # Telugu
+        r'\u0C80-\u0CFF'     # Kannada
+        r'\u0D00-\u0D7F]'    # Malayalam
+    )
+    _ARABIC_SCRIPT = re.compile(r'[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]')
+    _CJK_SCRIPT = re.compile(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]')
+    _HANGUL_SCRIPT = re.compile(r'[\uAC00-\uD7AF\u1100-\u11FF]')
+    _THAI_SCRIPT = re.compile(r'[\u0E00-\u0E7F]')
+    _CYRILLIC_SCRIPT = re.compile(r'[\u0400-\u04FF]')
+
+    # Scripts that should NOT dominate for a given language
+    FOREIGN_SCRIPTS = {
+        "ru": [_INDIC_SCRIPTS, _ARABIC_SCRIPT, _CJK_SCRIPT, _HANGUL_SCRIPT, _THAI_SCRIPT],
+        "en": [_INDIC_SCRIPTS, _ARABIC_SCRIPT, _CJK_SCRIPT, _HANGUL_SCRIPT, _THAI_SCRIPT, _CYRILLIC_SCRIPT],
+        "de": [_INDIC_SCRIPTS, _ARABIC_SCRIPT, _CJK_SCRIPT, _HANGUL_SCRIPT, _THAI_SCRIPT, _CYRILLIC_SCRIPT],
+        "fr": [_INDIC_SCRIPTS, _ARABIC_SCRIPT, _CJK_SCRIPT, _HANGUL_SCRIPT, _THAI_SCRIPT, _CYRILLIC_SCRIPT],
+        "es": [_INDIC_SCRIPTS, _ARABIC_SCRIPT, _CJK_SCRIPT, _HANGUL_SCRIPT, _THAI_SCRIPT, _CYRILLIC_SCRIPT],
+        "pt": [_INDIC_SCRIPTS, _ARABIC_SCRIPT, _CJK_SCRIPT, _HANGUL_SCRIPT, _THAI_SCRIPT, _CYRILLIC_SCRIPT],
+        "ja": [_INDIC_SCRIPTS, _ARABIC_SCRIPT, _HANGUL_SCRIPT, _CYRILLIC_SCRIPT],
+        "ko": [_INDIC_SCRIPTS, _ARABIC_SCRIPT, _CJK_SCRIPT, _CYRILLIC_SCRIPT],
+        "hi": [_ARABIC_SCRIPT, _CJK_SCRIPT, _HANGUL_SCRIPT, _CYRILLIC_SCRIPT, _THAI_SCRIPT],
+    }
+
+    # Search queries targeting AI-generated or AI-reproducible content:
+    # cute animal stories, AI art, animations, emotional mini-stories, neural network videos
     REGION_QUERIES = {
         "US": [
-            "#shorts AI generated",
-            "#shorts animation story",
-            "#shorts microdrama",
-            "#shorts story time dramatic",
-            "#shorts skit comedy",
-            "#shorts AI art video",
+            "#shorts AI generated story",
+            "#shorts AI animation cute animals",
+            "#shorts Sora Kling AI video",
+            "#shorts cute puppy kitten AI",
+            "#shorts emotional AI short film",
+            "#shorts wholesome animation story AI",
         ],
         "GB": [
-            "#shorts AI generated",
-            "#shorts animation story UK",
-            "#shorts microdrama",
-            "#shorts story time dramatic",
-            "#shorts skit comedy british",
+            "#shorts AI generated story",
+            "#shorts AI animation cute",
+            "#shorts emotional AI short film",
+            "#shorts cute animal animation story",
         ],
         "RU": [
-            "#shorts ИИ генерация",
-            "#shorts анимация история",
-            "#shorts микродрама",
-            "#shorts сторителлинг драма",
-            "#shorts скетч комедия",
+            "#shorts нейросеть видео",
+            "#shorts нейросетьзахватитмир",
+            "#shorts ИИ генерация видео",
+            "#shorts щенок котёнок анимация нейросеть",
+            "#shorts трогательная анимация история AI",
+            "#shorts AI арт видео нейросеть",
         ],
         "DE": [
-            "#shorts KI generiert",
-            "#shorts animation geschichte",
-            "#shorts microdrama deutsch",
-            "#shorts kurzfilm story",
+            "#shorts KI generiert video",
+            "#shorts KI animation süße tiere",
+            "#shorts neuronales netz kunst",
+            "#shorts KI kurzfilm emotionale geschichte",
         ],
         "JP": [
-            "#shorts AI生成",
-            "#shorts アニメ ストーリー",
-            "#shorts マイクロドラマ",
-            "#shorts ショートドラマ",
+            "#shorts AI生成 動画",
+            "#shorts AI アニメーション かわいい",
+            "#shorts ニューラルネットワーク アート",
+            "#shorts AI ショートフィルム 感動",
         ],
         "BR": [
-            "#shorts IA gerada",
-            "#shorts animação história",
-            "#shorts microdrama",
-            "#shorts história curta drama",
+            "#shorts IA gerada vídeo",
+            "#shorts animação IA fofa animais",
+            "#shorts rede neural arte vídeo",
+            "#shorts história emocional IA curta",
         ],
         "IN": [
-            "#shorts AI generated india",
-            "#shorts animation story hindi",
-            "#shorts microdrama",
-            "#shorts story dramatic hindi",
+            "#shorts AI generated cute animal story",
+            "#shorts neural network animation hindi",
+            "#shorts AI video emotional story",
+            "#shorts Sora Kling AI generated india",
         ],
     }
 
     # Fallback queries for unlisted regions
     DEFAULT_QUERIES = [
-        "#shorts AI generated",
-        "#shorts animation story",
-        "#shorts microdrama",
-        "#shorts story time dramatic",
-        "#shorts skit comedy",
+        "#shorts AI generated story",
+        "#shorts AI animation cute animals",
+        "#shorts emotional AI short film",
+        "#shorts Sora Kling midjourney video",
+    ]
+
+    # Keywords indicating content is AI-generated or easily AI-reproducible
+    AI_REPRODUCIBLE_KEYWORDS = [
+        # Direct AI markers
+        "ai generated", "ai art", "ai video", "ai animation", "ai creates",
+        "made with ai", "created by ai", "ai powered", "ai made",
+        "sora", "runway", "pika", "kling", "midjourney", "stable diffusion",
+        "veo", "dall-e", "leonardo ai", "luma", "minimax", "hailuo",
+        "neural network", "deep learning", "generative",
+        # Russian AI markers
+        "нейросеть", "нейросетьзахватитмир", "ии генерация", "ии видео",
+        "сгенерировано ии", "создано нейросетью", "ии арт", "нейронная сеть",
+        # Animation / easily reproducible with AI
+        "animation story", "animated story", "cute animation",
+        "3d animation", "cartoon story", "pixar style", "ghibli style",
+        "анимация история", "мультик", "мультфильм",
+        # Cute animal stories (prime AI content)
+        "cute puppy", "cute kitten", "puppy saved", "kitten rescued",
+        "baby animal", "cute dog", "cute cat", "animal rescue story",
+        "щенок", "котёнок", "милый", "спас",
+        # Emotional mini-stories (AI-friendly format)
+        "emotional story", "heartwarming", "wholesome", "touching story",
+        "трогательная история", "добрый", "история любви",
+        # Micro-drama / short film
+        "microdrama", "micro drama", "short film", "mini movie",
+        "микродрама", "короткометражка",
+        # Did-you-know / fact animation
+        "did you know", "amazing facts", "unbelievable",
+        "#aiart", "#aivideo", "#aigeneratedvideo", "#neuralnetwork",
+    ]
+
+    # Keywords indicating NOT AI-reproducible (real footage, sports, news, etc.)
+    NON_AI_KEYWORDS = [
+        "gameplay", "gaming", "fortnite", "minecraft", "roblox gameplay",
+        "nfl", "nba", "football highlights", "soccer highlights", "cricket",
+        "ipl", "wwe", "mma", "ufc", "boxing",
+        "mukbang", "asmr eating", "cooking recipe", "workout",
+        "unboxing", "haul", "vlog", "daily vlog",
+        "bollywood", "salman khan", "shah rukh", "tiktok dance",
+        "reaction video", "prank in public",
     ]
 
     @property
@@ -179,6 +268,18 @@ class YouTubeTrendsSource(TrendSource):
 
                     snippet = item.get("snippet", {})
                     stats = item.get("statistics", {})
+
+                    # Filter out wrong-language videos
+                    if not self._matches_language(snippet.get("title", ""), lang):
+                        continue
+
+                    # Filter: only AI-generated or AI-reproducible content
+                    title_text = snippet.get("title", "")
+                    desc_text = snippet.get("description", "")[:500]
+                    tag_list = snippet.get("tags", [])[:10] if snippet.get("tags") else []
+                    if not self._is_ai_reproducible(title_text, desc_text, tag_list):
+                        continue
+
                     channel = snippet.get("channelTitle", "")
                     views = int(stats.get("viewCount", 0))
 
@@ -255,6 +356,69 @@ class YouTubeTrendsSource(TrendSource):
             return 0.5
 
     @staticmethod
+    def _keyword_in_text(text: str, keyword: str) -> bool:
+        """Check if keyword appears as a whole word/phrase in text (not as substring)."""
+        if keyword.startswith('#'):
+            return keyword in text
+        return bool(re.search(r'\b' + re.escape(keyword) + r'\b', text))
+
+    def _is_ai_reproducible(self, title: str, description: str, tags: list) -> bool:
+        """Check if content is AI-generated or easily reproducible with AI."""
+        text = f"{title} {description} {' '.join(tags)}".lower()
+
+        # Reject if clearly non-AI content
+        if any(self._keyword_in_text(text, kw) for kw in self.NON_AI_KEYWORDS):
+            return False
+
+        # Accept if has AI-reproducible markers
+        if any(self._keyword_in_text(text, kw) for kw in self.AI_REPRODUCIBLE_KEYWORDS):
+            return True
+
+        # Accept if content_type will be classified as AI-friendly
+        content_type = self._classify_content_type(title, description, tags)
+        if content_type in ("ai_generated", "animation", "story"):
+            return True
+
+        return False
+
+    def _matches_language(self, title: str, lang: str) -> bool:
+        """Check if title matches expected language by script analysis."""
+        if not title or lang not in self.LANG_SCRIPTS:
+            return True  # No filter if unknown
+
+        # Strip emojis and special chars for cleaner analysis
+        clean = re.sub(r'[#@\d\s.,!?(){}[\]"\'…—–\-:;/\\|_~*+=%&^$<>]', '', title)
+        if not clean:
+            return True
+
+        # Count characters matching expected script
+        expected = self.LANG_SCRIPTS[lang]
+        expected_chars = len(expected.findall(clean))
+
+        # Check for foreign scripts — reject if ANY foreign chars found
+        foreign_scripts = self.FOREIGN_SCRIPTS.get(lang, [])
+        foreign_chars = sum(len(fs.findall(clean)) for fs in foreign_scripts)
+
+        # Strict: reject if foreign script has more than 2 chars
+        if foreign_chars > 2:
+            return False
+
+        # For Latin-based languages (en, de, fr, etc.): require some Latin
+        if lang in ("en", "de", "fr", "es", "pt", "it", "nl", "pl", "tr"):
+            latin_chars = len(re.findall(r'[a-zA-Z]', clean))
+            if latin_chars == 0:
+                return False
+
+        # For Cyrillic (RU): require some Cyrillic or Latin
+        if lang == "ru" and expected_chars == 0:
+            latin = len(re.findall(r'[a-zA-Z]', clean))
+            if latin > 0:
+                return True  # English title is OK for RU region
+            return False
+
+        return True
+
+    @staticmethod
     def _classify_content_type(title: str, description: str, tags: list) -> str:
         """Classify video content type based on title, description and tags."""
         text = f"{title} {description} {' '.join(tags)}".lower()
@@ -326,7 +490,6 @@ class YouTubeTrendsSource(TrendSource):
     @staticmethod
     def _parse_duration(iso_duration: str) -> int:
         """Parse ISO 8601 duration (PT1M30S) to seconds."""
-        import re
         match = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', iso_duration)
         if not match:
             return 0
