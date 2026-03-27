@@ -106,6 +106,10 @@ def _migrate_add_columns():
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE trends ADD COLUMN is_anomaly INTEGER DEFAULT 0"))
                 print("[MIGRATE] Added 'is_anomaly' column to trends table")
+        if "matched_keyword" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE trends ADD COLUMN matched_keyword VARCHAR"))
+                print("[MIGRATE] Added 'matched_keyword' column to trends table")
 
 _migrate_add_columns()
 

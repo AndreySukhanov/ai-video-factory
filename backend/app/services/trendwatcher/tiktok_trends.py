@@ -38,24 +38,26 @@ class TikTokTrendsSource(TrendSource):
     def __init__(self):
         self.api_token = settings.APIFY_API_TOKEN
 
-    def fetch_trends(self, region: str = "US", category: str = "", max_results: int = 20) -> List[TrendItem]:
+    def fetch_trends(self, region: str = "US", category: str = "", max_results: int = 20,
+                     keywords: List[str] = None) -> List[TrendItem]:
         if not self.api_token:
             print("[TRENDS] APIFY_API_TOKEN not set, skipping TikTok source")
             return []
 
-        trends = self._try_hashtag_scrape(region, max_results)
+        trends = self._try_hashtag_scrape(region, max_results, keywords=keywords)
         if not trends:
-            trends = self._try_search_scrape(region, max_results)
+            trends = self._try_search_scrape(region, max_results, keywords=keywords)
         return trends
 
-    def _try_hashtag_scrape(self, region: str, max_results: int) -> List[TrendItem]:
+    def _try_hashtag_scrape(self, region: str, max_results: int,
+                             keywords: List[str] = None) -> List[TrendItem]:
         """Scrape TikTok trending hashtags via Apify."""
         try:
             import requests
 
             actor_url = "https://api.apify.com/v2/acts/clockworks~free-tiktok-scraper/run-sync-get-dataset-items"
             params = {"token": self.api_token}
-            hashtags = self.REGION_HASHTAGS.get(region.upper(), self.REGION_HASHTAGS["US"])
+            hashtags = keywords if keywords else self.REGION_HASHTAGS.get(region.upper(), self.REGION_HASHTAGS["US"])
             payload = {
                 "hashtags": hashtags,
                 "resultsPerPage": min(max_results * 2, 50),
@@ -71,14 +73,15 @@ class TikTokTrendsSource(TrendSource):
             print(f"[TRENDS] TikTok hashtag scraper error: {e}")
             return []
 
-    def _try_search_scrape(self, region: str, max_results: int) -> List[TrendItem]:
+    def _try_search_scrape(self, region: str, max_results: int,
+                            keywords: List[str] = None) -> List[TrendItem]:
         """Fallback: search for trending TikTok videos."""
         try:
             import requests
 
             actor_url = "https://api.apify.com/v2/acts/clockworks~free-tiktok-scraper/run-sync-get-dataset-items"
             params = {"token": self.api_token}
-            queries = self.REGION_QUERIES.get(region.upper(), self.REGION_QUERIES["US"])
+            queries = keywords if keywords else self.REGION_QUERIES.get(region.upper(), self.REGION_QUERIES["US"])
             payload = {
                 "searchQueries": queries,
                 "resultsPerPage": min(max_results * 2, 50),

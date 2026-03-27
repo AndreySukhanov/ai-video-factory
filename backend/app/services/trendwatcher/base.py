@@ -23,13 +23,14 @@ class TrendItem:
     thumbnail_url: str = ""
     competition_level: Optional[float] = None
     opportunity_score: Optional[float] = None
-    # Content type classification for AI-reproducibility filtering
-    # story, animation, ai_generated, skit, educational, music_video, other
+    # Content type classification
     content_type: str = "other"
     # Viral coefficient: view_count / max(subscriber_count, 1) — anomaly if > 10
     subscriber_count: Optional[int] = None
     viral_coef: Optional[float] = None
     is_anomaly: bool = False
+    # Which user keyword found this trend (Trendsee-style keyword tagging)
+    matched_keyword: Optional[str] = None
 
     def __post_init__(self):
         if self.fetched_at is None:
@@ -46,7 +47,8 @@ class TrendSource(ABC):
         pass
 
     @abstractmethod
-    def fetch_trends(self, region: str = "US", category: str = "", max_results: int = 20) -> List[TrendItem]:
+    def fetch_trends(self, region: str = "US", category: str = "", max_results: int = 20,
+                     keywords: List[str] = None) -> List[TrendItem]:
         """
         Fetch trending topics.
 
