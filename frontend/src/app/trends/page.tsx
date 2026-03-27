@@ -508,11 +508,8 @@ export default function TrendsPage() {
                         {/* Left: status + keywords */}
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-3">
-                                <span className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${keywords.length > 0 ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-gray-700 text-gray-400 border border-gray-600'}`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${keywords.length > 0 ? 'bg-green-400' : 'bg-gray-500'}`} />
-                                    {keywords.length > 0 ? 'Активен' : 'Не настроен'}
-                                </span>
-                                <span className="text-xs text-gray-500">Ключевые слова</span>
+                                <span className="text-sm font-semibold text-white">Ключевые слова</span>
+                                <span className="text-xs text-gray-500">{keywords.length > 0 ? `${keywords.length} настроено` : 'не заданы — используются темы по умолчанию'}</span>
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 {keywords.map(kw => (
