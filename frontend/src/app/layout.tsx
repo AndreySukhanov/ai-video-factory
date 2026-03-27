@@ -4,6 +4,7 @@ import "./globals.css";
 import { LanguageProvider, type Locale } from "@/contexts/LanguageContext";
 import { isUiV2Enabled } from "@/lib/featureFlags";
 import { cookies } from "next/headers";
+import Sidebar from "@/components/Sidebar";
 
 const inter = Inter({
   subsets: ["latin", "cyrillic"],
@@ -30,7 +31,12 @@ export default async function RootLayout({
         data-ui-v2={isUiV2Enabled ? "1" : "0"}
       >
         <LanguageProvider initialLocale={initialLocale}>
-          {children}
+          <div className="flex min-h-screen">
+            <Sidebar />
+            <main className="flex-1 min-w-0">
+              {children}
+            </main>
+          </div>
         </LanguageProvider>
       </body>
     </html>

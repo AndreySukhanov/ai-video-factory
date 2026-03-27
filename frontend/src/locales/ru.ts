@@ -1,4 +1,14 @@
 const ru: Record<string, string> = {
+  // ===== SIDEBAR =====
+  "sidebar.content": "Контент",
+  "sidebar.publish": "Публикация",
+  "sidebar.trends": "Тренды",
+  "sidebar.generate": "Генерация",
+  "sidebar.review": "Ревью",
+  "sidebar.youtube": "YouTube",
+  "sidebar.dashboard": "Дашборд",
+  "sidebar.home": "Главная",
+
   // ===== HOME PAGE =====
   "home.title": "AI Video Factory",
   "home.subtitle": "Генерируйте вирусные вертикальные микро-драмы с помощью ИИ. Создавайте отдельные эпизоды или целые сериалы за минуты.",

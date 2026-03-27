@@ -278,11 +278,24 @@ def _handle_generate_scene_prompts(db: Session, job: Job, payload: dict):
         if prev_scene and prev_scene.visual_prompt:
             previous_prompt = prev_scene.visual_prompt
     
+    # Extract visual_tags_en from linked StoryIdea's analysis_json (Trendsee-style)
+    visual_tags = None
+    try:
+        from app.models.trend import StoryIdea
+        idea = db.query(StoryIdea).filter(StoryIdea.project_id == project.id).first()
+        if idea and idea.analysis_json:
+            import json as _json
+            analysis = _json.loads(idea.analysis_json)
+            visual_tags = analysis.get("visual_search_assets", {}).get("visual_tags_en")
+    except Exception:
+        pass
+
     # Generate prompt with full character context
     prompt_data = shot_prompt_agent.generate_visual_prompt(
         scene_description=scene.what_happens,
         characters=characters,
-        character_appearances=character_appearances
+        character_appearances=character_appearances,
+        visual_tags=visual_tags,
     )
     
     scene.visual_prompt = prompt_data.get("visual_prompt", "")

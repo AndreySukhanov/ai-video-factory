@@ -1,4 +1,14 @@
 const en: Record<string, string> = {
+  // ===== SIDEBAR =====
+  "sidebar.content": "Content",
+  "sidebar.publish": "Publish",
+  "sidebar.trends": "Trends",
+  "sidebar.generate": "Generate",
+  "sidebar.review": "Review",
+  "sidebar.youtube": "YouTube",
+  "sidebar.dashboard": "Dashboard",
+  "sidebar.home": "Home",
+
   // ===== HOME PAGE =====
   "home.title": "AI Video Factory",
   "home.subtitle": "Generate viral vertical micro-dramas with AI. Create single episodes or entire series in minutes.",

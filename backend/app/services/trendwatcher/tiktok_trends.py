@@ -145,10 +145,27 @@ class TikTokTrendsSource(TrendSource):
                 if sound_name and sound_name not in hashtags:
                     hashtags.append(f"sound:{sound_name}")
 
+            # Extract subscriber/follower count for viral_coef
+            author_meta = item.get("authorMeta", {}) or {}
+            subscriber_count = (
+                author_meta.get("fans") or
+                author_meta.get("followerCount") or
+                item.get("authorStats", {}).get("followerCount") or
+                0
+            )
+            subscriber_count = int(subscriber_count) if subscriber_count else 0
+
+            # Compute viral coefficient
+            viral_coef = None
+            is_anomaly = False
+            if subscriber_count > 0:
+                viral_coef = round(plays / subscriber_count, 1)
+                is_anomaly = viral_coef > 10
+
             # Build URL
             url = item.get("webVideoUrl", item.get("url", ""))
             if not url:
-                author = item.get("authorMeta", {}).get("name", "") or item.get("author", {}).get("uniqueId", "")
+                author = author_meta.get("name", "") or item.get("author", {}).get("uniqueId", "")
                 vid_id = item.get("id", "")
                 if author and vid_id:
                     url = f"https://www.tiktok.com/@{author}/video/{vid_id}"
@@ -175,6 +192,9 @@ class TikTokTrendsSource(TrendSource):
                 keywords=hashtags[:10],
                 url=url,
                 content_type=content_type,
+                subscriber_count=subscriber_count or None,
+                viral_coef=viral_coef,
+                is_anomaly=is_anomaly,
             ))
 
             if len(trends) >= max_results:

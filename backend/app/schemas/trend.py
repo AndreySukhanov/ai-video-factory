@@ -26,6 +26,9 @@ class TrendRead(TrendBase):
     view_count: Optional[int] = None
     duration_sec: Optional[int] = None
     thumbnail_url: Optional[str] = None
+    subscriber_count: Optional[int] = None
+    viral_coef: Optional[float] = None
+    is_anomaly: bool = False
 
     class Config:
         from_attributes = True
@@ -59,6 +62,7 @@ class StoryIdeaRead(StoryIdeaBase):
     variants_json: Optional[str] = None
     narrative_structure: Optional[str] = None
     regenerable: Optional[str] = None
+    analysis_json: Optional[str] = None  # Trendsee-style extended analysis
 
     class Config:
         from_attributes = True

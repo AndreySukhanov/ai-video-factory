@@ -31,6 +31,9 @@ interface TrendItem {
     published_at: string | null;
     thumbnail_url: string | null;
     content_type: string;
+    subscriber_count: number | null;
+    viral_coef: number | null;
+    is_anomaly: boolean;
 }
 
 interface TrendGenerateResult {
@@ -128,7 +131,7 @@ const HOOK_LABELS: Record<string, string> = {
     curiosity_gap: 'Curiosity Gap',
 };
 
-const SORT_OPTIONS = ['velocity', 'opportunity', 'score'] as const;
+const SORT_OPTIONS = ['velocity', 'viral_coef', 'opportunity', 'score'] as const;
 type SortBy = (typeof SORT_OPTIONS)[number];
 
 function isSortBy(value: string): value is SortBy {
@@ -151,6 +154,7 @@ export default function TrendsPage() {
     const [sourceFilter, setSourceFilter] = useState('');
     const [contentTypeFilter, setContentTypeFilter] = useState('');
     const [sortBy, setSortBy] = useState<SortBy>('velocity');
+    const [anomalyOnly, setAnomalyOnly] = useState(false);
     const [activeTab, setActiveTab] = useState<'trends' | 'ideas'>('trends');
     const [error, setError] = useState('');
     const [expandedVariants, setExpandedVariants] = useState<Set<number>>(new Set());
@@ -174,8 +178,13 @@ export default function TrendsPage() {
         return trends.filter(t => ['ai_generated', 'animation', 'story', 'skit', 'music_video'].includes(t.content_type || '')).length;
     }, [trends]);
 
+    const anomalyCount = useMemo(() => trends.filter(t => t.is_anomaly).length, [trends]);
+
     const filteredAndSortedTrends = useMemo(() => {
         let filtered = sourceFilter ? trends.filter(t => t.source === sourceFilter) : trends;
+        if (anomalyOnly) {
+            filtered = filtered.filter(t => t.is_anomaly);
+        }
         if (contentTypeFilter) {
             if (contentTypeFilter === '_actionable') {
                 filtered = filtered.filter(t => ['ai_generated', 'animation', 'story', 'skit', 'music_video'].includes(t.content_type || ''));
@@ -187,6 +196,9 @@ export default function TrendsPage() {
         switch (sortBy) {
             case 'velocity':
                 sorted.sort((a, b) => (b.velocity_score || 0) - (a.velocity_score || 0));
+                break;
+            case 'viral_coef':
+                sorted.sort((a, b) => (b.viral_coef || 0) - (a.viral_coef || 0));
                 break;
             case 'opportunity':
                 sorted.sort((a, b) => (b.opportunity_score || 0) - (a.opportunity_score || 0));
@@ -338,6 +350,12 @@ export default function TrendsPage() {
         if (v >= 1000) return `${(v / 1000).toFixed(1)}K/hr`;
         if (v >= 1) return `${v.toFixed(0)}/hr`;
         return '';
+    };
+
+    const formatViewCount = (n: number) => {
+        if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+        if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+        return String(n);
     };
 
     const formatScore = (trend: TrendItem) => {
@@ -499,12 +517,13 @@ export default function TrendsPage() {
                                     );
                                 })}
 
-                                <div className="ml-auto">
+                                <div className="ml-auto flex items-center gap-2">
                                     <select
                                         value={sortBy}
                                         onChange={(e) => setSortBy(isSortBy(e.target.value) ? e.target.value : 'velocity')}
                                         className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-300">
                                         <option value="velocity">{t('trends.fastestGrowing')}</option>
+                                        <option value="viral_coef">Viral Coef (X)</option>
                                         <option value="opportunity">{t('trends.bestOpportunity')}</option>
                                         <option value="score">{t('trends.mostViews')}</option>
                                     </select>
@@ -524,6 +543,12 @@ export default function TrendsPage() {
                                     className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${contentTypeFilter === '_actionable' ? 'bg-emerald-600/30 border-emerald-500/50 text-emerald-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-500'}`}>
                                     {t('trends.aiReproducible')} ({actionableCount})
                                 </button>
+                                {anomalyCount > 0 && (
+                                    <button onClick={() => setAnomalyOnly(!anomalyOnly)}
+                                        className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-colors ${anomalyOnly ? 'bg-red-600/30 border-red-500/50 text-red-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-red-500/50'}`}>
+                                        🔥 Аномалии ({anomalyCount})
+                                    </button>
+                                )}
                                 {Object.entries(contentTypeCounts).map(([ct, count]) => {
                                     const cfg = CONTENT_TYPE_CONFIG[ct] || CONTENT_TYPE_CONFIG.other;
                                     return (
@@ -556,13 +581,26 @@ export default function TrendsPage() {
                                         <div key={trend.id} className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 hover:border-purple-500/50 transition-colors flex flex-col">
                                             {/* Thumbnail */}
                                             {trend.thumbnail_url && (
-                                                <div className="mb-2 -mx-4 -mt-4 rounded-t-xl overflow-hidden">
+                                                <div className="mb-2 -mx-4 -mt-4 rounded-t-xl overflow-hidden relative">
                                                     <img
                                                         src={trend.thumbnail_url}
                                                         alt={trend.title}
                                                         className="w-full h-32 object-cover"
                                                         loading="lazy"
                                                     />
+                                                    {trend.viral_coef != null && trend.viral_coef >= 1 && (
+                                                        <span className={`absolute top-1.5 left-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-md ${trend.is_anomaly ? 'bg-red-600 text-white' : 'bg-blue-600/90 text-white'}`}>
+                                                            X{Math.round(trend.viral_coef)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {/* Viral badge (when no thumbnail) */}
+                                            {!trend.thumbnail_url && trend.viral_coef != null && trend.viral_coef >= 1 && (
+                                                <div className="flex justify-end mb-1">
+                                                    <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md ${trend.is_anomaly ? 'bg-red-600 text-white' : 'bg-blue-600/90 text-white'}`}>
+                                                        X{Math.round(trend.viral_coef)}
+                                                    </span>
                                                 </div>
                                             )}
                                             {/* Header: title + badges */}
@@ -592,6 +630,14 @@ export default function TrendsPage() {
                                                     <Zap className={`w-3 h-3 ${trend.velocity_score > 0 ? 'text-yellow-400' : 'text-gray-500'}`} />
                                                     <span className="text-xs text-gray-300 font-medium">{formatScore(trend)}</span>
                                                 </div>
+
+                                                {/* Subscriber count */}
+                                                {trend.subscriber_count != null && trend.subscriber_count > 0 && (
+                                                    <div className="flex items-center gap-1">
+                                                        <Eye className="w-3 h-3 text-gray-500" />
+                                                        <span className="text-[10px] text-gray-400">{formatViewCount(trend.subscriber_count)} subs</span>
+                                                    </div>
+                                                )}
 
                                                 {/* Trend stage badge */}
                                                 {trend.trend_stage && trend.trend_stage !== 'unknown' && (
