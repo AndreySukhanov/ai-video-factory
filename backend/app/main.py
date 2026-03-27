@@ -62,6 +62,10 @@ def _migrate_add_columns():
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE story_ideas ADD COLUMN regenerable VARCHAR"))
                 print("[MIGRATE] Added 'regenerable' column to story_ideas table")
+        if "analysis_json" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE story_ideas ADD COLUMN analysis_json TEXT"))
+                print("[MIGRATE] Added 'analysis_json' column to story_ideas table")
 
     # Add 'character_card', 'voice_description', 'seed' to 'characters' table if missing
     if "characters" in insp.get_table_names():
@@ -86,6 +90,22 @@ def _migrate_add_columns():
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE trends ADD COLUMN content_type VARCHAR DEFAULT 'other'"))
                 print("[MIGRATE] Added 'content_type' column to trends table")
+
+    # Add viral_coef fields to 'trends' table if missing
+    if "trends" in insp.get_table_names():
+        columns = [c["name"] for c in insp.get_columns("trends")]
+        if "subscriber_count" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE trends ADD COLUMN subscriber_count INTEGER"))
+                print("[MIGRATE] Added 'subscriber_count' column to trends table")
+        if "viral_coef" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE trends ADD COLUMN viral_coef REAL"))
+                print("[MIGRATE] Added 'viral_coef' column to trends table")
+        if "is_anomaly" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE trends ADD COLUMN is_anomaly INTEGER DEFAULT 0"))
+                print("[MIGRATE] Added 'is_anomaly' column to trends table")
 
 _migrate_add_columns()
 

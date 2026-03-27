@@ -42,11 +42,13 @@ def list_trends(
     source: Optional[str] = Query(None),
     region: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query(None),  # velocity, viral_coef, score
+    anomaly_only: bool = Query(False),
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
 ):
-    """List trends with optional filtering."""
+    """List trends with optional filtering and sorting."""
     query = db.query(Trend)
     if source:
         query = query.filter(Trend.source == source)
@@ -54,8 +56,20 @@ def list_trends(
         query = query.filter(Trend.region == region)
     if category:
         query = query.filter(Trend.category == category)
-    query = query.order_by(Trend.fetched_at.desc())
+    if anomaly_only:
+        query = query.filter(Trend.is_anomaly == 1)
+
+    if sort_by == "viral_coef":
+        query = query.order_by(Trend.viral_coef.desc().nullslast())
+    elif sort_by == "score":
+        query = query.order_by(Trend.score.desc())
+    else:
+        query = query.order_by(Trend.velocity_score.desc(), Trend.fetched_at.desc())
+
     trends = query.offset(skip).limit(limit).all()
+    # Convert is_anomaly int to bool for schema
+    for t in trends:
+        t.is_anomaly = bool(t.is_anomaly)
     return trends
 
 

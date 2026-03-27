@@ -16,13 +16,19 @@ class ShotPromptAgent:
         scene_description: str,
         characters: List[Dict],
         style: str = "cinematic",
-        character_appearances: Optional[Dict[str, str]] = None
+        character_appearances: Optional[Dict[str, str]] = None,
+        visual_tags: Optional[List[str]] = None,
     ) -> dict:
         """
         Generate visual prompt with detailed character descriptions
         and Veo 3.1 audio/SFX/negative prompt.
         """
         character_section = self._build_character_section(characters, character_appearances)
+
+        visual_tags_note = ""
+        if visual_tags:
+            tags_str = ", ".join(visual_tags[:5])
+            visual_tags_note = f"\nVISUAL STYLE REFERENCE (from trend analysis): {tags_str}"
 
         system_prompt = """You are a visual prompt expert for Google Veo 3.1 AI video generation.
 Create detailed, consistent prompts that preserve character appearances across scenes.
@@ -38,7 +44,7 @@ Return valid JSON only."""
 Create a visual prompt for Google Veo 3.1 video generation.
 
 SCENE DESCRIPTION:
-{scene_description}
+{scene_description}{visual_tags_note}
 
 CHARACTERS IN SCENE:
 {character_section}
