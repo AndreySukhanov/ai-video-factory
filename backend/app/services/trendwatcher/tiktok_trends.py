@@ -6,11 +6,11 @@ from app.core.config import settings
 
 class TikTokTrendsSource(TrendSource):
     """
-    Fetch trending TikTok content via Apify actors.
-    TikTok trends hit YouTube Shorts with 2-5 day delay = leading signal.
+    Fetch trending TikTok content.
+    Primary: RapidAPI tiktok-scraper7 (free tier, no account needed).
+    Fallback: Apify clockworks~free-tiktok-scraper.
     """
 
-    # Region-specific hashtags and search queries
     REGION_HASHTAGS = {
         "US": ["aiart", "aigenerated", "animation", "microdrama", "storytime"],
         "GB": ["aiart", "aigenerated", "animation", "microdrama", "storytime"],
@@ -22,13 +22,16 @@ class TikTokTrendsSource(TrendSource):
     }
 
     REGION_QUERIES = {
-        "US": ["AI generated story", "AI animation viral", "microdrama POV", "skit comedy story"],
-        "GB": ["AI generated story UK", "animation drama", "microdrama POV"],
-        "RU": ["нейросеть видео", "ИИ генерация", "микродрама POV", "анимация история"],
-        "DE": ["KI generiert video", "animation story deutsch", "microdrama"],
-        "JP": ["AI生成動画", "アニメストーリー", "マイクロドラマ"],
-        "BR": ["IA video gerado", "animação drama", "microdrama brasil"],
-        "IN": ["AI generated video india", "animation story hindi", "microdrama POV"],
+        "US": ["AI generated story", "AI animation viral", "microdrama POV"],
+        "RU": ["нейросеть видео", "ИИ генерация", "микродрама"],
+        "DE": ["KI generiert video", "animation story"],
+        "JP": ["AI生成動画", "マイクロドラマ"],
+        "BR": ["IA video gerado", "microdrama brasil"],
+    }
+
+    REGION_CODES = {
+        "US": "US", "GB": "GB", "RU": "RU", "DE": "DE",
+        "JP": "JP", "BR": "BR", "IN": "IN",
     }
 
     @property
@@ -36,156 +39,175 @@ class TikTokTrendsSource(TrendSource):
         return "tiktok"
 
     def __init__(self):
-        self.api_token = settings.APIFY_API_TOKEN
+        self.rapidapi_key = settings.RAPIDAPI_KEY
+        self.apify_token = settings.APIFY_API_TOKEN
 
     def fetch_trends(self, region: str = "US", category: str = "", max_results: int = 20,
                      keywords: List[str] = None) -> List[TrendItem]:
-        if not self.api_token:
-            print("[TRENDS] APIFY_API_TOKEN not set, skipping TikTok source")
-            return []
+        hashtags = keywords if keywords else self.REGION_HASHTAGS.get(region.upper(), self.REGION_HASHTAGS["US"])
 
-        trends = self._try_hashtag_scrape(region, max_results, keywords=keywords)
-        if not trends:
-            trends = self._try_search_scrape(region, max_results, keywords=keywords)
-        return trends
+        if self.rapidapi_key:
+            trends = self._fetch_rapidapi(hashtags, region, max_results)
+            if trends:
+                return trends
+            print("[TRENDS] TikTok RapidAPI returned empty, trying Apify fallback")
 
-    def _try_hashtag_scrape(self, region: str, max_results: int,
-                             keywords: List[str] = None) -> List[TrendItem]:
-        """Scrape TikTok trending hashtags via Apify."""
+        if self.apify_token:
+            return self._fetch_apify(hashtags, region, max_results)
+
+        print("[TRENDS] No TikTok API configured (set RAPIDAPI_KEY or APIFY_API_TOKEN)")
+        return []
+
+    def _fetch_rapidapi(self, hashtags: List[str], region: str, max_results: int) -> List[TrendItem]:
+        """Fetch via RapidAPI tiktok-scraper7 — free tier, 500 req/month."""
+        import requests
+
+        all_items: list = []
+        seen_ids: set = set()
+        per_tag = max(3, max_results // max(len(hashtags), 1))
+        region_code = self.REGION_CODES.get(region.upper(), "US")
+
+        for hashtag in hashtags:
+            if len(all_items) >= max_results:
+                break
+            try:
+                resp = requests.get(
+                    "https://tiktok-scraper7.p.rapidapi.com/feed/search",
+                    headers={
+                        "x-rapidapi-key": self.rapidapi_key,
+                        "x-rapidapi-host": "tiktok-scraper7.p.rapidapi.com",
+                    },
+                    params={
+                        "keywords": hashtag,
+                        "region": region_code,
+                        "count": per_tag * 3,
+                        "cursor": 0,
+                        "publish_time": 0,
+                        "sort_type": 0,
+                    },
+                    timeout=30,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                videos = data.get("data", {}).get("videos", [])
+                for v in videos:
+                    vid_id = v.get("video_id", "")
+                    if vid_id in seen_ids:
+                        continue
+                    seen_ids.add(vid_id)
+                    item = self._parse_rapidapi_item(v, hashtag)
+                    if item:
+                        all_items.append(item)
+                        if len(all_items) >= max_results:
+                            break
+            except Exception as e:
+                print(f"[TRENDS] TikTok RapidAPI error for #{hashtag}: {e}")
+                continue
+
+        all_items.sort(key=lambda t: t.velocity_score, reverse=True)
+        print(f"[TRENDS] TikTok RapidAPI: fetched {len(all_items)} videos")
+        return all_items[:max_results]
+
+    def _parse_rapidapi_item(self, v: dict, matched_keyword: str = None) -> "TrendItem | None":
+        title = v.get("title", "").strip()
+        if not title:
+            return None
+
+        plays = int(v.get("play", 0) or 0)
+        likes = int(v.get("digg", 0) or 0)
+        author = v.get("author", {}) or {}
+        followers = int(author.get("follower_count", 0) or 0)
+        create_time = v.get("create_time", 0)
+
+        published_at = None
+        hours_since = 24
+        if create_time:
+            published_at = datetime.fromtimestamp(int(create_time), tz=timezone.utc)
+            hours_since = max(1, (datetime.now(timezone.utc) - published_at).total_seconds() / 3600)
+
+        velocity = plays / hours_since
+        viral_coef = round(plays / followers, 1) if followers > 0 else None
+        is_anomaly = viral_coef > 10 if viral_coef else False
+
+        unique_id = author.get("unique_id", "")
+        vid_id = v.get("video_id", "")
+        url = f"https://www.tiktok.com/@{unique_id}/video/{vid_id}" if unique_id and vid_id else ""
+        if not url:
+            return None
+
+        thumbnail = v.get("cover", "") or v.get("origin_cover", "")
+        hashtags = [tag.strip("#") for tag in title.split() if tag.startswith("#")]
+
+        return TrendItem(
+            title=title[:200],
+            description=f"TikTok | {self._fmt(plays)} plays, {self._fmt(likes)} likes",
+            source=self.source_name,
+            category="tiktok_trending",
+            score=plays / 1000,
+            velocity_score=velocity,
+            published_at=published_at,
+            view_count=plays,
+            thumbnail_url=thumbnail or None,
+            keywords=hashtags[:10],
+            url=url,
+            content_type=self._classify(title, hashtags),
+            subscriber_count=followers or None,
+            viral_coef=viral_coef,
+            is_anomaly=is_anomaly,
+            matched_keyword=matched_keyword,
+        )
+
+    def _fetch_apify(self, hashtags: List[str], region: str, max_results: int) -> List[TrendItem]:
+        """Fallback: Apify clockworks~free-tiktok-scraper."""
         try:
             import requests
-
             actor_url = "https://api.apify.com/v2/acts/clockworks~free-tiktok-scraper/run-sync-get-dataset-items"
-            params = {"token": self.api_token}
-            hashtags = keywords if keywords else self.REGION_HASHTAGS.get(region.upper(), self.REGION_HASHTAGS["US"])
             payload = {
                 "hashtags": hashtags,
                 "resultsPerPage": min(max_results * 2, 50),
                 "shouldDownloadVideos": False,
             }
-
-            response = requests.post(actor_url, json=payload, params=params, timeout=120)
+            response = requests.post(actor_url, json=payload,
+                                     params={"token": self.apify_token}, timeout=120)
             response.raise_for_status()
-            data = response.json()
-
-            return self._parse_results(data, max_results)
+            return self._parse_apify_results(response.json(), max_results)
         except Exception as e:
-            print(f"[TRENDS] TikTok hashtag scraper error: {e}")
+            print(f"[TRENDS] TikTok Apify fallback error: {e}")
             return []
 
-    def _try_search_scrape(self, region: str, max_results: int,
-                            keywords: List[str] = None) -> List[TrendItem]:
-        """Fallback: search for trending TikTok videos."""
-        try:
-            import requests
-
-            actor_url = "https://api.apify.com/v2/acts/clockworks~free-tiktok-scraper/run-sync-get-dataset-items"
-            params = {"token": self.api_token}
-            queries = keywords if keywords else self.REGION_QUERIES.get(region.upper(), self.REGION_QUERIES["US"])
-            payload = {
-                "searchQueries": queries,
-                "resultsPerPage": min(max_results * 2, 50),
-                "shouldDownloadVideos": False,
-            }
-
-            response = requests.post(actor_url, json=payload, params=params, timeout=120)
-            response.raise_for_status()
-            data = response.json()
-
-            return self._parse_results(data, max_results)
-        except Exception as e:
-            print(f"[TRENDS] TikTok search scraper error: {e}")
-            return []
-
-    def _parse_results(self, data: list, max_results: int) -> List[TrendItem]:
-        """Parse TikTok scraper results into TrendItems with velocity."""
+    def _parse_apify_results(self, data: list, max_results: int) -> List[TrendItem]:
         trends = []
         seen_urls = set()
-
         for item in data[:max_results * 3]:
             title = item.get("text", item.get("desc", ""))
             if not title or len(title) < 5:
                 continue
-
-            plays = item.get("playCount", item.get("plays", 0)) or 0
-            likes = item.get("diggCount", item.get("likes", 0)) or 0
-            shares = item.get("shareCount", item.get("shares", 0)) or 0
-
-            # Parse creation time for velocity calculation
-            create_time = item.get("createTime", item.get("createTimeISO", 0))
+            plays = item.get("playCount", 0) or 0
+            likes = item.get("diggCount", 0) or 0
+            create_time = item.get("createTime", 0)
             published_at = None
-            hours_since = 24  # default
-
+            hours_since = 24
             if isinstance(create_time, (int, float)) and create_time > 0:
                 published_at = datetime.fromtimestamp(create_time, tz=timezone.utc)
                 hours_since = max(1, (datetime.now(timezone.utc) - published_at).total_seconds() / 3600)
-            elif isinstance(create_time, str) and create_time:
-                try:
-                    published_at = datetime.fromisoformat(create_time.replace("Z", "+00:00"))
-                    hours_since = max(1, (datetime.now(timezone.utc) - published_at).total_seconds() / 3600)
-                except (ValueError, TypeError):
-                    pass
-
             velocity = plays / hours_since
-
-            # Extract hashtags
-            hashtags = []
-            for tag in item.get("hashtags", item.get("challenges", [])):
-                if isinstance(tag, dict):
-                    name = tag.get("name", tag.get("title", ""))
-                elif isinstance(tag, str):
-                    name = tag
-                else:
-                    continue
-                if name:
-                    hashtags.append(name)
-
-            # Extract sound/audio name — key leading signal for YouTube
-            music = item.get("music", item.get("musicMeta", {}))
-            sound_name = ""
-            if isinstance(music, dict):
-                sound_name = music.get("title", music.get("musicName", ""))
-                if sound_name and sound_name not in hashtags:
-                    hashtags.append(f"sound:{sound_name}")
-
-            # Extract subscriber/follower count for viral_coef
             author_meta = item.get("authorMeta", {}) or {}
-            subscriber_count = (
-                author_meta.get("fans") or
-                author_meta.get("followerCount") or
-                item.get("authorStats", {}).get("followerCount") or
-                0
-            )
-            subscriber_count = int(subscriber_count) if subscriber_count else 0
-
-            # Compute viral coefficient
-            viral_coef = None
-            is_anomaly = False
-            if subscriber_count > 0:
-                viral_coef = round(plays / subscriber_count, 1)
-                is_anomaly = viral_coef > 10
-
-            # Build URL
-            url = item.get("webVideoUrl", item.get("url", ""))
-            if not url:
-                author = author_meta.get("name", "") or item.get("author", {}).get("uniqueId", "")
-                vid_id = item.get("id", "")
-                if author and vid_id:
-                    url = f"https://www.tiktok.com/@{author}/video/{vid_id}"
-
-            if url in seen_urls:
+            followers = int(author_meta.get("fans", 0) or 0)
+            viral_coef = round(plays / followers, 1) if followers > 0 else None
+            is_anomaly = viral_coef > 10 if viral_coef else False
+            url = item.get("webVideoUrl", "")
+            if not url or url in seen_urls:
                 continue
             seen_urls.add(url)
-
-            description = f"TikTok | {self._format_count(plays)} plays, {self._format_count(likes)} likes"
-            if sound_name:
-                description += f" | {sound_name}"
-
-            content_type = self._classify_content_type(title, hashtags)
-
+            hashtags = []
+            for tag in item.get("hashtags", []):
+                if isinstance(tag, dict):
+                    hashtags.append(tag.get("name", ""))
+                elif isinstance(tag, str):
+                    hashtags.append(tag)
             trends.append(TrendItem(
                 title=title[:200],
-                description=description,
+                description=f"TikTok | {self._fmt(plays)} plays, {self._fmt(likes)} likes",
                 source=self.source_name,
                 category="tiktok_trending",
                 score=plays / 1000,
@@ -194,42 +216,32 @@ class TikTokTrendsSource(TrendSource):
                 view_count=plays,
                 keywords=hashtags[:10],
                 url=url,
-                content_type=content_type,
-                subscriber_count=subscriber_count or None,
+                content_type=self._classify(title, hashtags),
+                subscriber_count=followers or None,
                 viral_coef=viral_coef,
                 is_anomaly=is_anomaly,
             ))
-
             if len(trends) >= max_results:
                 break
-
         trends.sort(key=lambda t: t.velocity_score, reverse=True)
-        print(f"[TRENDS] TikTok: fetched {len(trends)} videos")
+        print(f"[TRENDS] TikTok Apify: fetched {len(trends)} videos")
         return trends
 
     @staticmethod
-    def _classify_content_type(title: str, hashtags: list) -> str:
+    def _classify(title: str, hashtags: list) -> str:
         text = f"{title} {' '.join(hashtags)}".lower()
-        ai_kw = ["ai", "aigenerat", "aiart", "sora", "runway", "midjourney", "kling",
-                  "нейросеть", "ии", "ki generi", "ia gerad", "ai生成"]
-        anim_kw = ["animation", "animated", "cartoon", "anime", "3d", "анимация", "мультик", "アニメ", "animação"]
-        story_kw = ["story", "storytime", "microdrama", "pov", "drama", "short film",
-                     "история", "микродрама", "драма", "ドラマ", "história"]
-        skit_kw = ["skit", "sketch", "comedy skit", "скетч", "юмор"]
-        if any(kw in text for kw in ai_kw):
+        if any(k in text for k in ["ai", "нейросеть", "ki generi", "ia gerad", "ai生成"]):
             return "ai_generated"
-        if any(kw in text for kw in anim_kw):
+        if any(k in text for k in ["animation", "animated", "cartoon", "анимация", "アニメ"]):
             return "animation"
-        if any(kw in text for kw in story_kw):
+        if any(k in text for k in ["story", "microdrama", "pov", "drama", "история", "микродрама"]):
             return "story"
-        if any(kw in text for kw in skit_kw):
-            return "skit"
         return "other"
 
     @staticmethod
-    def _format_count(n: int) -> str:
+    def _fmt(n: int) -> str:
         if n >= 1_000_000:
-            return f"{n / 1_000_000:.1f}M"
-        elif n >= 1_000:
-            return f"{n / 1_000:.0f}K"
+            return f"{n/1_000_000:.1f}M"
+        if n >= 1_000:
+            return f"{n/1_000:.0f}K"
         return str(n)
