@@ -42,7 +42,9 @@ class Settings(BaseSettings):
     # Trendwatcher
     YOUTUBE_API_KEY: Optional[str] = None
     APIFY_API_TOKEN: Optional[str] = None
+    RAPIDAPI_KEY: Optional[str] = None  # RapidAPI key (TikTok + Instagram scrapers)
     TREND_FETCH_INTERVAL_HOURS: int = 6
+    INSTAGRAM_HASHTAGS: list = ["microdrama", "aivideo", "shortfilm", "viralvideo", "aiart", "reels"]
 
     # YouTube Upload (OAuth 2.0)
     YOUTUBE_CLIENT_ID: Optional[str] = None

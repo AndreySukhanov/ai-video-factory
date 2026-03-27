@@ -27,8 +27,8 @@ class TrendAnalyzer:
         if settings.YOUTUBE_API_KEY:
             self.sources.append(YouTubeTrendsSource())
 
-        # Instagram Reels + TikTok via Apify (primary viral signal sources)
-        if settings.APIFY_API_TOKEN:
+        # Instagram Reels + TikTok — RapidAPI (primary) or Apify (fallback)
+        if settings.RAPIDAPI_KEY or settings.APIFY_API_TOKEN:
             self.sources.append(InstagramReelsTrendWatcher())
             self.sources.append(TikTokTrendsSource())
 
@@ -42,7 +42,8 @@ class TrendAnalyzer:
         return hashlib.sha256(key.encode()).hexdigest()[:32]
 
     def fetch_all_trends(self, db: Session, region: str = "US", category: str = "",
-                         max_per_source: int = 20, keywords: List[str] = None) -> List[Trend]:
+                         max_per_source: int = 20, keywords: List[str] = None,
+                         platforms: List[str] = None) -> List[Trend]:
         """Fetch trends from all sources. Clear old region data, insert fresh."""
         # Delete old trends for this region so the page always shows fresh data
         old_count = db.query(Trend).filter(Trend.region == region).delete()
@@ -53,6 +54,9 @@ class TrendAnalyzer:
         all_trends = []
 
         for source in self.sources:
+            if platforms and source.source_name not in platforms:
+                print(f"[TRENDS] Skipping {source.source_name} (not in selected platforms)")
+                continue
             try:
                 items = source.fetch_trends(region=region, category=category,
                                             max_results=max_per_source,
