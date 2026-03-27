@@ -29,6 +29,7 @@ class TrendRead(TrendBase):
     subscriber_count: Optional[int] = None
     viral_coef: Optional[float] = None
     is_anomaly: bool = False
+    matched_keyword: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -37,6 +38,7 @@ class TrendFetchRequest(BaseModel):
     region: str = "US"
     category: str = ""
     max_per_source: int = 20
+    keywords: List[str] = []
 
 class TrendFetchResponse(BaseModel):
     success: bool

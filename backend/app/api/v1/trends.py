@@ -28,7 +28,8 @@ def fetch_trends(request: TrendFetchRequest, db: Session = Depends(get_db)):
     analyzer = _get_analyzer()
     trends = analyzer.fetch_all_trends(
         db, region=request.region, category=request.category,
-        max_per_source=request.max_per_source
+        max_per_source=request.max_per_source,
+        keywords=request.keywords,
     )
     return TrendFetchResponse(
         success=True,

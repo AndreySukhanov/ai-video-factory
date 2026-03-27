@@ -8,7 +8,7 @@ from app.ai_orchestrator.llm_client import LLMClient
 from app.models.trend import Trend, StoryIdea, TrendSnapshot
 from .base import TrendSource, TrendItem
 from .youtube_trends import YouTubeTrendsSource
-from .google_trends import GoogleTrendsSource
+from .instagram_reels import InstagramReelsTrendWatcher
 from .tiktok_trends import TikTokTrendsSource
 from app.core.config import settings
 
@@ -27,12 +27,9 @@ class TrendAnalyzer:
         if settings.YOUTUBE_API_KEY:
             self.sources.append(YouTubeTrendsSource())
 
-        # Google Trends (free, always available via RSS)
-        self.sources.append(GoogleTrendsSource())
-
-        # TikTok via Apify (leading signal for YouTube Shorts trends)
-        # Note: ApifyScraper (YouTube via Apify) removed — duplicates YouTubeTrendsSource and wastes Apify credits
+        # Instagram Reels + TikTok via Apify (primary viral signal sources)
         if settings.APIFY_API_TOKEN:
+            self.sources.append(InstagramReelsTrendWatcher())
             self.sources.append(TikTokTrendsSource())
 
         print(f"[TRENDS] Initialized {len(self.sources)} trend sources: "
@@ -45,7 +42,7 @@ class TrendAnalyzer:
         return hashlib.sha256(key.encode()).hexdigest()[:32]
 
     def fetch_all_trends(self, db: Session, region: str = "US", category: str = "",
-                         max_per_source: int = 20) -> List[Trend]:
+                         max_per_source: int = 20, keywords: List[str] = None) -> List[Trend]:
         """Fetch trends from all sources. Clear old region data, insert fresh."""
         # Delete old trends for this region so the page always shows fresh data
         old_count = db.query(Trend).filter(Trend.region == region).delete()
@@ -58,7 +55,8 @@ class TrendAnalyzer:
         for source in self.sources:
             try:
                 items = source.fetch_trends(region=region, category=category,
-                                            max_results=max_per_source)
+                                            max_results=max_per_source,
+                                            keywords=keywords or [])
                 for item in items:
                     title_hash = self._trend_hash(item.title, item.source, item.url)
 
@@ -89,6 +87,8 @@ class TrendAnalyzer:
                         if item.viral_coef is not None:
                             existing.viral_coef = item.viral_coef
                         existing.is_anomaly = 1 if item.is_anomaly else 0
+                        if item.matched_keyword:
+                            existing.matched_keyword = item.matched_keyword
 
                         # Classify trend stage based on velocity change
                         if old_velocity > 0:
@@ -122,6 +122,7 @@ class TrendAnalyzer:
                             subscriber_count=item.subscriber_count,
                             viral_coef=item.viral_coef,
                             is_anomaly=1 if item.is_anomaly else 0,
+                            matched_keyword=item.matched_keyword,
                         )
                         db.add(trend)
 
