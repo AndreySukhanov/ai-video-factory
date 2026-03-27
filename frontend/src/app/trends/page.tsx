@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
     TrendingUp, Sparkles, ThumbsUp, Play, Loader2,
     RefreshCw, ArrowLeft, Tag, Star, Zap, Youtube, Globe, Search, XCircle, Eye,
-    Music, ArrowUpRight, ArrowRight, ArrowDownRight, Target, ChevronDown, ChevronUp
+    Music, ArrowUpRight, ArrowRight, ArrowDownRight, Target, ChevronDown, ChevronUp, Heart
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
@@ -34,6 +34,7 @@ interface TrendItem {
     subscriber_count: number | null;
     viral_coef: number | null;
     is_anomaly: boolean;
+    matched_keyword: string | null;
 }
 
 interface TrendGenerateResult {
@@ -92,6 +93,12 @@ const SOURCE_CONFIG: Record<string, { label: string; icon: string; color: string
         icon: 'globe',
         color: 'text-blue-400',
         badgeClass: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+    },
+    instagram: {
+        label: 'Instagram',
+        icon: 'instagram',
+        color: 'text-pink-400',
+        badgeClass: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
     },
     apify: {
         label: 'Social Media',
@@ -152,9 +159,13 @@ export default function TrendsPage() {
     const [genreFilter, setGenreFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [sourceFilter, setSourceFilter] = useState('');
-    const [contentTypeFilter, setContentTypeFilter] = useState('');
-    const [sortBy, setSortBy] = useState<SortBy>('velocity');
+    const [sortBy, setSortBy] = useState<SortBy>('viral_coef');
     const [anomalyOnly, setAnomalyOnly] = useState(false);
+    const [favoritesOnly, setFavoritesOnly] = useState(false);
+    const [favorites, setFavorites] = useState<Set<number>>(new Set());
+    const [keywords, setKeywords] = useState<string[]>([]);
+    const [keywordInput, setKeywordInput] = useState('');
+    const [keywordFilter, setKeywordFilter] = useState('');
     const [activeTab, setActiveTab] = useState<'trends' | 'ideas'>('trends');
     const [error, setError] = useState('');
     const [expandedVariants, setExpandedVariants] = useState<Set<number>>(new Set());
@@ -165,33 +176,26 @@ export default function TrendsPage() {
         return counts;
     }, [trends]);
 
-    const contentTypeCounts = useMemo(() => {
+    const anomalyCount = useMemo(() => trends.filter(t => t.is_anomaly).length, [trends]);
+
+    const keywordCounts = useMemo(() => {
         const counts: Record<string, number> = {};
         trends.forEach(t => {
-            const ct = t.content_type || 'other';
-            counts[ct] = (counts[ct] || 0) + 1;
+            if (t.matched_keyword) counts[t.matched_keyword] = (counts[t.matched_keyword] || 0) + 1;
         });
         return counts;
     }, [trends]);
 
-    const actionableCount = useMemo(() => {
-        return trends.filter(t => ['ai_generated', 'animation', 'story', 'skit', 'music_video'].includes(t.content_type || '')).length;
-    }, [trends]);
-
-    const anomalyCount = useMemo(() => trends.filter(t => t.is_anomaly).length, [trends]);
+    const saveKeywords = (kws: string[]) => {
+        setKeywords(kws);
+        try { localStorage.setItem('trend_keywords', JSON.stringify(kws)); } catch { /* ignore */ }
+    };
 
     const filteredAndSortedTrends = useMemo(() => {
         let filtered = sourceFilter ? trends.filter(t => t.source === sourceFilter) : trends;
-        if (anomalyOnly) {
-            filtered = filtered.filter(t => t.is_anomaly);
-        }
-        if (contentTypeFilter) {
-            if (contentTypeFilter === '_actionable') {
-                filtered = filtered.filter(t => ['ai_generated', 'animation', 'story', 'skit', 'music_video'].includes(t.content_type || ''));
-            } else {
-                filtered = filtered.filter(t => (t.content_type || 'other') === contentTypeFilter);
-            }
-        }
+        if (anomalyOnly) filtered = filtered.filter(t => t.is_anomaly);
+        if (favoritesOnly) filtered = filtered.filter(t => favorites.has(t.id));
+        if (keywordFilter) filtered = filtered.filter(t => t.matched_keyword === keywordFilter);
         const sorted = [...filtered];
         switch (sortBy) {
             case 'velocity':
@@ -208,7 +212,7 @@ export default function TrendsPage() {
                 break;
         }
         return sorted;
-    }, [trends, sourceFilter, contentTypeFilter, sortBy]);
+    }, [trends, sourceFilter, sortBy, anomalyOnly, favoritesOnly, favorites, keywordFilter]);
 
     const fetchTrendsList = useCallback(async () => {
         setLoading(true);
@@ -241,6 +245,27 @@ export default function TrendsPage() {
         fetchIdeasList();
     }, [fetchTrendsList, fetchIdeasList]);
 
+    // Load favorites and keywords from localStorage
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem('trend_favorites');
+            if (stored) setFavorites(new Set(JSON.parse(stored)));
+        } catch { /* ignore */ }
+        try {
+            const storedKws = localStorage.getItem('trend_keywords');
+            if (storedKws) setKeywords(JSON.parse(storedKws));
+        } catch { /* ignore */ }
+    }, []);
+
+    const toggleFavorite = (id: number) => {
+        setFavorites(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            try { localStorage.setItem('trend_favorites', JSON.stringify([...next])); } catch { /* ignore */ }
+            return next;
+        });
+    };
+
     const handleFetchTrends = async () => {
         setFetchingTrends(true);
         setError('');
@@ -249,7 +274,7 @@ export default function TrendsPage() {
             const res = await fetch(`${API_V1_BASE_URL}/trends/fetch`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ region, max_per_source: 20 }),
+                body: JSON.stringify({ region, max_per_source: 20, keywords }),
             });
             const data = await res.json();
             if (data.success) {
@@ -381,8 +406,19 @@ export default function TrendsPage() {
             case 'google_trends': return <Globe className={className} />;
             case 'apify': return <Search className={className} />;
             case 'tiktok': return <Music className={className} />;
+            case 'instagram': return <Play className={className} />;
             default: return <TrendingUp className={className} />;
         }
+    };
+
+    const formatTimeAgo = (dateStr: string): string => {
+        const d = new Date(dateStr);
+        const hours = (Date.now() - d.getTime()) / 3_600_000;
+        if (hours < 1) return 'только что';
+        if (hours < 24) return 'сегодня';
+        if (hours < 48) return 'вчера';
+        const days = Math.floor(hours / 24);
+        return `${days} дн. назад`;
     };
 
     const StageIcon = ({ stage }: { stage: string }) => {
@@ -441,8 +477,37 @@ export default function TrendsPage() {
                         </div>
                     </div>
 
+                    {/* Keyword radar — Trendsee style */}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {keywords.map(kw => (
+                            <span key={kw} className="flex items-center gap-1 bg-purple-600/20 border border-purple-500/40 text-purple-300 text-sm px-3 py-1 rounded-full">
+                                <Tag className="w-3 h-3 opacity-60" />
+                                {kw}
+                                <button
+                                    onClick={() => { saveKeywords(keywords.filter(k => k !== kw)); if (keywordFilter === kw) setKeywordFilter(''); }}
+                                    className="ml-1 text-purple-400/60 hover:text-purple-200 leading-none">×</button>
+                            </span>
+                        ))}
+                        <input
+                            value={keywordInput}
+                            onChange={e => setKeywordInput(e.target.value)}
+                            onKeyDown={e => {
+                                if (e.key === 'Enter' && keywordInput.trim()) {
+                                    const kw = keywordInput.trim();
+                                    if (!keywords.includes(kw)) saveKeywords([...keywords, kw]);
+                                    setKeywordInput('');
+                                }
+                            }}
+                            placeholder="+ ключевое слово"
+                            className="bg-transparent border border-dashed border-gray-600 text-sm px-3 py-1 rounded-full text-gray-400 placeholder-gray-600 focus:outline-none focus:border-purple-500 w-40"
+                        />
+                        {keywords.length > 0 && (
+                            <span className="text-xs text-gray-600 ml-1">Enter для добавления · ключи идут в поиск при загрузке</span>
+                        )}
+                    </div>
+
                     {/* Workflow hint */}
-                    <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
+                    <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
                         <span className="bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded">1</span>
                         <span>{t('trends.step1')}</span>
                         <span className="text-gray-700">&rarr;</span>
@@ -531,34 +596,39 @@ export default function TrendsPage() {
                             </div>
                         )}
 
-                        {/* Content type filter */}
-                        {trends.length > 0 && (
+                        {/* Keyword tabs (Trendsee-style) */}
+                        {Object.keys(keywordCounts).length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2 mb-4">
+                                <button onClick={() => setKeywordFilter('')}
+                                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!keywordFilter ? 'bg-purple-600/30 border-purple-500/50 text-purple-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-500'}`}>
+                                    Все видео <span className="opacity-60">({trends.length})</span>
+                                </button>
+                                {Object.entries(keywordCounts).map(([kw, count]) => (
+                                    <button key={kw} onClick={() => setKeywordFilter(keywordFilter === kw ? '' : kw)}
+                                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${keywordFilter === kw ? 'bg-blue-600/30 border-blue-500/50 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-blue-500/40'}`}>
+                                        <Tag className="w-3 h-3 opacity-60" />
+                                        {kw} <span className="opacity-60">({count})</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Anomaly + Favorites filters */}
+                        {(anomalyCount > 0 || favorites.size > 0) && (
                             <div className="flex flex-wrap items-center gap-2 mb-5">
-                                <span className="text-xs text-gray-500 mr-1">{t('trends.contentType')}:</span>
-                                <button onClick={() => setContentTypeFilter('')}
-                                    className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${!contentTypeFilter ? 'bg-purple-600/30 border-purple-500/50 text-purple-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-500'}`}>
-                                    {t('trends.allTypes')} ({trends.length})
-                                </button>
-                                <button onClick={() => setContentTypeFilter(contentTypeFilter === '_actionable' ? '' : '_actionable')}
-                                    className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${contentTypeFilter === '_actionable' ? 'bg-emerald-600/30 border-emerald-500/50 text-emerald-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-500'}`}>
-                                    {t('trends.aiReproducible')} ({actionableCount})
-                                </button>
                                 {anomalyCount > 0 && (
                                     <button onClick={() => setAnomalyOnly(!anomalyOnly)}
                                         className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-colors ${anomalyOnly ? 'bg-red-600/30 border-red-500/50 text-red-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-red-500/50'}`}>
                                         🔥 Аномалии ({anomalyCount})
                                     </button>
                                 )}
-                                {Object.entries(contentTypeCounts).map(([ct, count]) => {
-                                    const cfg = CONTENT_TYPE_CONFIG[ct] || CONTENT_TYPE_CONFIG.other;
-                                    return (
-                                        <button key={ct}
-                                            onClick={() => setContentTypeFilter(contentTypeFilter === ct ? '' : ct)}
-                                            className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${contentTypeFilter === ct ? cfg.badgeClass : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-500'}`}>
-                                            {cfg.label} ({count})
-                                        </button>
-                                    );
-                                })}
+                                {favorites.size > 0 && (
+                                    <button onClick={() => setFavoritesOnly(!favoritesOnly)}
+                                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border transition-colors ${favoritesOnly ? 'bg-pink-600/30 border-pink-500/50 text-pink-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-pink-500/50'}`}>
+                                        <Heart className="w-3 h-3" fill={favoritesOnly ? 'currentColor' : 'none'} />
+                                        Избранные ({favorites.size})
+                                    </button>
+                                )}
                             </div>
                         )}
 
@@ -573,187 +643,152 @@ export default function TrendsPage() {
                                 <p className="text-sm mt-2">{t('trends.noTrendsHint')}</p>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                                 {filteredAndSortedTrends.map((trend) => {
                                     const keywords = safeStringArray(trend.keywords_json);
                                     const config = SOURCE_CONFIG[trend.source] || { label: trend.source, color: 'text-gray-400', badgeClass: 'bg-gray-500/20 text-gray-400 border-gray-500/30' };
+                                    const isNew = trend.published_at
+                                        ? (Date.now() - new Date(trend.published_at).getTime()) < 48 * 3_600_000
+                                        : false;
                                     return (
-                                        <div key={trend.id} className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 hover:border-purple-500/50 transition-colors flex flex-col">
-                                            {/* Thumbnail */}
-                                            {trend.thumbnail_url && (
-                                                <div className="mb-2 -mx-4 -mt-4 rounded-t-xl overflow-hidden relative">
+                                        <div key={trend.id} className="bg-gray-900 rounded-2xl overflow-hidden flex flex-col group hover:ring-1 hover:ring-purple-500/40 transition-all">
+                                            {/* ── Thumbnail ── */}
+                                            <div className="relative aspect-[9/14] overflow-hidden bg-gray-800 flex-shrink-0">
+                                                {trend.thumbnail_url ? (
                                                     <img
                                                         src={trend.thumbnail_url}
                                                         alt={trend.title}
-                                                        className="w-full h-32 object-cover"
+                                                        className="w-full h-full object-cover"
                                                         loading="lazy"
                                                     />
-                                                    {trend.viral_coef != null && trend.viral_coef >= 1 && (
-                                                        <span className={`absolute top-1.5 left-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-md ${trend.is_anomaly ? 'bg-red-600 text-white' : 'bg-blue-600/90 text-white'}`}>
-                                                            X{Math.round(trend.viral_coef)}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            )}
-                                            {/* Viral badge (when no thumbnail) */}
-                                            {!trend.thumbnail_url && trend.viral_coef != null && trend.viral_coef >= 1 && (
-                                                <div className="flex justify-end mb-1">
-                                                    <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md ${trend.is_anomaly ? 'bg-red-600 text-white' : 'bg-blue-600/90 text-white'}`}>
-                                                        X{Math.round(trend.viral_coef)}
-                                                    </span>
-                                                </div>
-                                            )}
-                                            {/* Header: title + badges */}
-                                            <div className="flex items-start justify-between mb-2">
-                                                <h3 className="font-medium text-sm line-clamp-2 flex-1">{trend.title}</h3>
-                                                <div className="flex flex-col items-end gap-1 ml-2">
-                                                    <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${config.badgeClass}`}>
-                                                        <SourceIcon source={trend.source} className="w-3 h-3" />
-                                                        {config.label}
-                                                    </span>
-                                                    {trend.content_type && trend.content_type !== 'other' && (
-                                                        <span className={`text-[10px] px-2 py-0.5 rounded-full border whitespace-nowrap ${(CONTENT_TYPE_CONFIG[trend.content_type] || CONTENT_TYPE_CONFIG.other).badgeClass}`}>
-                                                            {(CONTENT_TYPE_CONFIG[trend.content_type] || CONTENT_TYPE_CONFIG.other).label}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {trend.description && (
-                                                <p className="text-gray-400 text-xs line-clamp-2 mb-3">{trend.description}</p>
-                                            )}
-
-                                            {/* Metrics row */}
-                                            <div className="flex flex-wrap items-center gap-2 mb-2">
-                                                {/* Velocity / Score */}
-                                                <div className="flex items-center gap-1">
-                                                    <Zap className={`w-3 h-3 ${trend.velocity_score > 0 ? 'text-yellow-400' : 'text-gray-500'}`} />
-                                                    <span className="text-xs text-gray-300 font-medium">{formatScore(trend)}</span>
-                                                </div>
-
-                                                {/* Subscriber count */}
-                                                {trend.subscriber_count != null && trend.subscriber_count > 0 && (
-                                                    <div className="flex items-center gap-1">
-                                                        <Eye className="w-3 h-3 text-gray-500" />
-                                                        <span className="text-[10px] text-gray-400">{formatViewCount(trend.subscriber_count)} subs</span>
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center">
+                                                        <SourceIcon source={trend.source} className={`w-10 h-10 ${config.color} opacity-20`} />
                                                     </div>
                                                 )}
 
-                                                {/* Trend stage badge */}
-                                                {trend.trend_stage && trend.trend_stage !== 'unknown' && (
-                                                    <span className={`flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                                                        trend.trend_stage === 'rising' ? 'bg-green-500/20 text-green-400' :
-                                                        trend.trend_stage === 'peaking' ? 'bg-yellow-500/20 text-yellow-400' :
-                                                        'bg-red-500/20 text-red-400'
-                                                    }`}>
-                                                        <StageIcon stage={trend.trend_stage} />
-                                                        {trend.trend_stage === 'rising' ? t('trends.rising') :
-                                                         trend.trend_stage === 'peaking' ? t('trends.peaking') : t('trends.declining')}
-                                                    </span>
-                                                )}
+                                                {/* Platform badge — top left */}
+                                                <div className="absolute top-2 left-2 flex items-center gap-1 bg-black/70 backdrop-blur-sm px-2 py-1 rounded-lg">
+                                                    <SourceIcon source={trend.source} className={`w-3 h-3 ${config.color}`} />
+                                                    <span className="text-white text-[11px] font-semibold leading-none">{config.label}</span>
+                                                </div>
 
-                                                {/* Breakout badge for Google Trends */}
-                                                {trend.category === 'breakout' && (
-                                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-orange-500/30 text-orange-300 animate-pulse">
-                                                        BREAKOUT
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {/* Competition & Opportunity */}
-                                            {(trend.competition_level != null || trend.opportunity_score != null) && (
-                                                <div className="flex items-center gap-3 mb-2">
-                                                    {trend.competition_level != null && (
-                                                        <span className={`text-[10px] ${
-                                                            trend.competition_level > 0.6 ? 'text-red-400' :
-                                                            trend.competition_level > 0.3 ? 'text-yellow-400' : 'text-green-400'
-                                                        }`}>
-                                                            {t('trends.competition')}{trend.competition_level > 0.6 ? t('trends.competitionHigh') :
-                                                                          trend.competition_level > 0.3 ? t('trends.competitionMedium') : t('trends.competitionLow')}
-                                                        </span>
-                                                    )}
-                                                    {trend.opportunity_score != null && trend.opportunity_score > 0 && (
-                                                        <div className="flex items-center gap-1">
-                                                            <Target className={`w-3 h-3 ${
-                                                                trend.opportunity_score > 0.6 ? 'text-green-400' :
-                                                                trend.opportunity_score > 0.3 ? 'text-yellow-400' : 'text-gray-500'
-                                                            }`} />
-                                                            <span className="text-[10px] text-gray-400">
-                                                                {t('trends.opportunity')}{(trend.opportunity_score * 100).toFixed(0)}%
-                                                            </span>
-                                                        </div>
+                                                {/* Top-right actions */}
+                                                <div className="absolute top-2 right-2 flex flex-col gap-1.5">
+                                                    <button
+                                                        onClick={e => { e.stopPropagation(); toggleFavorite(trend.id); }}
+                                                        className="w-7 h-7 bg-black/70 backdrop-blur-sm rounded-full flex items-center justify-center transition-all hover:scale-110"
+                                                    >
+                                                        <Heart
+                                                            className={`w-3.5 h-3.5 transition-colors ${favorites.has(trend.id) ? 'text-pink-500' : 'text-white/70'}`}
+                                                            fill={favorites.has(trend.id) ? 'currentColor' : 'none'}
+                                                        />
+                                                    </button>
+                                                    {trend.url && (
+                                                        <a href={trend.url} target="_blank" rel="noopener noreferrer"
+                                                           onClick={e => e.stopPropagation()}
+                                                           className="w-7 h-7 bg-black/70 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <ArrowUpRight className="w-3.5 h-3.5 text-white" />
+                                                        </a>
                                                     )}
                                                 </div>
-                                            )}
 
-                                            {/* Keywords */}
-                                            {keywords.length > 0 && (
-                                                <div className="flex flex-wrap gap-1 mb-2">
-                                                    {keywords.slice(0, 5).map((kw: string, i: number) => (
-                                                        <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded ${
-                                                            kw.startsWith('sound:')
-                                                                ? 'bg-pink-500/20 text-pink-400'
-                                                                : 'bg-gray-700/50 text-gray-400'
-                                                        }`}>
-                                                            {kw.startsWith('sound:') ? `${kw.replace('sound:', '')}` : kw}
+                                                {/* Bottom gradient + stats */}
+                                                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/70 to-transparent pt-10 pb-2.5 px-2.5">
+                                                    {/* Badges row */}
+                                                    <div className="flex items-center gap-1.5 mb-2">
+                                                        {isNew && (
+                                                            <span className="bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full leading-none">
+                                                                Новый
+                                                            </span>
+                                                        )}
+                                                        {trend.viral_coef != null && trend.viral_coef >= 2 && (
+                                                            <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md leading-none ${trend.is_anomaly ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'}`}>
+                                                                X{Math.round(trend.viral_coef)}
+                                                            </span>
+                                                        )}
+                                                        {trend.trend_stage && trend.trend_stage !== 'unknown' && (
+                                                            <span className={`flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium leading-none ${
+                                                                trend.trend_stage === 'rising' ? 'bg-green-500/40 text-green-300' :
+                                                                trend.trend_stage === 'peaking' ? 'bg-yellow-500/40 text-yellow-300' :
+                                                                'bg-red-500/40 text-red-300'
+                                                            }`}>
+                                                                <StageIcon stage={trend.trend_stage} />
+                                                                {trend.trend_stage === 'rising' ? t('trends.rising') :
+                                                                 trend.trend_stage === 'peaking' ? t('trends.peaking') : t('trends.declining')}
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Stats row */}
+                                                    <div className="flex items-center gap-3 text-white text-[11px]">
+                                                        {trend.view_count != null && trend.view_count > 0 && (
+                                                            <span className="flex items-center gap-1">
+                                                                <Eye className="w-3 h-3 opacity-70" />
+                                                                {formatViewCount(trend.view_count)}
+                                                            </span>
+                                                        )}
+                                                        {trend.velocity_score > 0 && (
+                                                            <span className="flex items-center gap-1 opacity-70">
+                                                                <Zap className="w-3 h-3" />
+                                                                {formatVelocity(trend.velocity_score)}
+                                                            </span>
+                                                        )}
+                                                        {trend.subscriber_count != null && trend.subscriber_count > 0 && (
+                                                            <span className="flex items-center gap-1 opacity-60">
+                                                                <Star className="w-3 h-3" />
+                                                                {formatViewCount(trend.subscriber_count)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* ── Card body ── */}
+                                            <div className="p-3 flex flex-col flex-1 gap-2">
+                                                {/* Title */}
+                                                <p className="text-white text-xs font-medium line-clamp-2 leading-relaxed">{trend.title}</p>
+
+                                                {/* Date + tags */}
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    {trend.published_at && (
+                                                        <span className="text-gray-500 text-[10px]">{formatTimeAgo(trend.published_at)}</span>
+                                                    )}
+                                                    {keywords.slice(0, 2).map((kw: string, i: number) => (
+                                                        <span key={i} className="text-[10px] text-gray-600 truncate max-w-[60px]">
+                                                            #{kw.replace('sound:', '')}
                                                         </span>
                                                     ))}
                                                 </div>
-                                            )}
 
-                                            {trend.url && (
-                                                <a href={trend.url} target="_blank" rel="noopener noreferrer"
-                                                   className="text-xs text-purple-400 hover:text-purple-300 mt-1 block">
-                                                    {t('trends.viewSource')}
-                                                </a>
-                                            )}
-
-                                            {/* Generate Similar button */}
-                                            {!generatedResults[trend.id] && (
-                                                <button
-                                                    onClick={() => handleGenerateFromTrend(trend.id)}
-                                                    disabled={generatingTrend === trend.id}
-                                                    className="mt-auto pt-3 w-full bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 disabled:opacity-50 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-2 transition-colors"
-                                                >
-                                                    {generatingTrend === trend.id
-                                                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('trends.analyzingTrend')}</>
-                                                        : <><Zap className="w-3.5 h-3.5" /> {t('trends.generateSimilar')}</>
-                                                    }
-                                                </button>
-                                            )}
-
-                                            {/* Generated result */}
-                                            {generatedResults[trend.id] && (
-                                                <div className="mt-auto pt-3 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-                                                    <div className="flex items-center gap-1.5 mb-2">
-                                                        <Sparkles className="w-3.5 h-3.5 text-green-400" />
-                                                        <span className="text-[10px] text-green-400 font-medium uppercase">{t('trends.seoGenerated')}</span>
-                                                    </div>
-                                                    <p className="text-xs text-white font-medium mb-2 line-clamp-2">
-                                                        {generatedResults[trend.id].seo_title}
-                                                    </p>
-                                                    {generatedResults[trend.id].seo_tags.length > 0 && (
-                                                        <div className="flex flex-wrap gap-1 mb-2">
-                                                            {generatedResults[trend.id].seo_tags.slice(0, 8).map((tag, i) => (
-                                                                <span key={i} className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">
-                                                                    #{tag}
-                                                                </span>
-                                                            ))}
-                                                            {generatedResults[trend.id].seo_tags.length > 8 && (
-                                                                <span className="text-[10px] text-gray-500">
-                                                                    {t('trends.more', { count: generatedResults[trend.id].seo_tags.length - 8 })}
-                                                                </span>
-                                                            )}
+                                                {/* CTA */}
+                                                {generatedResults[trend.id] ? (
+                                                    <div className="mt-auto bg-green-500/10 border border-green-500/30 rounded-lg p-2">
+                                                        <div className="flex items-center gap-1 mb-1">
+                                                            <Sparkles className="w-3 h-3 text-green-400" />
+                                                            <span className="text-[10px] text-green-400 font-medium">{t('trends.seoGenerated')}</span>
                                                         </div>
-                                                    )}
-                                                    {generatedResults[trend.id].project_id && (
-                                                        <Link href={`/generate?project=${generatedResults[trend.id].project_id}`}
-                                                            className="text-xs text-green-400 hover:text-green-300 font-medium flex items-center gap-1">
-                                                            {t('trends.viewProject')} <ArrowUpRight className="w-3 h-3" />
-                                                        </Link>
-                                                    )}
-                                                </div>
-                                            )}
+                                                        <p className="text-[10px] text-white line-clamp-1">{generatedResults[trend.id].seo_title}</p>
+                                                        {generatedResults[trend.id].project_id && (
+                                                            <Link href={`/generate?project=${generatedResults[trend.id].project_id}`}
+                                                                className="text-[10px] text-green-400 hover:text-green-300 flex items-center gap-0.5 mt-1">
+                                                                {t('trends.viewProject')} <ArrowUpRight className="w-2.5 h-2.5" />
+                                                            </Link>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handleGenerateFromTrend(trend.id)}
+                                                        disabled={generatingTrend === trend.id}
+                                                        className="mt-auto w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                                                    >
+                                                        {generatingTrend === trend.id
+                                                            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('trends.analyzingTrend')}</>
+                                                            : <><Sparkles className="w-3.5 h-3.5" /> {t('trends.generateSimilar')}</>
+                                                        }
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })}

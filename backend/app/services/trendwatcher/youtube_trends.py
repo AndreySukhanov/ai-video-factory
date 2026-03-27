@@ -64,6 +64,23 @@ class YouTubeTrendsSource(TrendSource):
         "hi": [_ARABIC_SCRIPT, _CJK_SCRIPT, _HANGUL_SCRIPT, _CYRILLIC_SCRIPT, _THAI_SCRIPT],
     }
 
+    # Allowed audio languages per region lang code (if defaultAudioLanguage is set by YouTube)
+    REGION_AUDIO_LANGS = {
+        "en": ["en"],           # US/GB/AU — English only
+        "ru": ["ru", "en"],     # Russia — Russian or English OK
+        "de": ["de", "en"],     # Germany
+        "fr": ["fr", "en"],     # France
+        "es": ["es", "en"],     # Spain/Mexico
+        "pt": ["pt", "en"],     # Brazil
+        "ja": ["ja"],           # Japan
+        "ko": ["ko"],           # Korea
+        "hi": ["hi", "en"],     # India — Hindi or English
+        "it": ["it", "en"],
+        "nl": ["nl", "en"],
+        "pl": ["pl", "en"],
+        "tr": ["tr", "en"],
+    }
+
     # Search queries targeting AI-generated or AI-reproducible content:
     # cute animal stories, AI art, animations, emotional mini-stories, neural network videos
     REGION_QUERIES = {
@@ -180,12 +197,14 @@ class YouTubeTrendsSource(TrendSource):
             self._service = build("youtube", "v3", developerKey=self.api_key)
         return self._service
 
-    def fetch_trends(self, region: str = "US", category: str = "", max_results: int = 20) -> List[TrendItem]:
+    def fetch_trends(self, region: str = "US", category: str = "", max_results: int = 20,
+                     keywords: List[str] = None) -> List[TrendItem]:
         """
         Fetch viral YouTube Shorts using dual time-window strategy:
         - Emerging (24h): fresh, fast-growing content
         - Confirmed (3 days): proven viral content
         Results sorted by velocity (views/hour), not absolute views.
+        If keywords provided, use them as search queries (Trendsee-style radar).
         """
         if not self.api_key:
             print("[TRENDS] YOUTUBE_API_KEY not set, returning empty list")
@@ -196,12 +215,22 @@ class YouTubeTrendsSource(TrendSource):
             lang = self.REGION_LANG_MAP.get(region.upper(), "en")
             half = max_results // 2
 
+            # Build queries and keyword mapping
+            if keywords:
+                queries = [f"#shorts {kw}" for kw in keywords]
+                keyword_map = {f"#shorts {kw}": kw for kw in keywords}
+            else:
+                queries = self.REGION_QUERIES.get(region.upper(), self.DEFAULT_QUERIES)
+                keyword_map = {}
+
             # Pass 1: Emerging (24h) — fresh content, order by relevance
             emerging = self._search_window(
                 service, region, lang,
                 published_after=self._get_date_hours_ago(24),
                 order="relevance",
                 max_results=half,
+                queries=queries,
+                keyword_map=keyword_map,
             )
 
             # Pass 2: Confirmed (3 days) — proven viral, order by viewCount
@@ -210,6 +239,8 @@ class YouTubeTrendsSource(TrendSource):
                 published_after=self._get_date_hours_ago(72),
                 order="viewCount",
                 max_results=half,
+                queries=queries,
+                keyword_map=keyword_map,
             )
 
             # Merge, deduplicate, sort by velocity
@@ -226,11 +257,16 @@ class YouTubeTrendsSource(TrendSource):
 
     def _search_window(self, service, region: str, lang: str,
                        published_after: str, order: str,
-                       max_results: int) -> List[TrendItem]:
+                       max_results: int,
+                       queries: List[str] = None,
+                       keyword_map: dict = None) -> List[TrendItem]:
         """Search for Shorts within a specific time window."""
         trends = []
         channel_id_map: dict = {}  # video_url -> channelId for batch subscriber lookup
-        queries = self.REGION_QUERIES.get(region.upper(), self.DEFAULT_QUERIES)
+        if queries is None:
+            queries = self.REGION_QUERIES.get(region.upper(), self.DEFAULT_QUERIES)
+        if keyword_map is None:
+            keyword_map = {}
 
         for query in queries:
             if len(trends) >= max_results:
@@ -270,16 +306,16 @@ class YouTubeTrendsSource(TrendSource):
                     snippet = item.get("snippet", {})
                     stats = item.get("statistics", {})
 
-                    # Filter out wrong-language videos
+                    # Filter out wrong-language videos by title script
                     if not self._matches_language(snippet.get("title", ""), lang):
                         continue
 
-                    # Filter: only AI-generated or AI-reproducible content
-                    title_text = snippet.get("title", "")
-                    desc_text = snippet.get("description", "")[:500]
-                    tag_list = snippet.get("tags", [])[:10] if snippet.get("tags") else []
-                    if not self._is_ai_reproducible(title_text, desc_text, tag_list):
-                        continue
+                    # Filter by audio language for all regions (when the field is set)
+                    audio_lang = snippet.get("defaultAudioLanguage", "")
+                    if audio_lang:
+                        allowed = self.REGION_AUDIO_LANGS.get(lang, [])
+                        if allowed and not any(audio_lang.startswith(a) for a in allowed):
+                            continue
 
                     channel = snippet.get("channelTitle", "")
                     views = int(stats.get("viewCount", 0))
@@ -314,6 +350,7 @@ class YouTubeTrendsSource(TrendSource):
                         keywords=tags,
                         url=video_url,
                         content_type=content_type,
+                        matched_keyword=keyword_map.get(query),
                     )
                     trends.append(trend_item)
 

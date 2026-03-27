@@ -32,6 +32,8 @@ class Trend(Base):
     subscriber_count = Column(Integer, nullable=True)
     viral_coef = Column(Float, nullable=True)
     is_anomaly = Column(Integer, default=0)  # 0/1
+    # User keyword that found this trend (Trendsee-style keyword radar)
+    matched_keyword = Column(String, nullable=True)
 
     ideas = relationship("StoryIdea", back_populates="trend")
 
