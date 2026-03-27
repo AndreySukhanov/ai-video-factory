@@ -84,6 +84,11 @@ class TrendAnalyzer:
                         ct = getattr(item, 'content_type', None)
                         if ct and ct != 'other':
                             existing.content_type = ct
+                        if item.subscriber_count is not None:
+                            existing.subscriber_count = item.subscriber_count
+                        if item.viral_coef is not None:
+                            existing.viral_coef = item.viral_coef
+                        existing.is_anomaly = 1 if item.is_anomaly else 0
 
                         # Classify trend stage based on velocity change
                         if old_velocity > 0:
@@ -114,6 +119,9 @@ class TrendAnalyzer:
                             keywords_json=json.dumps(item.keywords),
                             url=item.url,
                             content_type=getattr(item, 'content_type', 'other'),
+                            subscriber_count=item.subscriber_count,
+                            viral_coef=item.viral_coef,
+                            is_anomaly=1 if item.is_anomaly else 0,
                         )
                         db.add(trend)
 
@@ -331,7 +339,36 @@ Return JSON:
           "hook_type": "another_hook",
           "suggested_title": "Another title"
         }}
-      ]
+      ],
+      "analysis": {{
+        "hook_system": {{
+          "text_hook": {{"strategy": "curiosity_gap", "on_screen_text": "exact hook text"}},
+          "audio_hook": {{"first_phrase": "opening spoken line"}},
+          "visual_hook": {{"type": "bold_text_overlay|shocking_visual|beauty_shot", "description": "what viewer sees first"}}
+        }},
+        "timeline_structure": {{
+          "hook": {{"timing": "0-3s", "description": "what happens"}},
+          "plot": {{"timing": "3-54s", "description": "main content"}},
+          "cta": {{"timing": "54-60s", "description": "call to action"}}
+        }},
+        "abstract_blueprint": {{
+          "formula_name": "short name like 'Shock-Reveal-CTA'",
+          "abstract_formula": "Show X → Reveal Y → CTA",
+          "visual_skeleton": "how to visually replicate this in any niche"
+        }},
+        "visual_search_assets": {{
+          "visual_tags_en": ["tag1 in English", "tag2", "tag3", "tag4", "tag5"],
+          "dominant_colors": ["#hex1", "#hex2"],
+          "setting_location": "indoor office|outdoor city|fantasy world|etc"
+        }},
+        "adaptation_potential": {{
+          "suitable_niches": ["niche1", "niche2"],
+          "adaptation_logic": "why this formula works across niches"
+        }},
+        "viral_formula": "one-liner: Show shocking result → Explain → CTA",
+        "lifespan": "evergreen|trending_now|seasonal",
+        "is_universal_template": true
+      }}
     }}
   ]
 }}"""
@@ -355,6 +392,7 @@ Return JSON:
         trend_id = trends[0].id if trends else None
 
         for idea_data in ideas_data:
+            analysis = idea_data.get("analysis")
             idea = StoryIdea(
                 trend_id=trend_id,
                 idea_text=idea_data.get("idea_text", ""),
@@ -367,6 +405,7 @@ Return JSON:
                 variants_json=json.dumps(idea_data.get("variants", [])),
                 narrative_structure=idea_data.get("narrative_structure"),
                 regenerable=idea_data.get("regenerable"),
+                analysis_json=json.dumps(analysis) if analysis else None,
             )
             db.add(idea)
             story_ideas.append(idea)

@@ -229,6 +229,7 @@ class YouTubeTrendsSource(TrendSource):
                        max_results: int) -> List[TrendItem]:
         """Search for Shorts within a specific time window."""
         trends = []
+        channel_id_map: dict = {}  # video_url -> channelId for batch subscriber lookup
         queries = self.REGION_QUERIES.get(region.upper(), self.DEFAULT_QUERIES)
 
         for query in queries:
@@ -299,7 +300,7 @@ class YouTubeTrendsSource(TrendSource):
                         tags,
                     )
 
-                    trends.append(TrendItem(
+                    trend_item = TrendItem(
                         title=snippet.get("title", ""),
                         description=snippet.get("description", "")[:500],
                         source=self.source_name,
@@ -313,13 +314,51 @@ class YouTubeTrendsSource(TrendSource):
                         keywords=tags,
                         url=video_url,
                         content_type=content_type,
-                    ))
+                    )
+                    trends.append(trend_item)
+
+                    # Track channelId for batch subscriber lookup
+                    channel_id = snippet.get("channelId", "")
+                    if channel_id:
+                        channel_id_map[video_url] = channel_id
 
             except Exception as e:
                 print(f"[TRENDS] YouTube search '{query}' error: {e}")
                 continue
 
+        # Batch-fetch subscriber counts and compute viral_coef
+        if channel_id_map:
+            unique_channel_ids = list(set(channel_id_map.values()))
+            sub_counts = self._fetch_subscriber_counts(service, unique_channel_ids)
+            for trend_item in trends:
+                ch_id = channel_id_map.get(trend_item.url)
+                if ch_id and ch_id in sub_counts:
+                    subs = sub_counts[ch_id]
+                    trend_item.subscriber_count = subs
+                    if subs > 0:
+                        trend_item.viral_coef = round(trend_item.view_count / subs, 1)
+                        trend_item.is_anomaly = trend_item.viral_coef > 10
+
         return trends
+
+    @staticmethod
+    def _fetch_subscriber_counts(service, channel_ids: list) -> dict:
+        """Batch-fetch subscriber counts for a list of channel IDs. Costs 1 API unit per 50."""
+        result = {}
+        for i in range(0, len(channel_ids), 50):
+            batch = channel_ids[i:i + 50]
+            try:
+                resp = service.channels().list(
+                    part="statistics",
+                    id=",".join(batch),
+                ).execute()
+                for ch in resp.get("items", []):
+                    ch_id = ch["id"]
+                    subs = int(ch.get("statistics", {}).get("subscriberCount", 0))
+                    result[ch_id] = subs
+            except Exception as e:
+                print(f"[TRENDS] YouTube channels.list error: {e}")
+        return result
 
     def estimate_competition(self, query: str, region: str = "US") -> float:
         """

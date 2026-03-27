@@ -26,6 +26,10 @@ class TrendItem:
     # Content type classification for AI-reproducibility filtering
     # story, animation, ai_generated, skit, educational, music_video, other
     content_type: str = "other"
+    # Viral coefficient: view_count / max(subscriber_count, 1) — anomaly if > 10
+    subscriber_count: Optional[int] = None
+    viral_coef: Optional[float] = None
+    is_anomaly: bool = False
 
     def __post_init__(self):
         if self.fetched_at is None:

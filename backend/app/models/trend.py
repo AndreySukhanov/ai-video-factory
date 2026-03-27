@@ -28,6 +28,10 @@ class Trend(Base):
     competition_level = Column(Float, nullable=True)  # 0.0 - 1.0
     opportunity_score = Column(Float, nullable=True)  # high velocity + low competition
     content_type = Column(String, default="other")  # story, animation, ai_generated, skit, educational, music_video, other
+    # Viral coefficient (Trendsee-style): views / subscribers — anomaly if > 10
+    subscriber_count = Column(Integer, nullable=True)
+    viral_coef = Column(Float, nullable=True)
+    is_anomaly = Column(Integer, default=0)  # 0/1
 
     ideas = relationship("StoryIdea", back_populates="trend")
 
@@ -51,6 +55,9 @@ class StoryIdea(Base):
     variants_json = Column(Text, nullable=True)  # JSON array of variant angles
     narrative_structure = Column(String, nullable=True)  # e.g. "Hook → Conflict → Twist → CTA"
     regenerable = Column(String, nullable=True)  # "yes" or "no: reason"
+    # Extended Trendsee-style analysis (JSON): hook_system, visual_search_assets,
+    # timeline_structure, abstract_blueprint, adaptation_potential, viral_formula, lifespan
+    analysis_json = Column(Text, nullable=True)
 
     trend = relationship("Trend", back_populates="ideas")
     project = relationship("Project")
