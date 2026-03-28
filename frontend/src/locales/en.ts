@@ -214,7 +214,6 @@ const en: Record<string, string> = {
   "generateV2.imageModelSeedream": "Seedream 4.5 ($0.045) — photorealistic",
   "generateV2.videoModelSeedance": "Seedance 2.0 ($0.05/video) — cheapest, up to 15s",
   "generateV2.videoModelLaozhang": "Veo 3.1 LaoZhang ($0.15/video) — best audio",
-  "generateV2.videoModelFal": "fal.ai Kling 2.1 ($0.13–0.26/video) — stable 99.99%",
   "generateV2.videoModelVertex": "Veo 3.1 Vertex ($0.10–0.40/sec) — top quality",
   "generateV2.videoModelKling": "Kling 2.1 ($0.25–0.90/video) — motion control",
   "generateV2.videoModelMinimax": "MiniMax ($0.50/video) — character consistency",

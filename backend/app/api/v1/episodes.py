@@ -294,31 +294,17 @@ def get_video_provider(model: str = "seedance", reference_image_url: str = None,
         use_fast = (quality_mode == "fast")
         return GeminiVeoProvider(use_fast=use_fast, use_fl=has_ref, aspect_ratio=aspect_ratio)
 
-    # fal.ai Kling 2.1 (direct, no fallback — $0.13/video, 99.99% uptime)
-    if model == "fal":
-        from app.media.video_provider_fal import FalKlingProvider
-        return FalKlingProvider(aspect_ratio=aspect_ratio)
-
-    # Seedance 2.0 via LaoZhang ($0.05/video) + fal.ai fallback on 503
+    # Seedance 2.0 via LaoZhang ($0.05/video, up to 9 reference images)
     if model == "seedance":
         from app.media.video_provider_seedance import SeedanceProvider
-        primary = SeedanceProvider(aspect_ratio=aspect_ratio)
-        if settings.FAL_KEY:
-            from app.media.video_provider_fal import FalKlingProvider
-            from app.media.video_provider_fallback import FallbackVideoProvider
-            return FallbackVideoProvider(primary=primary, fallback=FalKlingProvider(aspect_ratio=aspect_ratio), label="seedance")
-        return primary
+        return SeedanceProvider(aspect_ratio=aspect_ratio)
 
-    # LaoZhang Veo 3.1 + fal.ai fallback on 503
+    # LaoZhang provider (opt-in, requires API key)
     # Supports full matrix including landscape-fast (cheaper 16:9!)
+    # NOTE: LaoZhang does NOT support -fl models (403), but accepts image param on standard models
     if model == "laozhang":
         from app.media.video_provider_laozhang import LaoZhangVeoProvider
-        primary = LaoZhangVeoProvider(use_fast=(quality_mode == "fast"), use_fl=False, aspect_ratio=aspect_ratio)
-        if settings.FAL_KEY:
-            from app.media.video_provider_fal import FalKlingProvider
-            from app.media.video_provider_fallback import FallbackVideoProvider
-            return FallbackVideoProvider(primary=primary, fallback=FalKlingProvider(aspect_ratio=aspect_ratio), label="laozhang")
-        return primary
+        return LaoZhangVeoProvider(use_fast=(quality_mode == "fast"), use_fl=False, aspect_ratio=aspect_ratio)
 
     if settings.REPLICATE_API_TOKEN:
         if model == "minimax":
@@ -445,8 +431,8 @@ async def generate_episode(request: EpisodeGenerateRequest):
         # Process reference image URL (first frame for I2V)
         await send_progress(session_id, "processing", 10, "Processing reference images...")
 
-        # Seedance/LaoZhang/fal need public URLs (catbox), not base64 data URIs
-        needs_public_url = request.model in ("seedance", "laozhang", "fal")
+        # Seedance/LaoZhang need public URLs (catbox), not base64 data URIs
+        needs_public_url = request.model in ("seedance", "laozhang")
 
         if needs_public_url and request.reference_image_url:
             # Upload local file to catbox for external API access
@@ -526,7 +512,7 @@ async def generate_episode(request: EpisodeGenerateRequest):
             clip_kwargs["negative_prompt"] = request.negative_prompt
 
         # Pass audio preference only to providers that support it
-        if request.model in ("gemini", "vertex", "laozhang", "seedance", "fal"):
+        if request.model in ("gemini", "vertex", "laozhang", "seedance"):
             clip_kwargs["generate_audio"] = request.generate_audio
 
         variants_count = 1
@@ -578,7 +564,7 @@ async def generate_episode(request: EpisodeGenerateRequest):
 
             # Auto-download video to local server (Veo retention = 2 days!)
             local_video_url = video_url
-            if video_url and request.model in ("gemini", "vertex", "seedance", "laozhang", "fal"):
+            if video_url and request.model in ("gemini", "vertex", "seedance", "laozhang"):
                 try:
                     await send_progress(session_id, "downloading", 85, "Saving video locally...")
                     local_video_url = await asyncio.to_thread(_download_video_locally, video_url)

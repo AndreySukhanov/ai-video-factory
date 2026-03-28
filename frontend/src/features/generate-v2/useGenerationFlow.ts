@@ -20,8 +20,8 @@ import { EpisodeDraft, FlowStep, FlowStepId, GenerationDraftSnapshot, IdeaFormSt
 const DRAFT_STORAGE_KEY = 'ai_video_factory_generate_v2_draft';
 
 const STEP_ORDER: FlowStepId[] = ['idea', 'episodes', 'generation', 'publish'];
-const SINGLE_EPISODE_MODELS: GenerationModel[] = ['seedance', 'laozhang', 'fal', 'vertex', 'kling'];
-const SERIES_MODELS: GenerationModel[] = ['seedance', 'laozhang', 'fal', 'vertex', 'minimax'];
+const SINGLE_EPISODE_MODELS: GenerationModel[] = ['seedance', 'laozhang', 'vertex', 'kling'];
+const SERIES_MODELS: GenerationModel[] = ['seedance', 'laozhang', 'vertex', 'minimax'];
 const MODEL_DURATIONS: Record<GenerationModel, number[]> = {
   kling: [5, 10],
   minimax: [6],
@@ -29,7 +29,6 @@ const MODEL_DURATIONS: Record<GenerationModel, number[]> = {
   gemini: [4, 6, 8],
   vertex: [4, 6, 8],
   seedance: [4, 5, 8, 10, 15],
-  fal: [5, 10],
 };
 
 // Veo 3.1 does NOT support 1:1 aspect ratio
@@ -426,7 +425,7 @@ export function useGenerationFlow() {
         // === Reference image selection ===
         let referenceImageUrl: string | undefined;
         const isSeriesMode = ideaForm.episodesCount > 1;
-        const supportsReferences = ['gemini', 'vertex', 'seedance', 'laozhang', 'fal'].includes(ideaForm.model);
+        const supportsReferences = ['gemini', 'vertex', 'seedance', 'laozhang'].includes(ideaForm.model);
         const storyboardFrame = storyboardFrames[episode.number - 1];
 
         // Priority 1: Storyboard keyframe — ONLY for episode 1 (seeds the visual style)

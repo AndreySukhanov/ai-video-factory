@@ -28,7 +28,6 @@ interface EpisodesStepProps {
 const SINGLE_MODEL_KEYS = [
   { value: 'seedance', i18nKey: 'generateV2.videoModelSeedance' },
   { value: 'laozhang', i18nKey: 'generateV2.videoModelLaozhang' },
-  { value: 'fal', i18nKey: 'generateV2.videoModelFal' },
   { value: 'vertex', i18nKey: 'generateV2.videoModelVertex' },
   { value: 'kling', i18nKey: 'generateV2.videoModelKling' },
 ] as const;
@@ -36,7 +35,6 @@ const SINGLE_MODEL_KEYS = [
 const SERIES_MODEL_KEYS = [
   { value: 'seedance', i18nKey: 'generateV2.videoModelSeedanceSeries' },
   { value: 'laozhang', i18nKey: 'generateV2.videoModelLaozhang' },
-  { value: 'fal', i18nKey: 'generateV2.videoModelFal' },
   { value: 'vertex', i18nKey: 'generateV2.videoModelVertex' },
   { value: 'minimax', i18nKey: 'generateV2.videoModelMinimax' },
 ] as const;
@@ -48,17 +46,15 @@ const MODEL_DURATION_OPTIONS: Record<IdeaFormState['model'], readonly number[]> 
   gemini: [4, 6, 8],
   vertex: [4, 6, 8],
   seedance: [4, 5, 8, 10, 15],
-  fal: [5, 10],
 };
 
-const MODELS_WITH_REFS: GenerationModel[] = ['vertex', 'laozhang', 'seedance', 'fal'];
+const MODELS_WITH_REFS: GenerationModel[] = ['vertex', 'laozhang', 'seedance'];
 const MODELS_WITH_TRANSITION: GenerationModel[] = ['vertex', 'laozhang'];
 
 function estimatePerEpisodeCost(model: GenerationModel, duration: number): number {
   switch (model) {
     case 'seedance': return 0.05;
     case 'laozhang': return 0.15;
-    case 'fal': return duration <= 5 ? 0.13 : 0.26;
     case 'vertex': return duration * 0.15;
     case 'kling': return duration <= 5 ? 0.25 : 0.50;
     case 'minimax': return 0.50;
