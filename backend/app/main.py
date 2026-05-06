@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.api.v1 import jobs, projects, characters, websocket, upload, episodes, trends, scheduler, youtube, analytics, review
+from app.api.v1 import jobs, projects, characters, websocket, upload, episodes, trends, scheduler, youtube, analytics, review, proxy
 from app.core.config import settings
 from app.core.db import engine, Base
 
@@ -166,6 +166,7 @@ app.include_router(scheduler.router, prefix=f"{settings.API_V1_STR}/scheduler", 
 app.include_router(youtube.router, prefix=f"{settings.API_V1_STR}/youtube", tags=["youtube"])
 app.include_router(analytics.router, prefix=f"{settings.API_V1_STR}/analytics", tags=["analytics"])
 app.include_router(review.router, prefix=f"{settings.API_V1_STR}/review", tags=["review"])
+app.include_router(proxy.router, prefix=f"{settings.API_V1_STR}/proxy", tags=["proxy"])
 
 @app.get("/")
 def root():
