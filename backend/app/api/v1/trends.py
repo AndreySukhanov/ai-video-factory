@@ -30,6 +30,7 @@ def fetch_trends(request: TrendFetchRequest, db: Session = Depends(get_db)):
         db, region=request.region, category=request.category,
         max_per_source=request.max_per_source,
         keywords=request.keywords,
+        platforms=request.platforms,
     )
     return TrendFetchResponse(
         success=True,
@@ -195,7 +196,7 @@ def generate_from_idea(idea_id: int, request: IdeaGenerateRequest = None,
             "project_id": project.id,
             "idea": idea.idea_text,
             "genre": idea.genre,
-            "model": request.model if request else "seedance",
+            "model": request.model if request else "laozhang",
             "duration": request.duration if request else 6,
             "aspect_ratio": request.aspect_ratio if request else "9:16",
             "from_trend": True,

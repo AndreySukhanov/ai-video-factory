@@ -119,9 +119,14 @@ export default function StatusPanel({ currentStep, episodes, isGenerating, onRet
               </div>
               {episode.status === 'error' && (
                 <div className="mt-2">
-                  <div className="text-xs text-red-300 flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3" />
-                    {episode.error || t('generateV2.statusFailed')}
+                  <div className="text-xs text-red-300 flex items-start gap-1">
+                    <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                    <span>
+                      {episode.error || t('generateV2.statusFailed')}
+                      {episode.error && (episode.error.includes('503') || episode.error.includes('Service Unavailable')) && (
+                        <span className="block mt-1 text-amber-400">⚠ Переключитесь на Kling 2.1</span>
+                      )}
+                    </span>
                   </div>
                   <Button size="sm" variant="secondary" className="mt-2" onClick={() => onRetryEpisode(episode.id)}>
                     <RefreshCw className="w-3 h-3" />

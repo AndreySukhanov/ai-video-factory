@@ -37,8 +37,9 @@ class TrendRead(TrendBase):
 class TrendFetchRequest(BaseModel):
     region: str = "US"
     category: str = ""
-    max_per_source: int = 20
+    max_per_source: int = 30
     keywords: List[str] = []
+    platforms: List[str] = []  # empty = all enabled sources
 
 class TrendFetchResponse(BaseModel):
     success: bool
@@ -84,7 +85,7 @@ class IdeaApproveResponse(BaseModel):
 
 class IdeaGenerateRequest(BaseModel):
     genre: str = ""
-    model: str = "seedance"
+    model: str = "laozhang"
     duration: int = 6
     aspect_ratio: str = "9:16"
 
@@ -98,7 +99,7 @@ class IdeaGenerateResponse(BaseModel):
 # --- Trend Generate (Phase 9) ---
 class TrendGenerateRequest(BaseModel):
     genre: str = "drama"
-    model: str = "seedance"
+    model: str = "laozhang"
     duration: int = 6
     aspect_ratio: str = "9:16"
 

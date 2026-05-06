@@ -232,7 +232,7 @@ class EpisodeGenerateRequest(BaseModel):
     last_frame_image_url: Optional[str] = Field(default=None, description="Last frame image URL for transition videos (Veo 3.1 -fl models)")
     subject_reference_url: Optional[str] = Field(default=None, description="Character reference for identity consistency (MiniMax S2V-01)")
     reference_images: Optional[List[str]] = Field(default=None, description="1-3 reference images for Veo 3.1 R2V character consistency")
-    model: str = Field(default="seedance", description="Video model: seedance, laozhang, vertex, gemini, kling, or minimax")
+    model: str = Field(default="laozhang", description="Video model: seedance, laozhang, vertex, gemini, kling, or minimax")
     session_id: Optional[str] = Field(default=None, description="WebSocket session ID for progress updates")
     seed: Optional[int] = Field(default=None, description="Fixed seed for visual stability")
     negative_prompt: Optional[str] = Field(default=None, description="Negative prompt (noun format: text overlays, subtitles, cartoon)")

@@ -35,6 +35,7 @@ interface TrendItem {
     viral_coef: number | null;
     is_anomaly: boolean;
     matched_keyword: string | null;
+    region: string | null;
 }
 
 interface TrendGenerateResult {
@@ -166,6 +167,7 @@ export default function TrendsPage() {
     const [keywords, setKeywords] = useState<string[]>([]);
     const [keywordInput, setKeywordInput] = useState('');
     const [keywordFilter, setKeywordFilter] = useState('');
+    const [platforms, setPlatforms] = useState<Set<string>>(new Set(['youtube', 'tiktok', 'instagram']));
     const [activeTab, setActiveTab] = useState<'trends' | 'ideas'>('trends');
     const [error, setError] = useState('');
     const [expandedVariants, setExpandedVariants] = useState<Set<number>>(new Set());
@@ -217,7 +219,7 @@ export default function TrendsPage() {
     const fetchTrendsList = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_V1_BASE_URL}/trends/?region=${region}&limit=50`);
+            const res = await fetch(`${API_V1_BASE_URL}/trends/?region=${region}&limit=100`);
             const data = await res.json();
             setTrends(data);
         } catch (e: unknown) {
@@ -274,7 +276,7 @@ export default function TrendsPage() {
             const res = await fetch(`${API_V1_BASE_URL}/trends/fetch`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ region, max_per_source: 20, keywords }),
+                body: JSON.stringify({ region, max_per_source: 20, keywords, platforms: [...platforms] }),
             });
             const data = await res.json();
             if (data.success) {
@@ -545,19 +547,27 @@ export default function TrendsPage() {
                         {/* Center: platform selection */}
                         <div className="shrink-0">
                             <div className="text-xs text-gray-500 mb-2">Платформы поиска</div>
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center gap-1.5 bg-gray-700/50 border border-gray-600 rounded-lg px-3 py-2">
-                                    <Youtube className="w-4 h-4 text-red-500" />
-                                    <span className="text-xs text-gray-300">YouTube</span>
-                                </div>
-                                <div className="flex items-center gap-1.5 bg-gray-700/50 border border-gray-600 rounded-lg px-3 py-2">
-                                    <Music className="w-4 h-4 text-pink-400" />
-                                    <span className="text-xs text-gray-300">TikTok</span>
-                                </div>
-                                <div className="flex items-center gap-1.5 bg-gray-700/50 border border-gray-600 rounded-lg px-3 py-2">
-                                    <Play className="w-4 h-4 text-orange-400" />
-                                    <span className="text-xs text-gray-300">Instagram</span>
-                                </div>
+                            <div className="flex items-center gap-2">
+                                {([
+                                    { id: 'youtube', label: 'YouTube', icon: <Youtube className="w-4 h-4" />, color: 'text-red-500', active: 'bg-red-500/15 border-red-500/50 text-red-400' },
+                                    { id: 'tiktok', label: 'TikTok', icon: <Music className="w-4 h-4" />, color: 'text-pink-400', active: 'bg-pink-500/15 border-pink-500/50 text-pink-300' },
+                                    { id: 'instagram', label: 'Instagram', icon: <Play className="w-4 h-4" />, color: 'text-orange-400', active: 'bg-orange-500/15 border-orange-500/50 text-orange-300' },
+                                ] as const).map(p => {
+                                    const on = platforms.has(p.id);
+                                    return (
+                                        <button key={p.id}
+                                            onClick={() => setPlatforms(prev => {
+                                                const next = new Set(prev);
+                                                if (next.has(p.id)) { if (next.size > 1) next.delete(p.id); }
+                                                else next.add(p.id);
+                                                return next;
+                                            })}
+                                            className={`flex items-center gap-1.5 border rounded-lg px-3 py-2 transition-colors ${on ? p.active : 'bg-gray-800/50 border-gray-700 text-gray-500 opacity-50'}`}>
+                                            <span className={on ? p.color : ''}>{p.icon}</span>
+                                            <span className="text-xs">{p.label}</span>
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
 
@@ -681,7 +691,7 @@ export default function TrendsPage() {
                             <div className="text-center py-20 text-gray-500">
                                 <TrendingUp className="w-12 h-12 mx-auto mb-4 opacity-50" />
                                 <p className="text-lg">{t('trends.noTrends')}</p>
-                                <p className="text-sm mt-2">{t('trends.noTrendsHint')}</p>
+                                <p className="text-sm mt-2">Нет данных для региона <strong className="text-gray-300">{region}</strong> — нажмите «Загрузить тренды»</p>
                             </div>
                         ) : (
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
@@ -697,10 +707,13 @@ export default function TrendsPage() {
                                             <div className="relative aspect-[9/14] overflow-hidden bg-gray-800 flex-shrink-0">
                                                 {trend.thumbnail_url ? (
                                                     <img
-                                                        src={trend.thumbnail_url}
+                                                        src={trend.source === 'instagram'
+                                                            ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/v1/proxy/image?url=${encodeURIComponent(trend.thumbnail_url)}`
+                                                            : trend.thumbnail_url}
                                                         alt={trend.title}
                                                         className="w-full h-full object-cover"
                                                         loading="lazy"
+                                                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                                     />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center">

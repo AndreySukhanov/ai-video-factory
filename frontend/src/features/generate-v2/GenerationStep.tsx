@@ -89,7 +89,14 @@ export default function GenerationStep({
                     <Badge variant={statusBadgeVariant(episode.status)}>{statusLabel(episode.status)}</Badge>
                   </div>
                   <div className="text-sm text-[var(--muted)]">{episode.title}</div>
-                  {episode.error && <div className="text-xs text-red-400 mt-1">{episode.error}</div>}
+                  {episode.error && (
+                    <div className="text-xs text-red-400 mt-1">
+                      {episode.error}
+                      {(episode.error.includes('503') || episode.error.includes('Service Unavailable')) && (
+                        <span className="block mt-1 text-amber-400">⚠ Модель временно недоступна — выберите Kling 2.1 в настройках выше.</span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="w-full md:w-56">
                   {episode.videoUrl ? (

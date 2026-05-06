@@ -40,7 +40,7 @@ const DEFAULT_IDEA_FORM: IdeaFormState = {
   episodesCount: 4,
   duration: 6,
   aspectRatio: '9:16',
-  model: 'minimax',
+  model: 'laozhang',
 };
 
 const DEFAULT_PUBLISH_FORM: PublishFormState = {
@@ -64,7 +64,7 @@ function normalizeEpisodesCount(value: number): number {
 }
 
 function pickDefaultModelForCount(episodesCount: number): GenerationModel {
-  return episodesCount > 1 ? 'seedance' : 'seedance';
+  return episodesCount > 1 ? 'laozhang' : 'laozhang';
 }
 
 
