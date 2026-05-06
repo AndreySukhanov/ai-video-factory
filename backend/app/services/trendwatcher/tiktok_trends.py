@@ -1,5 +1,6 @@
 from typing import List
 from datetime import datetime, timezone
+import re
 from .base import TrendSource, TrendItem
 from app.core.config import settings
 
@@ -10,6 +11,35 @@ class TikTokTrendsSource(TrendSource):
     Primary: RapidAPI tiktok-scraper7 (free tier, no account needed).
     Fallback: Apify clockworks~free-tiktok-scraper.
     """
+
+    REGION_LANG_MAP = {
+        "US": "en", "GB": "en", "RU": "ru", "DE": "de",
+        "JP": "ja", "BR": "pt", "IN": "hi",
+    }
+
+    _CYRILLIC = re.compile(r'[\u0400-\u04FF]')
+    _CJK      = re.compile(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]')
+    _HANGUL   = re.compile(r'[\uAC00-\uD7AF]')
+    _INDIC    = re.compile(r'[\u0900-\u097F\u0980-\u09FF\u0A80-\u0AFF\u0B00-\u0D7F]')
+    _ARABIC   = re.compile(r'[\u0600-\u06FF]')
+
+    FOREIGN_SCRIPTS = {
+        "en": [_CYRILLIC, _CJK, _HANGUL, _INDIC, _ARABIC],
+        "ru": [_CJK, _HANGUL, _INDIC, _ARABIC],
+        "de": [_CYRILLIC, _CJK, _HANGUL, _INDIC, _ARABIC],
+        "ja": [_CYRILLIC, _HANGUL, _INDIC, _ARABIC],
+        "pt": [_CYRILLIC, _CJK, _HANGUL, _INDIC, _ARABIC],
+        "hi": [_CYRILLIC, _CJK, _HANGUL, _ARABIC],
+    }
+
+    def _text_matches_lang(self, text: str, lang: str) -> bool:
+        if not text or lang not in self.FOREIGN_SCRIPTS:
+            return True
+        total = len(text)
+        for pattern in self.FOREIGN_SCRIPTS[lang]:
+            if len(pattern.findall(text)) / max(total, 1) > 0.4:
+                return False
+        return True
 
     REGION_HASHTAGS = {
         "US": ["aiart", "aigenerated", "animation", "microdrama", "storytime"],
@@ -45,26 +75,27 @@ class TikTokTrendsSource(TrendSource):
     def fetch_trends(self, region: str = "US", category: str = "", max_results: int = 20,
                      keywords: List[str] = None) -> List[TrendItem]:
         hashtags = keywords if keywords else self.REGION_HASHTAGS.get(region.upper(), self.REGION_HASHTAGS["US"])
+        lang = self.REGION_LANG_MAP.get(region.upper(), "en")
 
         if self.rapidapi_key:
-            trends = self._fetch_rapidapi(hashtags, region, max_results)
+            trends = self._fetch_rapidapi(hashtags, region, max_results, lang)
             if trends:
                 return trends
             print("[TRENDS] TikTok RapidAPI returned empty, trying Apify fallback")
 
         if self.apify_token:
-            return self._fetch_apify(hashtags, region, max_results)
+            return self._fetch_apify(hashtags, region, max_results, lang)
 
         print("[TRENDS] No TikTok API configured (set RAPIDAPI_KEY or APIFY_API_TOKEN)")
         return []
 
-    def _fetch_rapidapi(self, hashtags: List[str], region: str, max_results: int) -> List[TrendItem]:
+    def _fetch_rapidapi(self, hashtags: List[str], region: str, max_results: int, lang: str = "en") -> List[TrendItem]:
         """Fetch via RapidAPI tiktok-scraper7 — free tier, 500 req/month."""
         import requests
 
         all_items: list = []
         seen_ids: set = set()
-        per_tag = max(3, max_results // max(len(hashtags), 1))
+        per_tag = max(10, max_results // max(len(hashtags), 1))
         region_code = self.REGION_CODES.get(region.upper(), "US")
 
         for hashtag in hashtags:
@@ -95,7 +126,7 @@ class TikTokTrendsSource(TrendSource):
                     if vid_id in seen_ids:
                         continue
                     seen_ids.add(vid_id)
-                    item = self._parse_rapidapi_item(v, hashtag)
+                    item = self._parse_rapidapi_item(v, hashtag, lang)
                     if item:
                         all_items.append(item)
                         if len(all_items) >= max_results:
@@ -108,9 +139,11 @@ class TikTokTrendsSource(TrendSource):
         print(f"[TRENDS] TikTok RapidAPI: fetched {len(all_items)} videos")
         return all_items[:max_results]
 
-    def _parse_rapidapi_item(self, v: dict, matched_keyword: str = None) -> "TrendItem | None":
+    def _parse_rapidapi_item(self, v: dict, matched_keyword: str = None, lang: str = "en") -> "TrendItem | None":
         title = v.get("title", "").strip()
         if not title:
+            return None
+        if not self._text_matches_lang(title, lang):
             return None
 
         plays = int(v.get("play", 0) or 0)
@@ -157,7 +190,7 @@ class TikTokTrendsSource(TrendSource):
             matched_keyword=matched_keyword,
         )
 
-    def _fetch_apify(self, hashtags: List[str], region: str, max_results: int) -> List[TrendItem]:
+    def _fetch_apify(self, hashtags: List[str], region: str, max_results: int, lang: str = "en") -> List[TrendItem]:
         """Fallback: Apify clockworks~free-tiktok-scraper."""
         try:
             import requests
@@ -170,17 +203,19 @@ class TikTokTrendsSource(TrendSource):
             response = requests.post(actor_url, json=payload,
                                      params={"token": self.apify_token}, timeout=120)
             response.raise_for_status()
-            return self._parse_apify_results(response.json(), max_results)
+            return self._parse_apify_results(response.json(), max_results, lang)
         except Exception as e:
             print(f"[TRENDS] TikTok Apify fallback error: {e}")
             return []
 
-    def _parse_apify_results(self, data: list, max_results: int) -> List[TrendItem]:
+    def _parse_apify_results(self, data: list, max_results: int, lang: str = "en") -> List[TrendItem]:
         trends = []
         seen_urls = set()
         for item in data[:max_results * 3]:
             title = item.get("text", item.get("desc", ""))
             if not title or len(title) < 5:
+                continue
+            if not self._text_matches_lang(title, lang):
                 continue
             plays = item.get("playCount", 0) or 0
             likes = item.get("diggCount", 0) or 0
