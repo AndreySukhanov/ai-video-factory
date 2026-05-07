@@ -7,6 +7,7 @@ import FlowStepper from './FlowStepper';
 import IdeaStep from './IdeaStep';
 import EpisodesStep from './EpisodesStep';
 import GenerationStep from './GenerationStep';
+import StoryboardStep from './StoryboardStep';
 import PublishStep from './PublishStep';
 import StatusPanel from './StatusPanel';
 import { FlowStepId } from './types';
@@ -22,7 +23,7 @@ export default function GenerationWizardV2() {
       flow.goStep(step);
       return;
     }
-    if ((step === 'episodes' || step === 'generation') && flow.episodes.length === 0) {
+    if ((step === 'episodes' || step === 'storyboard' || step === 'generation') && flow.episodes.length === 0) {
       return;
     }
     if (step === 'publish' && flow.stats.done === 0) {
@@ -76,6 +77,20 @@ export default function GenerationWizardV2() {
                 onReferenceImagesChange={flow.setReferenceImages}
                 referenceLocalUrls={flow.referenceLocalUrls}
                 onReferenceLocalUrlsChange={flow.setReferenceLocalUrls}
+              />
+            )}
+
+            {flow.currentStep === 'storyboard' && (
+              <StoryboardStep
+                episodes={flow.episodes}
+                storyboardFrames={flow.storyboardFrames}
+                imageModel={flow.imageModel}
+                isStoryboarding={flow.isStoryboarding}
+                onImageModelChange={flow.setImageModel}
+                onRunStoryboard={flow.runStoryboard}
+                onRegenerateFrame={flow.regenerateFrame}
+                onSetEpisodeFirstFrame={flow.setEpisodeFirstFrame}
+                onContinue={() => flow.goStep('generation')}
               />
             )}
 

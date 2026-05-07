@@ -1,6 +1,6 @@
 import { GenerationModel } from '@/lib/api/generation';
 
-export type FlowStepId = 'idea' | 'episodes' | 'generation' | 'publish';
+export type FlowStepId = 'idea' | 'episodes' | 'storyboard' | 'generation' | 'publish';
 
 export interface FlowStep {
   id: FlowStepId;
