@@ -36,6 +36,8 @@ export interface EpisodeDraft {
   qualityMode?: 'fast' | 'standard';
   firstFrameUrl?: string;      // first frame image for transition
   lastFrameUrl?: string;       // last frame image for transition
+  model?: GenerationModel;     // override video model for this episode (falls back to ideaForm.model)
+  duration?: number;           // override duration for this episode (falls back to ideaForm.duration)
 }
 
 export interface PublishFormState {

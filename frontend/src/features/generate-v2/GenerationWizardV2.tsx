@@ -87,6 +87,10 @@ export default function GenerationWizardV2() {
                 onRetryEpisode={flow.retryEpisode}
                 onMoveEpisode={flow.moveEpisode}
                 onRegenerateEpisode={flow.regenerateEpisode}
+                defaultModel={flow.ideaForm.model}
+                episodesCount={flow.ideaForm.episodesCount}
+                onSetEpisodeModel={flow.setEpisodeModel}
+                onApplyModelToAll={flow.applyModelToAll}
               />
             )}
 
