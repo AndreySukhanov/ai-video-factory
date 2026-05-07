@@ -2,14 +2,14 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.api.v1 import jobs, projects, characters, websocket, upload, episodes, trends, scheduler, youtube, analytics, review, proxy
+from app.api.v1 import jobs, projects, characters, websocket, upload, episodes, trends, scheduler, youtube, analytics, review, proxy, pipeline_templates
 from app.core.config import settings
 from app.core.db import engine, Base
 
 # Import all models to register them with SQLAlchemy
 from app.models import (Project, Episode, Scene, Asset, Job, Character, User,
                         Trend, StoryIdea, TrendSnapshot, ScheduledTask, YouTubeChannel,
-                        YouTubeUpload, VideoAnalytics, ReviewItem)
+                        YouTubeUpload, VideoAnalytics, ReviewItem, PipelineTemplate)
 
 # Create database tables on startup
 Base.metadata.create_all(bind=engine)
@@ -167,6 +167,7 @@ app.include_router(youtube.router, prefix=f"{settings.API_V1_STR}/youtube", tags
 app.include_router(analytics.router, prefix=f"{settings.API_V1_STR}/analytics", tags=["analytics"])
 app.include_router(review.router, prefix=f"{settings.API_V1_STR}/review", tags=["review"])
 app.include_router(proxy.router, prefix=f"{settings.API_V1_STR}/proxy", tags=["proxy"])
+app.include_router(pipeline_templates.router, prefix=f"{settings.API_V1_STR}/pipeline-templates", tags=["pipeline-templates"])
 
 @app.get("/")
 def root():

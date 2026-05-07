@@ -8,6 +8,7 @@ import IdeaStep from './IdeaStep';
 import EpisodesStep from './EpisodesStep';
 import GenerationStep from './GenerationStep';
 import StoryboardStep from './StoryboardStep';
+import TemplateBar from './TemplateBar';
 import PublishStep from './PublishStep';
 import StatusPanel from './StatusPanel';
 import { FlowStepId } from './types';
@@ -56,7 +57,10 @@ export default function GenerationWizardV2() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 space-y-4">
             {flow.currentStep === 'idea' && (
-              <IdeaStep value={flow.ideaForm} isPlanning={flow.isPlanning} onChange={flow.updateIdeaForm} onGenerate={flow.planEpisodes} />
+              <>
+                <TemplateBar onApply={flow.applyTemplatePayload} onDump={flow.dumpToTemplatePayload} />
+                <IdeaStep value={flow.ideaForm} isPlanning={flow.isPlanning} onChange={flow.updateIdeaForm} onGenerate={flow.planEpisodes} />
+              </>
             )}
 
             {flow.currentStep === 'episodes' && (
