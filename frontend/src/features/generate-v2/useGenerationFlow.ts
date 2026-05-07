@@ -30,6 +30,7 @@ const MODEL_DURATIONS: Record<GenerationModel, number[]> = {
   gemini: [4, 6, 8],
   vertex: [4, 6, 8],
   seedance: [4, 5, 8, 10, 15],
+  fal: [5, 10],
 };
 
 // Veo 3.1 does NOT support 1:1 aspect ratio
