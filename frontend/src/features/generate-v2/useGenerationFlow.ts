@@ -140,6 +140,7 @@ export function useGenerationFlow() {
   const [notice, setNotice] = useState<string | null>(null);
   const hydratedRef = useRef(false);
   const projectLoadedRef = useRef(false);
+  const pendingOverridesRef = useRef<Array<{ number: number; model?: string; duration?: number }>>([]);
 
   // Ref to always have fresh episodes (avoids stale closure in sequential queue)
   const episodesRef = useRef(episodes);
@@ -363,6 +364,52 @@ export function useGenerationFlow() {
     );
   }, []);
 
+  const dumpToTemplatePayload = useCallback(() => {
+    return {
+      version: 1,
+      ideaForm: { ...ideaForm },
+      episodeOverrides: episodes
+        .filter((ep) => ep.model || ep.duration !== undefined)
+        .map((ep) => ({
+          number: ep.number,
+          model: ep.model,
+          duration: ep.duration,
+        })),
+      imageModel,
+      storyboardSeed: storyboardSeed ?? null,
+      anchorPromptHint: anchorPrompt || undefined,
+    };
+  }, [ideaForm, episodes, imageModel, storyboardSeed, anchorPrompt]);
+
+  const applyTemplatePayload = useCallback((payload: unknown) => {
+    if (!payload || typeof payload !== 'object') return;
+    const p = payload as {
+      version?: number;
+      ideaForm?: Partial<IdeaFormState>;
+      episodeOverrides?: Array<{ number: number; model?: string; duration?: number }>;
+      imageModel?: string;
+      storyboardSeed?: number | null;
+    };
+    if (p.version !== 1) {
+      setError(t('generateV2.templateIncompatible') || 'Incompatible template version');
+      return;
+    }
+    if (p.ideaForm) {
+      setIdeaForm((prev) => normalizeIdeaForm({ ...prev, ...p.ideaForm }));
+    }
+    // Stash overrides to apply after planEpisodes (they need real episode IDs)
+    if (p.episodeOverrides && p.episodeOverrides.length > 0) {
+      pendingOverridesRef.current = p.episodeOverrides;
+    }
+    if (p.imageModel === 'gemini' || p.imageModel === 'seedream' || p.imageModel === 'flux') {
+      setImageModel(p.imageModel);
+    }
+    if (p.storyboardSeed !== undefined && p.storyboardSeed !== null) {
+      setStoryboardSeed(p.storyboardSeed);
+    }
+    setNotice(t('generateV2.templateApplied') || 'Template applied');
+  }, [t]);
+
   const applyModelToAll = useCallback((model: GenerationModel) => {
     setEpisodes((prev) =>
       prev.map((ep) => {
@@ -429,16 +476,24 @@ export function useGenerationFlow() {
       setVoiceDescription(response.voice_description || null);
       setAnchorPrompt(response.anchor_prompt || null);
 
-      const nextEpisodes = (response.episodes || []).map((episode) => ({
-        id: createEpisodeId(episode.number),
-        number: episode.number,
-        title: episode.title,
-        synopsis: episode.synopsis,
-        prompt: episode.prompt,
-        status: 'queued' as const,
-        anchorPrompt: episode.anchor_prompt,
-        variablePrompt: episode.variable_prompt,
-      }));
+      const overrides = pendingOverridesRef.current;
+      const nextEpisodes = (response.episodes || []).map((episode) => {
+        const o = overrides.find((x) => x.number === episode.number);
+        const draft: EpisodeDraft = {
+          id: createEpisodeId(episode.number),
+          number: episode.number,
+          title: episode.title,
+          synopsis: episode.synopsis,
+          prompt: episode.prompt,
+          status: 'queued' as const,
+          anchorPrompt: episode.anchor_prompt,
+          variablePrompt: episode.variable_prompt,
+        };
+        if (o?.model) draft.model = o.model as GenerationModel;
+        if (o?.duration !== undefined) draft.duration = o.duration;
+        return draft;
+      });
+      pendingOverridesRef.current = [];
 
       setSeriesTitle(response.series_title || t('generateV2.untitledSeries'));
       setSeriesLogline(response.logline || '');
@@ -861,6 +916,8 @@ export function useGenerationFlow() {
     updateEpisodeField,
     setEpisodeModel,
     applyModelToAll,
+    dumpToTemplatePayload,
+    applyTemplatePayload,
     goStep,
     resetFlow,
     planEpisodes,

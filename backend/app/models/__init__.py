@@ -10,3 +10,4 @@ from .schedule import ScheduledTask
 from .youtube_channel import YouTubeChannel, YouTubeUpload
 from .analytics import VideoAnalytics
 from .review import ReviewItem
+from .pipeline_template import PipelineTemplate
