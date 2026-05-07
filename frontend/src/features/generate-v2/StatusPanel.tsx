@@ -23,6 +23,7 @@ export default function StatusPanel({ currentStep, episodes, isGenerating, onRet
   const stepLabel = (step: FlowStepId): string => {
     if (step === 'idea') return t('generateV2.stepIdeaLabel');
     if (step === 'episodes') return t('generateV2.stepEpisodesLabel');
+    if (step === 'storyboard') return t('generateV2.stepStoryboardLabel');
     if (step === 'generation') return t('generateV2.stepGenerationLabel');
     return t('generateV2.stepPublishLabel');
   };
