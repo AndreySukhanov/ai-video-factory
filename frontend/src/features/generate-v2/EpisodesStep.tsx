@@ -46,6 +46,7 @@ const MODEL_DURATION_OPTIONS: Record<IdeaFormState['model'], readonly number[]> 
   gemini: [4, 6, 8],
   vertex: [4, 6, 8],
   seedance: [4, 5, 8, 10, 15],
+  fal: [5, 10],
 };
 
 const MODELS_WITH_REFS: GenerationModel[] = ['vertex', 'laozhang', 'seedance'];
@@ -59,6 +60,8 @@ function estimatePerEpisodeCost(model: GenerationModel, duration: number): numbe
     case 'kling': return duration <= 5 ? 0.25 : 0.50;
     case 'minimax': return 0.50;
     case 'gemini': return duration * 0.15;
+    case 'fal': return 0.40;
+    default: return 0;
   }
 }
 
