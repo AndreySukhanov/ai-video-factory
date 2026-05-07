@@ -332,6 +332,42 @@ export function useGenerationFlow() {
     [],
   );
 
+  const setEpisodeModel = useCallback((id: string, model: GenerationModel | null) => {
+    setEpisodes((prev) =>
+      prev.map((ep) => {
+        if (ep.id !== id) return ep;
+        if (model === null) {
+          // reset to default (drop override fields so it falls back to ideaForm.model)
+          const next = { ...ep };
+          delete next.model;
+          delete next.duration;
+          return next;
+        }
+        const allowedDurations = MODEL_DURATIONS[model];
+        const currentDuration = ep.duration ?? allowedDurations[0];
+        const normalizedDuration = allowedDurations.includes(currentDuration)
+          ? currentDuration
+          : allowedDurations.reduce((prev, curr) =>
+              Math.abs(curr - currentDuration) < Math.abs(prev - currentDuration) ? curr : prev,
+            );
+        return { ...ep, model, duration: normalizedDuration };
+      }),
+    );
+  }, []);
+
+  const applyModelToAll = useCallback((model: GenerationModel) => {
+    setEpisodes((prev) =>
+      prev.map((ep) => {
+        const allowedDurations = MODEL_DURATIONS[model];
+        const currentDuration = ep.duration ?? allowedDurations[0];
+        const normalizedDuration = allowedDurations.includes(currentDuration)
+          ? currentDuration
+          : allowedDurations[0];
+        return { ...ep, model, duration: normalizedDuration };
+      }),
+    );
+  }, []);
+
   const goStep = useCallback((step: FlowStepId) => {
     setCurrentStep(step);
     setError(null);
@@ -422,10 +458,14 @@ export function useGenerationFlow() {
 
       setEpisodes((prev) => updateEpisodeById(prev, episodeId, { status: 'generating', error: undefined }));
       try {
+        // Per-episode model/duration override (falls back to ideaForm)
+        const effectiveModel = (episode.model ?? ideaForm.model) as GenerationModel;
+        const effectiveDuration = episode.duration ?? ideaForm.duration;
+
         // === Reference image selection ===
         let referenceImageUrl: string | undefined;
         const isSeriesMode = ideaForm.episodesCount > 1;
-        const supportsReferences = ['gemini', 'vertex', 'seedance', 'laozhang'].includes(ideaForm.model);
+        const supportsReferences = ['gemini', 'vertex', 'seedance', 'laozhang'].includes(effectiveModel);
         const storyboardFrame = storyboardFrames[episode.number - 1];
 
         // Priority 1: Storyboard keyframe — ONLY for episode 1 (seeds the visual style)
@@ -466,7 +506,7 @@ export function useGenerationFlow() {
         // Duration: force 8s ONLY for frame-chaining fallback (fl models need it)
         // Storyboard keyframes and user photos work fine with user-selected duration
         const isFrameChainFallback = referenceImageUrl && !storyboardFrame && episode.number > 1;
-        const duration = isFrameChainFallback ? 8 : ideaForm.duration;
+        const duration = isFrameChainFallback ? 8 : effectiveDuration;
 
         // ALWAYS use full prompt — no motion-only replacement
         const promptText = episode.prompt.trim();
@@ -483,11 +523,11 @@ export function useGenerationFlow() {
           prompt: promptText,
           duration: lastFrameUrl ? 8 : duration, // transition mode forces 8s
           aspect_ratio: ideaForm.aspectRatio,
-          model: ideaForm.model as GenerationModel,
+          model: effectiveModel,
           reference_image_url: firstFrameUrl,
           last_frame_image_url: lastFrameUrl,
           reference_images: validRefImages.length > 0 ? validRefImages : undefined,
-          generate_audio: ideaForm.model !== 'laozhang' && ideaForm.model !== 'vertex',
+          generate_audio: effectiveModel !== 'laozhang' && effectiveModel !== 'vertex',
         });
 
         if (!response.success || !response.video_url) {
@@ -752,6 +792,8 @@ export function useGenerationFlow() {
     anchorPrompt,
     updateIdeaForm,
     updateEpisodeField,
+    setEpisodeModel,
+    applyModelToAll,
     goStep,
     resetFlow,
     planEpisodes,
