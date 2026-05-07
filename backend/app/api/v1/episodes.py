@@ -836,6 +836,72 @@ async def generate_storyboard(request: StoryboardRequest):
         return StoryboardResponse(success=False, error=str(e))
 
 
+class StoryboardFrameRequest(BaseModel):
+    """Request for regenerating a single storyboard frame"""
+    anchor_prompt: str = Field(default="", description="Shared visual anchor")
+    character_card: str = Field(default="", description="Fixed character appearance")
+    episode_prompt: str = Field(..., description="Single episode visual prompt")
+    aspect_ratio: str = Field(default="9:16")
+    seed: Optional[int] = Field(default=None, description="Optional seed (random if None)")
+    image_model: str = Field(default="gemini")
+    reference_image_urls: List[str] = Field(default_factory=list)
+
+
+class StoryboardFrameResponse(BaseModel):
+    success: bool
+    frame_url: Optional[str] = None
+    seed: Optional[int] = None
+    error: Optional[str] = None
+
+
+@router.post("/storyboard/frame", response_model=StoryboardFrameResponse)
+async def regenerate_storyboard_frame(request: StoryboardFrameRequest):
+    """
+    Regenerate a single storyboard keyframe (e.g. user wants to redo just one frame).
+    Reuses the same provider as /storyboard but for a single prompt.
+    """
+    print(f"[STORYBOARD-FRAME] model={request.image_model}, seed={request.seed}")
+
+    try:
+        if request.image_model == "seedream":
+            if not settings.LAOZHANG_API_KEY:
+                return StoryboardFrameResponse(success=False, error="LAOZHANG_API_KEY not configured")
+            from app.media.image_provider_seedream import SeedreamImageProvider
+            provider = SeedreamImageProvider()
+        elif request.image_model == "flux":
+            if not settings.REPLICATE_API_TOKEN:
+                return StoryboardFrameResponse(success=False, error="REPLICATE_API_TOKEN not configured")
+            from app.media.image_provider_flux import FluxImageProvider
+            provider = FluxImageProvider()
+        else:
+            if not settings.GEMINI_API_KEY:
+                return StoryboardFrameResponse(success=False, error="GEMINI_API_KEY not configured")
+            from app.media.image_provider_gemini import GeminiImageProvider
+            provider = GeminiImageProvider()
+
+        import random
+        seed = request.seed or random.randint(1, 999999)
+        valid_refs = [u for u in request.reference_image_urls if u and u.strip()]
+
+        keyframes = await asyncio.to_thread(
+            provider.generate_storyboard,
+            anchor_prompt=request.anchor_prompt,
+            episode_prompts=[request.episode_prompt],
+            aspect_ratio=request.aspect_ratio,
+            seed=seed,
+            character_card=request.character_card,
+            reference_image_urls=valid_refs if valid_refs else None,
+        )
+
+        if not keyframes or not keyframes[0]:
+            return StoryboardFrameResponse(success=False, error="Frame generation failed", seed=seed)
+
+        return StoryboardFrameResponse(success=True, frame_url=keyframes[0], seed=seed)
+    except Exception as e:
+        print(f"[STORYBOARD-FRAME] Error: {str(e)}")
+        return StoryboardFrameResponse(success=False, error=str(e))
+
+
 @router.post("/merge", response_model=MergeResponse)
 async def merge_episodes(request: MergeRequest):
     """

@@ -8,6 +8,7 @@ import {
   generateEpisodeClip,
   generateSeriesPlan,
   generateStoryboard,
+  regenerateStoryboardFrame,
   mergeVideos,
   GenerationModel,
   ImageModel,
@@ -19,7 +20,7 @@ import { EpisodeDraft, FlowStep, FlowStepId, GenerationDraftSnapshot, IdeaFormSt
 
 const DRAFT_STORAGE_KEY = 'ai_video_factory_generate_v2_draft';
 
-const STEP_ORDER: FlowStepId[] = ['idea', 'episodes', 'generation', 'publish'];
+const STEP_ORDER: FlowStepId[] = ['idea', 'episodes', 'storyboard', 'generation', 'publish'];
 const SINGLE_EPISODE_MODELS: GenerationModel[] = ['seedance', 'laozhang', 'vertex', 'kling'];
 const SERIES_MODELS: GenerationModel[] = ['seedance', 'laozhang', 'vertex', 'minimax'];
 const MODEL_DURATIONS: Record<GenerationModel, number[]> = {
@@ -250,6 +251,13 @@ export function useGenerationFlow() {
             id,
             label: t('generateV2.stepEpisodesLabel'),
             hint: t('generateV2.stepEpisodesHint'),
+          };
+        }
+        if (id === 'storyboard') {
+          return {
+            id,
+            label: t('generateV2.stepStoryboardLabel'),
+            hint: t('generateV2.stepStoryboardHint'),
           };
         }
         if (id === 'generation') {
@@ -741,6 +749,65 @@ export function useGenerationFlow() {
   }, [episodes, publishForm, stitchedVideoUrl, seriesTitle, seriesLogline, projectId, t]);
 
   // ── Storyboard (Gemini Flash / Seedream 4.5) ──
+  const regenerateFrame = useCallback(
+    async (index: number) => {
+      const episode = episodes[index];
+      if (!episode) return;
+      setError(null);
+      setIsStoryboarding(true);
+      try {
+        const localRefs = referenceLocalUrls.filter((u) => u.trim());
+        const resp = await regenerateStoryboardFrame({
+          anchor_prompt: anchorPrompt || '',
+          character_card: characterCard || '',
+          episode_prompt: episode.prompt,
+          aspect_ratio: ideaForm.aspectRatio,
+          seed: storyboardSeed ?? undefined,
+          image_model: imageModel,
+          reference_image_urls: localRefs.length > 0 ? localRefs : undefined,
+        });
+        if (!resp.success || !resp.frame_url) {
+          throw new Error(resp.error || 'Frame regeneration failed');
+        }
+        setStoryboardFrames((prev) => {
+          const next = [...prev];
+          while (next.length <= index) next.push('');
+          next[index] = resp.frame_url!;
+          return next;
+        });
+        // Drop any user override on this frame so the new keyframe is used
+        setEpisodes((prev) =>
+          prev.map((ep, i) => {
+            if (i !== index || !ep.firstFrameUrl) return ep;
+            const copy = { ...ep };
+            delete copy.firstFrameUrl;
+            return copy;
+          }),
+        );
+        setNotice(t('generateV2.frameRegenerated', { count: index + 1 }));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Frame regeneration failed');
+      } finally {
+        setIsStoryboarding(false);
+      }
+    },
+    [episodes, anchorPrompt, characterCard, ideaForm.aspectRatio, storyboardSeed, imageModel, referenceLocalUrls, t],
+  );
+
+  const setEpisodeFirstFrame = useCallback((episodeId: string, url: string | null) => {
+    setEpisodes((prev) =>
+      prev.map((ep) => {
+        if (ep.id !== episodeId) return ep;
+        if (url === null) {
+          const copy = { ...ep };
+          delete copy.firstFrameUrl;
+          return copy;
+        }
+        return { ...ep, firstFrameUrl: url };
+      }),
+    );
+  }, []);
+
   const runStoryboard = useCallback(async () => {
     if (episodes.length === 0) return;
     setIsStoryboarding(true);
@@ -809,6 +876,8 @@ export function useGenerationFlow() {
     stitchEpisodes,
     publishToReview,
     runStoryboard,
+    regenerateFrame,
+    setEpisodeFirstFrame,
     isStoryboarding,
     storyboardFrames,
     imageModel,
