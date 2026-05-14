@@ -43,6 +43,7 @@ const DEFAULT_IDEA_FORM: IdeaFormState = {
   duration: 6,
   aspectRatio: '9:16',
   model: 'laozhang',
+  llmModel: 'opus',
 };
 
 const DEFAULT_PUBLISH_FORM: PublishFormState = {
@@ -466,6 +467,7 @@ export function useGenerationFlow() {
         episodes_count: ideaForm.episodesCount,
         duration: ideaForm.duration,
         aspect_ratio: ideaForm.aspectRatio,
+        llm_model: ideaForm.llmModel ?? 'opus',
       });
 
       if (!response.success) {
