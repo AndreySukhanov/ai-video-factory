@@ -33,7 +33,7 @@ class FrameReport:
 class VisualConsistencyChecker:
     """VLM-based consistency audit for storyboard frames."""
 
-    SCORE_THRESHOLD = 70  # below this → flag for regen
+    SCORE_THRESHOLD = 80  # below this → flag for regen
     MODEL = "gemini-2.5-flash"
     API_URL_TMPL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
 
