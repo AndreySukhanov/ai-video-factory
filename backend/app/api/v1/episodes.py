@@ -765,8 +765,16 @@ class StoryboardRequest(BaseModel):
     episode_prompts: List[str] = Field(..., description="Visual prompts per episode (variable parts)")
     aspect_ratio: str = Field(default="9:16", description="Image aspect ratio")
     seed: Optional[int] = Field(default=None, description="Fixed seed for consistency (auto if None)")
-    image_model: str = Field(default="gemini", description="Image provider: 'gemini' (Nano Banana $0.003), 'seedream' (Seedream 4.5 $0.045), or 'flux' (FLUX Schnell $0.003)")
+    image_model: str = Field(default="gemini", description="Image provider: 'gemini' (Nano Banana $0.003), 'seedream' (Seedream 5.0), or 'flux' (FLUX Schnell $0.003)")
     reference_image_urls: List[str] = Field(default_factory=list, description="User-uploaded reference photos (character, location)")
+    visual_audit: bool = Field(default=True, description="Run VLM consistency check after generation and auto-regenerate low-score frames")
+
+
+class FrameAuditReport(BaseModel):
+    index: int
+    score: int
+    mismatches: List[str] = []
+    regenerated: bool = False
 
 
 class StoryboardResponse(BaseModel):
@@ -774,6 +782,7 @@ class StoryboardResponse(BaseModel):
     success: bool
     keyframes: List[str] = Field(default_factory=list, description="Image URLs per episode")
     seed: Optional[int] = None
+    audit: List[FrameAuditReport] = Field(default_factory=list, description="Per-frame VLM audit reports")
     error: Optional[str] = None
 
 
@@ -826,10 +835,51 @@ async def generate_storyboard(request: StoryboardRequest):
                 error=f"All {len(keyframes)} frames failed to generate. Try a different image model.",
             )
 
+        # VLM consistency audit — flag and auto-regen low-score frames
+        audit_reports: List[FrameAuditReport] = []
+        if request.visual_audit and request.character_card and settings.GEMINI_API_KEY:
+            from app.ai_orchestrator.agents.visual_consistency_checker import get_visual_consistency_checker
+            checker = get_visual_consistency_checker()
+            reports = await asyncio.to_thread(
+                checker.check_storyboard,
+                keyframes,
+                request.character_card,
+            )
+            for rep in reports:
+                if not rep.needs_regen:
+                    audit_reports.append(FrameAuditReport(
+                        index=rep.index, score=rep.score, mismatches=rep.mismatches, regenerated=False,
+                    ))
+                    continue
+                # Regenerate this frame with reinforcement
+                reinforcement = checker.build_reinforcement(rep.mismatches)
+                ep_prompt = request.episode_prompts[rep.index] if rep.index < len(request.episode_prompts) else ""
+                regen_prompt = f"{ep_prompt}{reinforcement}"
+                print(f"[STORYBOARD] Regenerating frame {rep.index + 1} due to score {rep.score}")
+                try:
+                    new_url = await asyncio.to_thread(
+                        provider.generate_keyframe,
+                        prompt=f"{request.character_card}. {request.anchor_prompt}. {regen_prompt}".strip(". "),
+                        aspect_ratio=request.aspect_ratio,
+                        seed=seed,
+                    )
+                    if new_url:
+                        keyframes[rep.index] = new_url
+                        audit_reports.append(FrameAuditReport(
+                            index=rep.index, score=rep.score, mismatches=rep.mismatches, regenerated=True,
+                        ))
+                        continue
+                except Exception as e:
+                    print(f"[STORYBOARD] Regen failed for frame {rep.index + 1}: {e}")
+                audit_reports.append(FrameAuditReport(
+                    index=rep.index, score=rep.score, mismatches=rep.mismatches, regenerated=False,
+                ))
+
         return StoryboardResponse(
             success=True,
             keyframes=keyframes,
             seed=seed,
+            audit=audit_reports,
         )
     except Exception as e:
         print(f"[STORYBOARD] Error: {str(e)}")
