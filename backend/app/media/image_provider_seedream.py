@@ -1,10 +1,11 @@
 """
-Seedream 4.5 Image Provider — storyboard/keyframe generation via LaoZhang API.
+Seedream 5.0 Image Provider — storyboard/keyframe generation via LaoZhang API.
 
-Higher quality than Gemini Flash: 2K resolution, better character consistency,
-superior text rendering. $0.045/image vs $0.003 for Gemini Flash.
+2K resolution, strong character consistency, superior text rendering.
+Native ByteDance Volces backend (seedream-5-0-260128, released Jan 2026).
 
 Uses OpenAI-compatible /v1/images/generations endpoint from LaoZhang.
+Note: seedream-5 takes `aspect_ratio` (NOT `size`) — differs from seedream-4-5.
 """
 
 import os
@@ -15,21 +16,13 @@ from typing import Optional
 from app.core.config import settings
 
 
-# Aspect ratio → pixel size mapping for Seedream
-ASPECT_TO_SIZE = {
-    "9:16": "1024x1536",
-    "16:9": "1536x1024",
-    "1:1": "1024x1024",
-}
-
-
 class SeedreamImageProvider:
     """
-    Generates storyboard keyframes via Seedream 4.5 (LaoZhang API).
+    Generates storyboard keyframes via Seedream 5.0 (LaoZhang API).
     Same interface as GeminiImageProvider for drop-in replacement.
     """
 
-    MODEL = "seedream-4-5-251128"
+    MODEL = "seedream-5-0-260128"
 
     def __init__(self):
         self.api_key = settings.LAOZHANG_API_KEY
@@ -45,10 +38,17 @@ class SeedreamImageProvider:
         os.makedirs(self.static_dir, exist_ok=True)
 
     KEYFRAME_SYSTEM = (
-        "Generate exactly ONE single photorealistic keyframe image. "
-        "NOT a collage, NOT a grid, NOT multiple panels — ONE image only. "
-        "The character's clothing and appearance MUST match the description EXACTLY "
-        "regardless of the action in the scene. Never change the character's outfit."
+        "Generate exactly ONE single keyframe image — NOT a collage, NOT a grid, NOT multiple panels.\n"
+        "STYLE LOCK: cinematic live-action photography, shot on Arri Alexa, 35mm lens, "
+        "shallow depth of field, photorealistic skin texture, natural film grain, "
+        "soft naturalistic lighting. EVERY frame in this series MUST share this EXACT same "
+        "cinematic photographic style.\n"
+        "STRICT NEGATIVE STYLES (do NOT produce): anime, manga, comic book, graphic novel, "
+        "illustration, cartoon, 3D render, CGI animation, painterly, oil painting, watercolor, "
+        "pixar style, disney style, cel-shaded, stylized art.\n"
+        "IDENTITY LOCK: the character's face, age, ethnicity, hair, eye color, and outfit "
+        "MUST match the description EXACTLY in every frame. Never restyle the character. "
+        "Never age the character up or down. Never change the outfit color or cut."
     )
 
     def _headers(self):
@@ -74,7 +74,6 @@ class SeedreamImageProvider:
         Returns:
             URL path to the saved image (relative to backend)
         """
-        size = ASPECT_TO_SIZE.get(aspect_ratio, "1024x1536")
         full_prompt = f"{self.KEYFRAME_SYSTEM}\n\n{prompt}"
 
         url = f"{self.base_url}/images/generations"
@@ -82,7 +81,7 @@ class SeedreamImageProvider:
         payload = {
             "model": self.MODEL,
             "prompt": full_prompt,
-            "size": size,
+            "aspect_ratio": aspect_ratio,
             "response_format": "b64_json",
             "n": 1,
         }
@@ -92,9 +91,18 @@ class SeedreamImageProvider:
 
         print(f"[SEEDREAM] Generating keyframe: {prompt[:60]}...")
 
-        resp = requests.post(url, json=payload, headers=self._headers(), timeout=60)
-        resp.raise_for_status()
-        data = resp.json()
+        last_err = None
+        for attempt in range(2):
+            try:
+                resp = requests.post(url, json=payload, headers=self._headers(), timeout=180)
+                resp.raise_for_status()
+                data = resp.json()
+                break
+            except requests.exceptions.Timeout as e:
+                last_err = e
+                print(f"[SEEDREAM] Timeout on attempt {attempt+1}, retrying...")
+        else:
+            raise last_err
 
         # Extract image from OpenAI-compatible response
         images = data.get("data", [])

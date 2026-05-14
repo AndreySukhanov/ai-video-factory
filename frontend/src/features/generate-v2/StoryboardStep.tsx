@@ -53,7 +53,7 @@ export default function StoryboardStep({
                 className="text-sm bg-black/30 border border-white/10 rounded px-2 py-1.5 text-white focus:outline-none focus:border-purple-500"
               >
                 <option value="gemini">Gemini Nano Banana</option>
-                <option value="seedream">Seedream 4.5</option>
+                <option value="seedream">Seedream 5.0</option>
                 <option value="flux">FLUX Schnell</option>
               </select>
             </div>

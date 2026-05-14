@@ -240,7 +240,7 @@ const ru: Record<string, string> = {
   "generateV2.storyboardReady": "Раскадровка готова ({count} кадров)",
   "generateV2.imageModelGemini": "Gemini Flash ($0.003) — лучшее качество",
   "generateV2.imageModelFlux": "FLUX Schnell ($0.003) — самый быстрый",
-  "generateV2.imageModelSeedream": "Seedream 4.5 ($0.045) — фотореализм",
+  "generateV2.imageModelSeedream": "Seedream 5.0 — 2K, фотореализм",
   "generateV2.videoModelSeedance": "Seedance 2.0 ($0.05/видео) — самый дешёвый, до 15с",
   "generateV2.videoModelLaozhang": "Veo 3.1 LaoZhang ($0.15/видео) — лучший звук",
   "generateV2.videoModelVertex": "Veo 3.1 Vertex ($0.10–0.40/сек) — топ качество",

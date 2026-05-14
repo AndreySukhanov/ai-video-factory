@@ -1,12 +1,17 @@
 """
 Seedance 2.0 Provider via LaoZhang API.
-ByteDance's video generation model — cheapest option with best reference support.
+ByteDance's video generation model — cheapest option with multimodal references.
 
-Pricing: $0.05 per video (any duration/resolution)
-References: up to 9 images + 3 videos + 3 audio files with weight control
+Docs: https://docs.laozhang.ai/api-capabilities/seedance2-video-generation
+Endpoint: POST /v1/videos (submit), GET /v1/videos/{id} (poll)
+Models:
+  - doubao-seedance-2-0-fast-260128   (fast variant)
+  - doubao-seedance-2-0-260128        (standard variant)
+
+Pricing: $0.05 per video
 Durations: 4, 5, 8, 10, 15 seconds
-Resolutions: 480p, 720p, 1080p, 2k
-Aspect ratios: 16:9, 9:16, 4:3, 3:4, 21:9, 1:1
+Aspect ratios: 16:9, 9:16, 1:1, 3:4, 4:3, 21:9
+References: multimodal `content` array (image_url / video_url / audio_url)
 """
 
 import time
@@ -16,23 +21,29 @@ from app.core.config import settings
 from .video_provider_base import VideoProvider
 
 
+SEEDANCE_VALID_RATIOS = {"16:9", "9:16", "1:1", "3:4", "4:3", "21:9"}
+SEEDANCE_VALID_DURATIONS = [4, 5, 8, 10, 15]
+
+
 class SeedanceProvider(VideoProvider):
     """
     Seedance 2.0 via LaoZhang API.
     Submit → poll → download pattern.
-    $0.05/video, up to 9 reference images with weight control.
     """
 
-    def __init__(self, aspect_ratio: str = "9:16", resolution: str = "720p"):
+    def __init__(self, aspect_ratio: str = "9:16", use_fast: bool = True):
         self.api_key = settings.LAOZHANG_API_KEY
         self.base_url = settings.LAOZHANG_BASE_URL.rstrip("/")
-        self.default_aspect = aspect_ratio
-        self.default_resolution = resolution
+        self.default_aspect = aspect_ratio if aspect_ratio in SEEDANCE_VALID_RATIOS else "9:16"
+        self.model_name = (
+            "doubao-seedance-2-0-fast-260128" if use_fast
+            else "doubao-seedance-2-0-260128"
+        )
 
         if not self.api_key:
             raise ValueError("LAOZHANG_API_KEY not set (Seedance uses LaoZhang API)")
 
-        print(f"[SEEDANCE] Initialized: model=seedance-2.0, aspect={aspect_ratio}, res={resolution}")
+        print(f"[SEEDANCE] Initialized: model={self.model_name}, aspect={self.default_aspect}")
 
     def _headers(self):
         return {
@@ -49,67 +60,69 @@ class SeedanceProvider(VideoProvider):
         reference_image_url: Optional[str] = None,
         last_frame_image_url: Optional[str] = None,
         reference_images: Optional[List[str]] = None,
-        resolution: str = "720p",
+        resolution: str = "720p",  # ignored — not supported by Seedance
         generate_audio: bool = True,
-        negative_prompt: Optional[str] = None,
+        negative_prompt: Optional[str] = None,  # ignored — not supported by Seedance
     ) -> str:
         """
         Generate video via Seedance 2.0.
-        Returns video download URL (valid ~24h).
+        Returns video download URL.
         """
-        valid_durations = [4, 5, 8, 10, 15]
-        if duration_sec not in valid_durations:
-            duration_sec = min(valid_durations, key=lambda x: abs(x - duration_sec))
+        if duration_sec not in SEEDANCE_VALID_DURATIONS:
+            duration_sec = min(SEEDANCE_VALID_DURATIONS, key=lambda x: abs(x - duration_sec))
 
-        # Build input
-        input_data = {
-            "prompt": visual_prompt,
-            "duration": duration_sec,
-            "resolution": resolution or self.default_resolution,
-            "aspect_ratio": aspect_ratio or self.default_aspect,
-        }
-
-        if negative_prompt:
-            input_data["negative_prompt"] = negative_prompt
-
-        # Build references array
-        references = []
-
-        # Single reference image (frame chaining)
-        if reference_image_url:
-            references.append({
-                "type": "image",
-                "url": reference_image_url,
-                "weight": 0.9,
-            })
-
-        # Multiple reference images (character consistency)
-        if reference_images:
-            for ref_url in reference_images[:8]:  # max 9 total, 1 slot used above
-                if ref_url != reference_image_url:
-                    references.append({
-                        "type": "image",
-                        "url": ref_url,
-                        "weight": 0.7,
-                    })
-
-        if references:
-            input_data["references"] = references[:9]
-            print(f"[SEEDANCE] {len(references)} reference(s) attached")
+        ratio = aspect_ratio if aspect_ratio in SEEDANCE_VALID_RATIOS else self.default_aspect
 
         payload = {
-            "model": "seedance-2.0",
-            "input": input_data,
+            "model": self.model_name,
+            "prompt": visual_prompt,
+            "ratio": ratio,
+            "duration": duration_sec,
+            "watermark": False,
+            "generate_audio": generate_audio,
         }
 
-        ref_str = f", refs={len(references)}" if references else ""
-        print(f"[SEEDANCE] Submitting: dur={duration_sec}s, {aspect_ratio}, {resolution}{ref_str}")
+        content = []
+        if reference_image_url:
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": reference_image_url},
+                "role": "reference_image",
+            })
+        if last_frame_image_url and last_frame_image_url != reference_image_url:
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": last_frame_image_url},
+                "role": "reference_image",
+            })
+        if reference_images:
+            seen = {reference_image_url, last_frame_image_url}
+            for ref_url in reference_images:
+                if ref_url and ref_url not in seen:
+                    content.append({
+                        "type": "image_url",
+                        "image_url": {"url": ref_url},
+                        "role": "reference_image",
+                    })
+                    seen.add(ref_url)
+                    if len(content) >= 9:
+                        break
+
+        if content:
+            payload["content"] = content[:9]
+            print(f"[SEEDANCE] {len(payload['content'])} reference(s) attached")
+
+        print(f"[SEEDANCE] Submitting: dur={duration_sec}s, ratio={ratio}, model={self.model_name}")
         print(f"[SEEDANCE] Prompt: {visual_prompt[:80]}...")
 
-        # Submit
-        submit_url = f"{self.base_url}/video/generations"
+        submit_url = f"{self.base_url}/videos"
         resp = requests.post(submit_url, json=payload, headers=self._headers(), timeout=30)
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            try:
+                err = resp.json()
+            except ValueError:
+                err = resp.text
+            raise ValueError(f"Seedance submit failed: HTTP {resp.status_code} — {err}")
         result = resp.json()
 
         task_id = result.get("id") or result.get("task_id")
@@ -121,9 +134,8 @@ class SeedanceProvider(VideoProvider):
 
         print(f"[SEEDANCE] Task submitted: {task_id}")
 
-        # Poll for completion (max 3 minutes — Seedance is fast, median 45-60s)
-        poll_url = f"{self.base_url}/video/generations/{task_id}"
-        max_wait = 180
+        poll_url = f"{self.base_url}/videos/{task_id}"
+        max_wait = 300
         poll_interval = 5
         elapsed = 0
 
@@ -132,7 +144,12 @@ class SeedanceProvider(VideoProvider):
             elapsed += poll_interval
 
             poll_resp = requests.get(poll_url, headers=self._headers(), timeout=15)
-            poll_resp.raise_for_status()
+            if poll_resp.status_code >= 400:
+                try:
+                    err = poll_resp.json()
+                except ValueError:
+                    err = poll_resp.text
+                raise ValueError(f"Seedance poll failed: HTTP {poll_resp.status_code} — {err}")
             poll_data = poll_resp.json()
 
             status = poll_data.get("status", "").lower()
@@ -140,8 +157,9 @@ class SeedanceProvider(VideoProvider):
             if status in ("completed", "succeeded", "success"):
                 video_url = (
                     poll_data.get("video_url")
-                    or poll_data.get("output", {}).get("video_url")
-                    or poll_data.get("result", {}).get("url")
+                    or poll_data.get("url")
+                    or (poll_data.get("output") or {}).get("video_url")
+                    or (poll_data.get("result") or {}).get("url")
                 )
                 if video_url:
                     print(f"[SEEDANCE] Video ready ({elapsed}s): {video_url[:80]}...")
