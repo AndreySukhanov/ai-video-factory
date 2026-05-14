@@ -240,7 +240,7 @@ const en: Record<string, string> = {
   "generateV2.storyboardReady": "Storyboard ready ({count} frames)",
   "generateV2.imageModelGemini": "Gemini Flash ($0.003) — best quality",
   "generateV2.imageModelFlux": "FLUX Schnell ($0.003) — fastest",
-  "generateV2.imageModelSeedream": "Seedream 4.5 ($0.045) — photorealistic",
+  "generateV2.imageModelSeedream": "Seedream 5.0 — 2K, photorealistic",
   "generateV2.videoModelSeedance": "Seedance 2.0 ($0.05/video) — cheapest, up to 15s",
   "generateV2.videoModelLaozhang": "Veo 3.1 LaoZhang ($0.15/video) — best audio",
   "generateV2.videoModelVertex": "Veo 3.1 Vertex ($0.10–0.40/sec) — top quality",
