@@ -64,6 +64,19 @@ export default function IdeaStep({ value, isPlanning, onChange, onGenerate }: Id
           </div>
         </div>
 
+        <div className="space-y-2">
+          <label className="text-sm text-[var(--muted)]">{t('generateV2.promptWriter')}</label>
+          <Select
+            value={value.llmModel ?? 'opus'}
+            onChange={(event) => onChange('llmModel', event.target.value as IdeaFormState['llmModel'])}
+          >
+            <option value="opus">{t('generateV2.llmOpus')}</option>
+            <option value="opus-thinking">{t('generateV2.llmOpusThinking')}</option>
+            <option value="deepseek">{t('generateV2.llmDeepseek')}</option>
+          </Select>
+          <p className="text-xs text-[var(--muted)]">{t('generateV2.promptWriterHint')}</p>
+        </div>
+
         <Button onClick={onGenerate} disabled={isPlanning || value.idea.trim().length < 10} className="w-full md:w-auto">
           {isPlanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
           {t('generate.generateEpisodePrompts')}

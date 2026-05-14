@@ -8,6 +8,8 @@ export interface FlowStep {
   hint: string;
 }
 
+export type LlmModel = 'deepseek' | 'opus' | 'opus-thinking';
+
 export interface IdeaFormState {
   idea: string;
   genre: string;
@@ -15,6 +17,7 @@ export interface IdeaFormState {
   duration: number;
   aspectRatio: string;
   model: GenerationModel;
+  llmModel?: LlmModel;  // LLM preset for prompt writer (default: 'opus' if LaoZhang key set)
 }
 
 export type EpisodeStatus = 'queued' | 'generating' | 'done' | 'error';
