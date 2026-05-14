@@ -241,6 +241,8 @@ const en: Record<string, string> = {
   "generateV2.imageModelGemini": "Gemini Flash ($0.003) — best quality",
   "generateV2.imageModelFlux": "FLUX Schnell ($0.003) — fastest",
   "generateV2.imageModelSeedream": "Seedream 5.0 — 2K, photorealistic",
+  "generateV2.auditPerfect": "Perfect match with character description",
+  "generateV2.auditRegenerated": "regenerated",
   "generateV2.promptWriter": "Prompt writer model",
   "generateV2.promptWriterHint": "Which model writes episode and storyboard prompts. Opus 4.6 produces more cinematic descriptions; DeepSeek is faster and cheaper.",
   "generateV2.llmOpus": "Claude Opus 4.6 (recommended, like Higgsfield)",

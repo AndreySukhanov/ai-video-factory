@@ -241,6 +241,8 @@ const ru: Record<string, string> = {
   "generateV2.imageModelGemini": "Gemini Flash ($0.003) — лучшее качество",
   "generateV2.imageModelFlux": "FLUX Schnell ($0.003) — самый быстрый",
   "generateV2.imageModelSeedream": "Seedream 5.0 — 2K, фотореализм",
+  "generateV2.auditPerfect": "Полное совпадение с описанием персонажа",
+  "generateV2.auditRegenerated": "перегенерирован",
   "generateV2.promptWriter": "Модель промпт-райтера",
   "generateV2.promptWriterHint": "Какая модель пишет промпты эпизодов и раскадровки. Opus 4.6 даёт более кинематографичные описания, DeepSeek быстрее и дешевле.",
   "generateV2.llmOpus": "Claude Opus 4.6 (рекомендуется, как в Higgsfield)",

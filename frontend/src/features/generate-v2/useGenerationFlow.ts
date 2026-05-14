@@ -12,6 +12,7 @@ import {
   mergeVideos,
   GenerationModel,
   ImageModel,
+  FrameAuditReport,
 } from '@/lib/api/generation';
 import { API_V1_BASE_URL } from '@/lib/apiBase';
 import { safeJsonParse } from '@/lib/safeJson';
@@ -134,6 +135,7 @@ export function useGenerationFlow() {
   const [stitchedDuration, setStitchedDuration] = useState<number | null>(null);
   const [isStoryboarding, setIsStoryboarding] = useState(false);
   const [storyboardFrames, setStoryboardFrames] = useState<string[]>([]);
+  const [storyboardAudit, setStoryboardAudit] = useState<FrameAuditReport[]>([]);
   const [storyboardSeed, setStoryboardSeed] = useState<number | null>(null);
   const [imageModel, setImageModel] = useState<ImageModel>('gemini');
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
@@ -885,6 +887,7 @@ export function useGenerationFlow() {
       });
       if (!resp.success) throw new Error(resp.error || 'Storyboard failed');
       setStoryboardFrames(resp.keyframes);
+      setStoryboardAudit(resp.audit || []);
       if (resp.seed) setStoryboardSeed(resp.seed);
       setNotice(t('generateV2.storyboardReady', { count: String(resp.keyframes.filter(Boolean).length) }));
     } catch (err) {
@@ -940,6 +943,7 @@ export function useGenerationFlow() {
     setEpisodeFirstFrame,
     isStoryboarding,
     storyboardFrames,
+    storyboardAudit,
     imageModel,
     setImageModel,
     referenceImages,

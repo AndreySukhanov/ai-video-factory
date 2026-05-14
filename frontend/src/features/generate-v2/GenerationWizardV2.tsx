@@ -88,6 +88,7 @@ export default function GenerationWizardV2() {
               <StoryboardStep
                 episodes={flow.episodes}
                 storyboardFrames={flow.storyboardFrames}
+                storyboardAudit={flow.storyboardAudit}
                 imageModel={flow.imageModel}
                 isStoryboarding={flow.isStoryboarding}
                 onImageModelChange={flow.setImageModel}
