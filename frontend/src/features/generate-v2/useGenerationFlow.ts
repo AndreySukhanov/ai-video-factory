@@ -804,7 +804,7 @@ export function useGenerationFlow() {
     }
   }, [episodes, publishForm, stitchedVideoUrl, seriesTitle, seriesLogline, projectId, t]);
 
-  // ── Storyboard (Gemini Flash / Seedream 4.5) ──
+  // ── Storyboard (Gemini Flash / Seedream 5.0) ──
   const regenerateFrame = useCallback(
     async (index: number) => {
       const episode = episodes[index];
