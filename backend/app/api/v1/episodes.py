@@ -835,7 +835,7 @@ async def generate_storyboard(request: StoryboardRequest):
                 error=f"All {len(keyframes)} frames failed to generate. Try a different image model.",
             )
 
-        # VLM consistency audit — flag and auto-regen low-score frames
+        # VLM consistency audit — flag, regen, re-audit, keep best
         audit_reports: List[FrameAuditReport] = []
         if request.visual_audit and request.character_card and settings.GEMINI_API_KEY:
             from app.ai_orchestrator.agents.visual_consistency_checker import get_visual_consistency_checker
@@ -851,11 +851,17 @@ async def generate_storyboard(request: StoryboardRequest):
                         index=rep.index, score=rep.score, mismatches=rep.mismatches, regenerated=False,
                     ))
                     continue
-                # Regenerate this frame with reinforcement
-                reinforcement = checker.build_reinforcement(rep.mismatches)
+
+                original_url = keyframes[rep.index]
+                original_score = rep.score
+                original_mismatches = rep.mismatches
+
+                reinforcement = checker.build_reinforcement(original_mismatches)
                 ep_prompt = request.episode_prompts[rep.index] if rep.index < len(request.episode_prompts) else ""
                 regen_prompt = f"{ep_prompt}{reinforcement}"
-                print(f"[STORYBOARD] Regenerating frame {rep.index + 1} due to score {rep.score}")
+                print(f"[STORYBOARD] Regenerating frame {rep.index + 1} due to score {original_score}")
+
+                new_url = None
                 try:
                     new_url = await asyncio.to_thread(
                         provider.generate_keyframe,
@@ -863,17 +869,40 @@ async def generate_storyboard(request: StoryboardRequest):
                         aspect_ratio=request.aspect_ratio,
                         seed=seed,
                     )
-                    if new_url:
-                        keyframes[rep.index] = new_url
-                        audit_reports.append(FrameAuditReport(
-                            index=rep.index, score=rep.score, mismatches=rep.mismatches, regenerated=True,
-                        ))
-                        continue
                 except Exception as e:
                     print(f"[STORYBOARD] Regen failed for frame {rep.index + 1}: {e}")
-                audit_reports.append(FrameAuditReport(
-                    index=rep.index, score=rep.score, mismatches=rep.mismatches, regenerated=False,
-                ))
+
+                if not new_url:
+                    audit_reports.append(FrameAuditReport(
+                        index=rep.index, score=original_score, mismatches=original_mismatches, regenerated=False,
+                    ))
+                    continue
+
+                # Re-audit the regenerated frame
+                second = await asyncio.to_thread(checker.check_frame, new_url, request.character_card)
+                if second is None:
+                    # Re-audit failed — trust regen, keep new
+                    keyframes[rep.index] = new_url
+                    audit_reports.append(FrameAuditReport(
+                        index=rep.index, score=original_score, mismatches=original_mismatches, regenerated=True,
+                    ))
+                    continue
+
+                new_score = int(second.get("score", 0))
+                new_mismatches = [str(m) for m in (second.get("mismatches") or []) if m]
+                print(f"[STORYBOARD] Frame {rep.index + 1} regen score: {original_score} -> {new_score}")
+                if new_score > original_score:
+                    keyframes[rep.index] = new_url
+                    audit_reports.append(FrameAuditReport(
+                        index=rep.index, score=new_score, mismatches=new_mismatches, regenerated=True,
+                    ))
+                else:
+                    # Rollback — regen made it worse or equal
+                    print(f"[STORYBOARD] Frame {rep.index + 1} rollback: regen not better, keeping original")
+                    keyframes[rep.index] = original_url
+                    audit_reports.append(FrameAuditReport(
+                        index=rep.index, score=original_score, mismatches=original_mismatches, regenerated=False,
+                    ))
 
         return StoryboardResponse(
             success=True,

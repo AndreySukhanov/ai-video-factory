@@ -41,6 +41,7 @@ export interface EpisodeDraft {
   lastFrameUrl?: string;       // last frame image for transition
   model?: GenerationModel;     // override video model for this episode (falls back to ideaForm.model)
   duration?: number;           // override duration for this episode (falls back to ideaForm.duration)
+  audit?: { score: number; mismatches: string[]; regenerated: boolean };  // VLM consistency audit result
 }
 
 export interface PublishFormState {
