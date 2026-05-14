@@ -1,35 +1,73 @@
 import os
+import re
 from typing import Dict, Any
 from app.core.config import settings
 import json
 
+# Strip ```json ... ``` markdown fences that Claude likes to wrap JSON in
+_JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
+
+
+def _strip_json_fences(text: str) -> str:
+    return _JSON_FENCE_RE.sub("", text.strip()).strip()
+
+
 class LLMClient:
     """
-    Client for interacting with LLM (OpenRouter/DeepSeek or OpenAI fallback)
+    Client for interacting with LLM.
+
+    Provider priority (auto):
+      1. LaoZhang + Claude Opus (if LAOZHANG_API_KEY set)
+      2. OpenRouter + DeepSeek V3 (if OPENROUTER_API_KEY set)
+      3. OpenAI gpt-4-turbo (if OPENAI_API_KEY set)
+      4. Mock
+
+    Override via env: LLM_PROVIDER=laozhang|openrouter|openai, LLM_MODEL=<model_id>
     """
 
     def __init__(self):
-        self.api_key = settings.OPENROUTER_API_KEY or settings.OPENAI_API_KEY
-        self.use_openrouter = bool(settings.OPENROUTER_API_KEY)
-        self.use_real_api = bool(self.api_key)
+        provider = (settings.LLM_PROVIDER or "").lower()
+        if not provider:
+            if settings.LAOZHANG_API_KEY:
+                provider = "laozhang"
+            elif settings.OPENROUTER_API_KEY:
+                provider = "openrouter"
+            elif settings.OPENAI_API_KEY:
+                provider = "openai"
 
-        if self.use_real_api:
-            try:
-                from openai import OpenAI
-                if self.use_openrouter:
-                    self.client = OpenAI(
-                        api_key=self.api_key,
-                        base_url="https://openrouter.ai/api/v1"
-                    )
-                    self.model = "deepseek/deepseek-chat-v3-0324"
-                    print("[LLM CLIENT] Using OpenRouter with DeepSeek V3")
-                else:
-                    self.client = OpenAI(api_key=self.api_key)
-                    self.model = "gpt-4-turbo-preview"
-                    print("[LLM CLIENT] Using OpenAI")
-            except ImportError:
-                print("[LLM CLIENT] Warning: openai package not installed, using mock")
-                self.use_real_api = False
+        self.provider = provider
+        self.use_real_api = provider in ("laozhang", "openrouter", "openai")
+        self.is_claude = False
+
+        if not self.use_real_api:
+            return
+
+        try:
+            from openai import OpenAI
+        except ImportError:
+            print("[LLM CLIENT] Warning: openai package not installed, using mock")
+            self.use_real_api = False
+            return
+
+        if provider == "laozhang":
+            self.client = OpenAI(
+                api_key=settings.LAOZHANG_API_KEY,
+                base_url=settings.LAOZHANG_BASE_URL,
+            )
+            self.model = settings.LLM_MODEL or "claude-opus-4-6"
+            self.is_claude = self.model.startswith("claude")
+            print(f"[LLM CLIENT] Using LaoZhang with {self.model}")
+        elif provider == "openrouter":
+            self.client = OpenAI(
+                api_key=settings.OPENROUTER_API_KEY,
+                base_url="https://openrouter.ai/api/v1",
+            )
+            self.model = settings.LLM_MODEL or "deepseek/deepseek-chat-v3-0324"
+            print(f"[LLM CLIENT] Using OpenRouter with {self.model}")
+        else:  # openai
+            self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            self.model = settings.LLM_MODEL or "gpt-4-turbo-preview"
+            print(f"[LLM CLIENT] Using OpenAI with {self.model}")
 
     def generate_structured_output(
         self,
@@ -46,18 +84,29 @@ class LLMClient:
 
         try:
             print(f"[LLM CLIENT] Calling {self.model}...")
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
+            kwargs = {
+                "model": self.model,
+                "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ],
-                response_format={"type": "json_object"},
-                temperature=0.7,
-                timeout=90,
-            )
+                "temperature": 0.7,
+                "timeout": 90,
+            }
+            # Claude on LaoZhang ignores response_format and wraps in markdown.
+            # Instead nudge it via system prompt + parse with fence stripping.
+            if self.is_claude:
+                kwargs["messages"][0]["content"] = (
+                    f"{system_prompt}\n\n"
+                    "Respond with a single JSON object. Do not wrap it in markdown fences."
+                )
+                kwargs["max_tokens"] = 4096
+            else:
+                kwargs["response_format"] = {"type": "json_object"}
 
-            result = json.loads(response.choices[0].message.content)
+            response = self.client.chat.completions.create(**kwargs)
+            raw = response.choices[0].message.content
+            result = json.loads(_strip_json_fences(raw))
             print(f"[LLM CLIENT] Response received")
             return result
 

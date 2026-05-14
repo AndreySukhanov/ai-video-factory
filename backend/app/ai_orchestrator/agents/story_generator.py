@@ -38,29 +38,64 @@ class StoryGenerator:
     Creates detailed visual prompts for each episode using Veo 3.1 best practices.
     """
 
-    def __init__(self):
-        self.api_key = settings.OPENROUTER_API_KEY or settings.OPENAI_API_KEY
-        self.use_openrouter = bool(settings.OPENROUTER_API_KEY)
-        self.use_real_api = bool(self.api_key)
-        self.client = None
+    # Public aliases user can pick in UI → (provider, model_id)
+    LLM_PRESETS = {
+        "deepseek": ("openrouter", "deepseek/deepseek-chat-v3-0324"),
+        "opus": ("laozhang", "claude-opus-4-6"),
+        "opus-thinking": ("laozhang", "claude-opus-4-6-thinking"),
+    }
 
-        if self.use_real_api:
-            try:
-                from openai import OpenAI
-                if self.use_openrouter:
-                    self.client = OpenAI(
-                        api_key=self.api_key,
-                        base_url="https://openrouter.ai/api/v1"
-                    )
-                    self.model = "deepseek/deepseek-chat-v3-0324"
-                    print("[STORY GENERATOR] Using OpenRouter with DeepSeek V3")
-                else:
-                    self.client = OpenAI(api_key=self.api_key)
-                    self.model = "gpt-4o-mini"
-                    print("[STORY GENERATOR] Using OpenAI")
-            except ImportError:
-                print("[STORY GENERATOR] Warning: openai package not installed")
-                self.use_real_api = False
+    def __init__(self, llm_preset: str | None = None):
+        """
+        llm_preset: 'deepseek' | 'opus' | 'opus-thinking' | None (auto)
+        Auto prefers LaoZhang+Claude if LAOZHANG_API_KEY else OpenRouter+DeepSeek else OpenAI.
+        """
+        self.client = None
+        self.use_real_api = False
+        self.model = ""
+        self.is_claude = False
+
+        provider, model = None, None
+        if llm_preset and llm_preset in self.LLM_PRESETS:
+            provider, model = self.LLM_PRESETS[llm_preset]
+
+        if not provider:
+            if settings.LAOZHANG_API_KEY:
+                provider, model = "laozhang", "claude-opus-4-6"
+            elif settings.OPENROUTER_API_KEY:
+                provider, model = "openrouter", "deepseek/deepseek-chat-v3-0324"
+            elif settings.OPENAI_API_KEY:
+                provider, model = "openai", "gpt-4o-mini"
+            else:
+                return
+
+        try:
+            from openai import OpenAI
+        except ImportError:
+            print("[STORY GENERATOR] Warning: openai package not installed")
+            return
+
+        if provider == "laozhang":
+            if not settings.LAOZHANG_API_KEY:
+                print("[STORY GENERATOR] LaoZhang requested but LAOZHANG_API_KEY missing")
+                return
+            self.client = OpenAI(api_key=settings.LAOZHANG_API_KEY, base_url=settings.LAOZHANG_BASE_URL)
+        elif provider == "openrouter":
+            if not settings.OPENROUTER_API_KEY:
+                print("[STORY GENERATOR] OpenRouter requested but OPENROUTER_API_KEY missing")
+                return
+            self.client = OpenAI(api_key=settings.OPENROUTER_API_KEY, base_url="https://openrouter.ai/api/v1")
+        else:  # openai
+            if not settings.OPENAI_API_KEY:
+                print("[STORY GENERATOR] OpenAI requested but OPENAI_API_KEY missing")
+                return
+            self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
+        self.model = model
+        self.provider = provider
+        self.is_claude = model.startswith("claude")
+        self.use_real_api = True
+        print(f"[STORY GENERATOR] Using {provider} with {model}")
 
     def generate_series(
         self,
@@ -462,12 +497,15 @@ CRITICAL RULES:
         )
 
 
-# Singleton instance
-_story_generator = None
+# Per-preset cache (so we don't rebuild OpenAI client every request)
+_story_generators: dict[str, StoryGenerator] = {}
 
-def get_story_generator() -> StoryGenerator:
-    """Get or create singleton StoryGenerator instance."""
-    global _story_generator
-    if _story_generator is None:
-        _story_generator = StoryGenerator()
-    return _story_generator
+def get_story_generator(llm_preset: str | None = None) -> StoryGenerator:
+    """
+    Get or create StoryGenerator instance for the given LLM preset.
+    llm_preset: 'deepseek' | 'opus' | 'opus-thinking' | None (auto-detect)
+    """
+    cache_key = llm_preset or "auto"
+    if cache_key not in _story_generators:
+        _story_generators[cache_key] = StoryGenerator(llm_preset=llm_preset)
+    return _story_generators[cache_key]

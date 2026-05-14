@@ -994,6 +994,7 @@ class SeriesGenerateRequest(BaseModel):
     episodes_count: int = Field(default=5, ge=1, le=10, description="Number of episodes to generate")
     duration: int = Field(default=4, description="Duration per episode in seconds (4, 6, or 8)")
     aspect_ratio: str = Field(default="9:16", description="Video aspect ratio")
+    llm_model: Optional[str] = Field(default=None, description="LLM preset for prompt writer: 'deepseek' | 'opus' | 'opus-thinking' (None = auto)")
 
 
 class EpisodePromptData(BaseModel):
@@ -1037,11 +1038,11 @@ async def generate_series(request: SeriesGenerateRequest):
     Returns:
         SeriesGenerateResponse with series structure and prompts
     """
-    print(f"[SERIES GENERATOR] Request: idea={request.idea[:50]}..., genre={request.genre}, episodes={request.episodes_count}")
-    
+    print(f"[SERIES GENERATOR] Request: idea={request.idea[:50]}..., genre={request.genre}, episodes={request.episodes_count}, llm={request.llm_model or 'auto'}")
+
     try:
-        story_generator = get_story_generator()
-        
+        story_generator = get_story_generator(llm_preset=request.llm_model)
+
         series = story_generator.generate_series(
             idea=request.idea,
             genre=request.genre,

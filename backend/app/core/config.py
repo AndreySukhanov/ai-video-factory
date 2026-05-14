@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     LAOZHANG_API_KEY: Optional[str] = None
     LAOZHANG_BASE_URL: str = "https://api.laozhang.ai/v1"
 
+    # LLM model selection — if set, overrides default routing
+    # Examples: "claude-opus-4-6" (via LaoZhang), "claude-opus-4-7"
+    LLM_MODEL: Optional[str] = None
+    # Force LaoZhang as LLM provider (uses LAOZHANG_API_KEY + LLM_MODEL)
+    LLM_PROVIDER: Optional[str] = None  # "laozhang" | "openrouter" | "openai" | None (auto)
+
     # Backend URL for static files
     BACKEND_URL: Optional[str] = None
     FRONTEND_URL: str = "http://localhost:3000"
