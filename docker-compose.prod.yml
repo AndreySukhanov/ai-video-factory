@@ -1,5 +1,4 @@
 services:
-  # Redis for job queue
   redis:
     image: redis:alpine
     restart: unless-stopped
@@ -13,7 +12,6 @@ services:
     networks:
       - app-network
 
-  # Backend API
   backend:
     build:
       context: ./backend
@@ -35,7 +33,6 @@ services:
       - app-network
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
-  # Background worker
   worker:
     build:
       context: ./backend
@@ -57,7 +54,6 @@ services:
       - app-network
     command: python -m app.worker
 
-  # Frontend
   frontend:
     build:
       context: ./frontend
@@ -66,13 +62,12 @@ services:
         - NEXT_PUBLIC_API_BASE_URL=https://your-domain.com
     restart: unless-stopped
     environment:
-      - NEXT_PUBLIC_API_BASE_URL=https://oem-herbal-networks-century.trycloudflare.com
+      - NEXT_PUBLIC_API_BASE_URL=https://your-domain.com
     depends_on:
       - backend
     networks:
       - app-network
 
-  # Nginx reverse proxy
   nginx:
     image: nginx:alpine
     restart: unless-stopped
@@ -81,7 +76,9 @@ services:
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot
     depends_on:
       - frontend
       - backend
@@ -91,6 +88,7 @@ services:
 volumes:
   redis_data:
   backend_data:
+  certbot_www:
 
 networks:
   app-network:
