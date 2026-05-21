@@ -3,7 +3,7 @@
 
 $SERVER_IP = "SERVER_IP"
 $SERVER_USER = "root"
-$SERVER_PASS = "prM9R6WGdhKkG"
+$SERVER_PASS = $env:SERVER_PASS  # set via: $env:SERVER_PASS = "..."
 $APP_DIR = "/opt/microdrama-ai"
 
 Write-Host "==========================================" -ForegroundColor Cyan
