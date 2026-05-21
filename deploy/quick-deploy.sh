@@ -8,7 +8,7 @@ set -e
 # Server configuration
 SERVER_IP="SERVER_IP"
 SERVER_USER="root"
-SERVER_PASS="prM9R6WGdhKkG"
+SERVER_PASS="${SERVER_PASS:?set SERVER_PASS env var, e.g. export SERVER_PASS=...}"
 APP_DIR="/opt/microdrama-ai"
 
 echo "=========================================="

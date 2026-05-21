@@ -171,6 +171,8 @@ backend/test_*.py
 *.key
 vertex-sa-key.json
 *-sa-key*.json
+Вход по SSH.txt
+*SSH*.txt
 
 # Unnecessary docs
 .gemini/
