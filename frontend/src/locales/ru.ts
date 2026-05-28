@@ -244,6 +244,7 @@ const ru: Record<string, string> = {
   "generateV2.auditPerfect": "Полное совпадение с описанием персонажа",
   "generateV2.auditRegenerated": "перегенерирован",
   "generateV2.promptWriter": "Модель промпт-райтера",
+  "generateV2.generateAudio": "Генерировать аудио (звук в видео)",
   "generateV2.promptWriterHint": "Какая модель пишет промпты эпизодов и раскадровки. Opus 4.6 даёт более кинематографичные описания, DeepSeek быстрее и дешевле.",
   "generateV2.llmOpus": "Claude Opus 4.6 (LaoZhang) — рекомендуется, как в Higgsfield",
   "generateV2.llmOpus47": "Claude Opus 4.7 (LaoZhang) — новейшая, лучшее качество",

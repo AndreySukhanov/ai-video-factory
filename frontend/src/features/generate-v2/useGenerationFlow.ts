@@ -48,6 +48,7 @@ const DEFAULT_IDEA_FORM: IdeaFormState = {
   aspectRatio: '9:16',
   model: 'laozhang',
   llmModel: 'opus',
+  generateAudio: true,
 };
 
 const DEFAULT_PUBLISH_FORM: PublishFormState = {
@@ -598,7 +599,7 @@ export function useGenerationFlow() {
           reference_image_url: firstFrameUrl,
           last_frame_image_url: lastFrameUrl,
           reference_images: validRefImages.length > 0 ? validRefImages : undefined,
-          generate_audio: effectiveModel !== 'laozhang' && effectiveModel !== 'vertex',
+          generate_audio: ideaForm.generateAudio,
         });
 
         if (!response.success || !response.video_url) {
