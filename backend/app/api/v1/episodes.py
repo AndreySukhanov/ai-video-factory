@@ -11,7 +11,7 @@ import io
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 import requests
 from PIL import Image
 
@@ -222,6 +222,14 @@ def _download_video_locally(video_url: str) -> str:
 router = APIRouter()
 
 
+# Whitelisted video models — unknown values are rejected (422) instead of
+# silently falling through to a fallback provider.
+ALLOWED_VIDEO_MODELS = {
+    "seedance", "wavespeed", "wavespeed-standard", "laozhang",
+    "vertex", "gemini", "kling", "minimax", "pika", "fal", "mock",
+}
+
+
 # Request/Response models
 class EpisodeGenerateRequest(BaseModel):
     """Request body for episode generation"""
@@ -241,6 +249,13 @@ class EpisodeGenerateRequest(BaseModel):
     variants_count: int = Field(default=1, ge=1, le=4, description="Number of variants to generate (for standard mode)")
     use_timestamps: bool = Field(default=False, description="Use multi-shot timestamp prompting (gemini/vertex, duration>=6)")
     narrative_structure: Optional[str] = Field(default=None, description="Narrative structure for timestamp prompting")
+
+    @field_validator("model")
+    @classmethod
+    def _validate_model(cls, v: str) -> str:
+        if v not in ALLOWED_VIDEO_MODELS:
+            raise ValueError(f"Unknown model '{v}'. Allowed: {sorted(ALLOWED_VIDEO_MODELS)}")
+        return v
 
 
 class EpisodeGenerateResponse(BaseModel):
