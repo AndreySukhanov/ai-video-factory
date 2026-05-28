@@ -251,6 +251,7 @@ const en: Record<string, string> = {
   "generateV2.videoModelSeedance": "Seedance 2.0 (LaoZhang) — $0.05/video, cheapest, up to 15s",
   "generateV2.videoModelWavespeed": "Seedance 2.0 Fast (WaveSpeed) — $0.50/video, image+text, up to 15s",
   "generateV2.videoModelWavespeedStandard": "Seedance 2.0 Standard (WaveSpeed) — $0.60/video, higher quality",
+  "generateV2.videoModelWavespeedV15": "Seedance v1.5-pro (WaveSpeed) — $0.26/video, cheaper, previous gen",
   "generateV2.videoModelLaozhang": "Veo 3.1 (LaoZhang) — $0.15/video, best audio",
   "generateV2.videoModelVertex": "Veo 3.1 (Vertex) — $0.10–0.40/sec, top quality",
   "generateV2.videoModelKling": "Kling 2.1 (Replicate) — $0.25–0.90/video, motion control",

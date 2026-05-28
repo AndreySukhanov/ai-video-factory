@@ -29,6 +29,7 @@ const SINGLE_MODEL_KEYS = [
   { value: 'seedance', i18nKey: 'generateV2.videoModelSeedance' },
   { value: 'wavespeed', i18nKey: 'generateV2.videoModelWavespeed' },
   { value: 'wavespeed-standard', i18nKey: 'generateV2.videoModelWavespeedStandard' },
+  { value: 'wavespeed-v15', i18nKey: 'generateV2.videoModelWavespeedV15' },
   { value: 'laozhang', i18nKey: 'generateV2.videoModelLaozhang' },
   { value: 'vertex', i18nKey: 'generateV2.videoModelVertex' },
   { value: 'kling', i18nKey: 'generateV2.videoModelKling' },
@@ -38,6 +39,7 @@ const SERIES_MODEL_KEYS = [
   { value: 'seedance', i18nKey: 'generateV2.videoModelSeedanceSeries' },
   { value: 'wavespeed', i18nKey: 'generateV2.videoModelWavespeed' },
   { value: 'wavespeed-standard', i18nKey: 'generateV2.videoModelWavespeedStandard' },
+  { value: 'wavespeed-v15', i18nKey: 'generateV2.videoModelWavespeedV15' },
   { value: 'laozhang', i18nKey: 'generateV2.videoModelLaozhang' },
   { value: 'vertex', i18nKey: 'generateV2.videoModelVertex' },
   { value: 'minimax', i18nKey: 'generateV2.videoModelMinimax' },
@@ -52,10 +54,11 @@ const MODEL_DURATION_OPTIONS: Record<IdeaFormState['model'], readonly number[]> 
   seedance: [4, 5, 8, 10, 15],
   wavespeed: [4, 5, 8, 10, 15],
   'wavespeed-standard': [4, 5, 8, 10, 15],
+  'wavespeed-v15': [5, 10],
   fal: [5, 10],
 };
 
-const MODELS_WITH_REFS: GenerationModel[] = ['vertex', 'laozhang', 'seedance', 'wavespeed', 'wavespeed-standard'];
+const MODELS_WITH_REFS: GenerationModel[] = ['vertex', 'laozhang', 'seedance', 'wavespeed', 'wavespeed-standard', 'wavespeed-v15'];
 const MODELS_WITH_TRANSITION: GenerationModel[] = ['vertex', 'laozhang'];
 
 function estimatePerEpisodeCost(model: GenerationModel, duration: number): number {
@@ -63,6 +66,7 @@ function estimatePerEpisodeCost(model: GenerationModel, duration: number): numbe
     case 'seedance': return 0.05;
     case 'wavespeed': return 0.50;  // Seedance 2.0-fast
     case 'wavespeed-standard': return 0.60;  // Seedance 2.0 standard
+    case 'wavespeed-v15': return 0.26;  // Seedance v1.5-pro
     case 'laozhang': return 0.15;
     case 'vertex': return duration * 0.15;
     case 'kling': return duration <= 5 ? 0.25 : 0.50;
