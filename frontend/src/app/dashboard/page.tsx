@@ -50,6 +50,7 @@ export default function DashboardPage() {
     const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
     const [health, setHealth] = useState<HealthStatus | null>(null);
     const [videos, setVideos] = useState<VideoAnalyticsItem[]>([]);
+    const [wsBalance, setWsBalance] = useState<{ configured: boolean; balance: number | null } | null>(null);
     const [loading, setLoading] = useState(true);
     const [alerting, setAlerting] = useState(false);
     const [error, setError] = useState('');
@@ -58,14 +59,16 @@ export default function DashboardPage() {
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const [summaryRes, healthRes, videosRes] = await Promise.all([
+            const [summaryRes, healthRes, videosRes, balanceRes] = await Promise.all([
                 fetch(`${API_V1_BASE_URL}/analytics/summary`),
                 fetch(`${API_V1_BASE_URL}/analytics/health`),
                 fetch(`${API_V1_BASE_URL}/analytics/videos?limit=20`),
+                fetch(`${API_V1_BASE_URL}/analytics/wavespeed-balance`),
             ]);
             setSummary(await summaryRes.json());
             setHealth(await healthRes.json());
             setVideos(await videosRes.json());
+            setWsBalance(await balanceRes.json());
         } catch (e: unknown) {
             setError(toErrorMessage(e));
         } finally {
@@ -181,7 +184,7 @@ export default function DashboardPage() {
                         )}
                     </div>
                     {health ? (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                             {/* Redis */}
                             <div className={`rounded-lg p-3 border ${health.redis.healthy ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
                                 <div className="flex items-center gap-2 mb-1">
@@ -225,6 +228,25 @@ export default function DashboardPage() {
                                         ? t('dashboard.ytQuotaLeft', { remaining: health.youtube_quota.remaining?.toLocaleString() || '0', uploads: health.youtube_quota.max_uploads_remaining || 0 })
                                         : t('dashboard.na')
                                     }
+                                </p>
+                            </div>
+                            {/* WaveSpeed balance */}
+                            <div className={`rounded-lg p-3 border ${
+                                !wsBalance?.configured ? 'border-gray-500/30 bg-gray-500/5'
+                                : (wsBalance.balance ?? 0) >= 5 ? 'border-green-500/30 bg-green-500/5'
+                                : 'border-yellow-500/30 bg-yellow-500/5'
+                            }`}>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Zap className="w-4 h-4" />
+                                    <span className="text-xs font-medium">{t('dashboard.wsBalance')}</span>
+                                    {!wsBalance?.configured ? <AlertTriangle className="w-3 h-3 text-gray-400 ml-auto" />
+                                        : (wsBalance.balance ?? 0) >= 5 ? <CheckCircle className="w-3 h-3 text-green-400 ml-auto" />
+                                        : <AlertTriangle className="w-3 h-3 text-yellow-400 ml-auto" />}
+                                </div>
+                                <p className="text-[10px] text-gray-400">
+                                    {wsBalance?.configured && wsBalance.balance != null
+                                        ? `$${wsBalance.balance.toFixed(2)}`
+                                        : t('dashboard.na')}
                                 </p>
                             </div>
                         </div>

@@ -616,27 +616,32 @@ async def get_generation_status():
     """
     Get the current status of the video generation service.
     
-    Returns information about which video provider is configured.
+    Returns the video models actually available given configured API keys.
     """
-    provider_name = "mock"
-    provider_status = "ready"
-    
+    # Map each selectable model to the API key that enables it
+    available = []
+    if settings.WAVESPEED_API_KEY:
+        available.append("wavespeed")
+    if settings.LAOZHANG_API_KEY:
+        available.extend(["seedance", "laozhang"])
+    if settings.VERTEX_PROJECT_ID and settings.VERTEX_SA_KEY_PATH:
+        available.append("vertex")
+    if settings.GEMINI_API_KEY:
+        available.append("gemini")
     if settings.REPLICATE_API_TOKEN:
-        provider_name = "replicate_minimax"
-        provider_status = "ready"
-    elif settings.FAL_KEY:
-        provider_name = "pika_fal"
-        provider_status = "ready"
-    elif settings.VIDEO_API_KEY:
-        provider_name = "pika"
-        provider_status = "ready"
-    
+        available.extend(["minimax", "kling"])
+    if settings.FAL_KEY or settings.VIDEO_API_KEY:
+        available.append("pika")
+    if not available:
+        available.append("mock")
+
     return {
-        "provider": provider_name,
-        "status": provider_status,
+        "provider": available[0],            # primary (highest priority configured)
+        "available_models": available,        # all models the user can actually pick
+        "status": "ready",
         "supported_durations": [4, 6, 8],
         "supported_aspect_ratios": ["9:16", "16:9"],
-        "model_restrictions": {}
+        "model_restrictions": {},
     }
 
 
