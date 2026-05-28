@@ -71,7 +71,7 @@ export default function IdeaStep({ value, isPlanning, onChange, onGenerate }: Id
             onChange={(event) => onChange('llmModel', event.target.value as IdeaFormState['llmModel'])}
           >
             <option value="opus">{t('generateV2.llmOpus')}</option>
-            <option value="opus-thinking">{t('generateV2.llmOpusThinking')}</option>
+            <option value="opus-4.7">{t('generateV2.llmOpus47')}</option>
             <option value="deepseek">{t('generateV2.llmDeepseek')}</option>
           </Select>
           <p className="text-xs text-[var(--muted)]">{t('generateV2.promptWriterHint')}</p>

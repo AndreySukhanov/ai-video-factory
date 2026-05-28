@@ -8,7 +8,7 @@ export interface FlowStep {
   hint: string;
 }
 
-export type LlmModel = 'deepseek' | 'opus' | 'opus-thinking';
+export type LlmModel = 'deepseek' | 'opus' | 'opus-4.7';
 
 export interface IdeaFormState {
   idea: string;

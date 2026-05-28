@@ -1078,7 +1078,7 @@ class SeriesGenerateRequest(BaseModel):
     episodes_count: int = Field(default=5, ge=1, le=10, description="Number of episodes to generate")
     duration: int = Field(default=4, description="Duration per episode in seconds (4, 6, or 8)")
     aspect_ratio: str = Field(default="9:16", description="Video aspect ratio")
-    llm_model: Optional[str] = Field(default=None, description="LLM preset for prompt writer: 'deepseek' | 'opus' | 'opus-thinking' (None = auto)")
+    llm_model: Optional[str] = Field(default=None, description="LLM preset for prompt writer: 'deepseek' | 'opus' | 'opus-4.7' (None = auto)")
 
 
 class EpisodePromptData(BaseModel):

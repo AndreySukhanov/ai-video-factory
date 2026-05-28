@@ -4,18 +4,18 @@ import { EpisodeDraft } from './types';
 import { GenerationModel } from '@/lib/api/generation';
 import { useLanguage } from '@/contexts/LanguageContext';
 
-const SINGLE_EPISODE_MODELS: GenerationModel[] = ['seedance', 'laozhang', 'vertex', 'kling'];
-const SERIES_MODELS: GenerationModel[] = ['seedance', 'laozhang', 'vertex', 'minimax'];
+const SINGLE_EPISODE_MODELS: GenerationModel[] = ['seedance', 'wavespeed', 'laozhang', 'vertex', 'kling'];
+const SERIES_MODELS: GenerationModel[] = ['seedance', 'wavespeed', 'laozhang', 'vertex', 'minimax'];
 
 const MODEL_LABELS: Record<GenerationModel, string> = {
-  seedance: 'Seedance 2.0',
+  seedance: 'Seedance 2.0 (LaoZhang)',
   wavespeed: 'Seedance 2.0 (WaveSpeed)',
-  laozhang: 'LaoZhang Veo 3.1',
-  vertex: 'Vertex Veo 3.1',
-  gemini: 'Gemini Veo 3.1',
-  kling: 'Kling 2.6',
-  minimax: 'MiniMax S2V',
-  fal: 'fal.ai',
+  laozhang: 'Veo 3.1 (LaoZhang)',
+  vertex: 'Veo 3.1 (Vertex)',
+  gemini: 'Veo 3.1 (Gemini)',
+  kling: 'Kling 2.6 (Replicate)',
+  minimax: 'MiniMax S2V (Replicate)',
+  fal: 'Pika (fal.ai)',
 };
 
 interface GenerationStepProps {
