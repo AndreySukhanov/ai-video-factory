@@ -540,14 +540,15 @@ export function useGenerationFlow() {
         const supportsReferences = ['gemini', 'vertex', 'seedance', 'laozhang', 'wavespeed', 'wavespeed-standard', 'wavespeed-v15'].includes(effectiveModel);
         const storyboardFrame = storyboardFrames[episode.number - 1];
 
-        // Priority 1: Storyboard keyframe — ONLY for episode 1 (seeds the visual style)
-        // Episodes 2+ use frame chaining for real continuity from actual video frames
-        if (storyboardFrame && supportsReferences && episode.number === 1) {
+        // Priority 1: per-episode storyboard keyframe — used for EVERY episode that has one.
+        // Each keyframe is anchored to the same character card + seed, so the character
+        // stays consistent without drifting across frame-chain hops.
+        if (storyboardFrame && supportsReferences) {
           referenceImageUrl = storyboardFrame;
-          console.log(`[I2V] Using storyboard keyframe for episode 1: ${storyboardFrame}`);
+          console.log(`[I2V] Using storyboard keyframe for episode ${episode.number}: ${storyboardFrame}`);
           setNotice(t('generateV2.usingStoryboardFrame', { count: episode.number }));
         }
-        // Priority 2: Frame chaining for E2+ (extract last frame from previous video)
+        // Priority 2: Frame chaining for E2+ WITHOUT a keyframe (extract last frame from previous video)
         else if (isSeriesMode && supportsReferences && episode.number > 1) {
           const latestEpisodes = episodesRef.current;
           const prevEpisode = latestEpisodes.find((e) => e.number === episode.number - 1 && e.status === 'done' && e.videoUrl);
