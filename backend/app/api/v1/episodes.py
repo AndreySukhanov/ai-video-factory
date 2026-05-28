@@ -302,7 +302,12 @@ def get_video_provider(model: str = "seedance", reference_image_url: str = None,
     # Seedance 2.0 via WaveSpeed AI (альтернативный путь, Bearer auth)
     if model == "wavespeed":
         from app.media.video_provider_wavespeed import WavespeedSeedanceProvider
-        return WavespeedSeedanceProvider(aspect_ratio=aspect_ratio, use_fast=(quality_mode == "fast"))
+        return WavespeedSeedanceProvider(aspect_ratio=aspect_ratio, use_fast=True)
+
+    # Seedance 2.0 Standard via WaveSpeed (дороже, выше качество)
+    if model == "wavespeed-standard":
+        from app.media.video_provider_wavespeed import WavespeedSeedanceProvider
+        return WavespeedSeedanceProvider(aspect_ratio=aspect_ratio, use_fast=False)
 
     # LaoZhang provider (opt-in, requires API key)
     # Supports full matrix including landscape-fast (cheaper 16:9!)
@@ -437,7 +442,7 @@ async def generate_episode(request: EpisodeGenerateRequest):
         await send_progress(session_id, "processing", 10, "Processing reference images...")
 
         # Seedance/LaoZhang/WaveSpeed need public URLs (catbox), not base64 data URIs
-        needs_public_url = request.model in ("seedance", "laozhang", "wavespeed")
+        needs_public_url = request.model in ("seedance", "laozhang", "wavespeed", "wavespeed-standard")
 
         if needs_public_url and request.reference_image_url:
             # Upload local file to catbox for external API access
@@ -517,7 +522,7 @@ async def generate_episode(request: EpisodeGenerateRequest):
             clip_kwargs["negative_prompt"] = request.negative_prompt
 
         # Pass audio preference only to providers that support it
-        if request.model in ("gemini", "vertex", "laozhang", "seedance", "wavespeed"):
+        if request.model in ("gemini", "vertex", "laozhang", "seedance", "wavespeed", "wavespeed-standard"):
             clip_kwargs["generate_audio"] = request.generate_audio
 
         variants_count = 1
@@ -569,7 +574,7 @@ async def generate_episode(request: EpisodeGenerateRequest):
 
             # Auto-download video to local server (Veo retention = 2 days!)
             local_video_url = video_url
-            if video_url and request.model in ("gemini", "vertex", "seedance", "laozhang", "wavespeed"):
+            if video_url and request.model in ("gemini", "vertex", "seedance", "laozhang", "wavespeed", "wavespeed-standard"):
                 try:
                     await send_progress(session_id, "downloading", 85, "Saving video locally...")
                     local_video_url = await asyncio.to_thread(_download_video_locally, video_url)
@@ -621,7 +626,7 @@ async def get_generation_status():
     # Map each selectable model to the API key that enables it
     available = []
     if settings.WAVESPEED_API_KEY:
-        available.append("wavespeed")
+        available.extend(["wavespeed", "wavespeed-standard"])
     if settings.LAOZHANG_API_KEY:
         available.extend(["seedance", "laozhang"])
     if settings.VERTEX_PROJECT_ID and settings.VERTEX_SA_KEY_PATH:
