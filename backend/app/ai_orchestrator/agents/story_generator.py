@@ -224,6 +224,9 @@ CRITICAL RULES:
             print(f"[STORY GENERATOR] Generating {episodes_count} episodes for: {idea[:50]}...")
             print(f"[STORY GENERATOR] Using model: {self.model}")
 
+            # Each episode carries long English Veo prompts (~700-900 tokens).
+            # Scale the budget with episode count so 10-episode plans don't truncate.
+            series_max_tokens = min(16000, max(4000, 1500 + episodes_count * 850))
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -231,8 +234,8 @@ CRITICAL RULES:
                     {"role": "user", "content": user_request}
                 ],
                 temperature=0.8,
-                max_tokens=4000,
-                timeout=60,
+                max_tokens=series_max_tokens,
+                timeout=120,
             )
 
             raw_content = response.choices[0].message.content
