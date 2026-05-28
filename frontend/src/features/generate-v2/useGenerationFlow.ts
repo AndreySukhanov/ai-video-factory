@@ -22,8 +22,8 @@ import { EpisodeDraft, FlowStep, FlowStepId, GenerationDraftSnapshot, IdeaFormSt
 const DRAFT_STORAGE_KEY = 'ai_video_factory_generate_v2_draft';
 
 const STEP_ORDER: FlowStepId[] = ['idea', 'episodes', 'storyboard', 'generation', 'publish'];
-const SINGLE_EPISODE_MODELS: GenerationModel[] = ['seedance', 'wavespeed', 'wavespeed-standard', 'laozhang', 'vertex', 'kling'];
-const SERIES_MODELS: GenerationModel[] = ['seedance', 'wavespeed', 'wavespeed-standard', 'laozhang', 'vertex', 'minimax'];
+const SINGLE_EPISODE_MODELS: GenerationModel[] = ['seedance', 'wavespeed', 'wavespeed-standard', 'wavespeed-v15', 'laozhang', 'vertex', 'kling'];
+const SERIES_MODELS: GenerationModel[] = ['seedance', 'wavespeed', 'wavespeed-standard', 'wavespeed-v15', 'laozhang', 'vertex', 'minimax'];
 const MODEL_DURATIONS: Record<GenerationModel, number[]> = {
   kling: [5, 10],
   minimax: [6],
@@ -33,6 +33,7 @@ const MODEL_DURATIONS: Record<GenerationModel, number[]> = {
   seedance: [4, 5, 8, 10, 15],
   wavespeed: [4, 5, 8, 10, 15],
   'wavespeed-standard': [4, 5, 8, 10, 15],
+  'wavespeed-v15': [5, 10],
   fal: [5, 10],
 };
 

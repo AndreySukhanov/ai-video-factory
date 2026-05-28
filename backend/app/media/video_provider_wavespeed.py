@@ -36,11 +36,16 @@ WAVESPEED_VALID_RESOLUTIONS = {"480p", "720p", "1080p"}
 class WavespeedSeedanceProvider(VideoProvider):
     """Seedance 2.0 via WaveSpeed AI."""
 
-    def __init__(self, aspect_ratio: str = "9:16", use_fast: bool = True):
+    def __init__(self, aspect_ratio: str = "9:16", use_fast: bool = True,
+                 model_slug: Optional[str] = None):
         self.api_key = settings.WAVESPEED_API_KEY
         self.base_url = settings.WAVESPEED_BASE_URL.rstrip("/")
         self.default_aspect = aspect_ratio if aspect_ratio in WAVESPEED_VALID_RATIOS else "9:16"
-        self.model_slug = "seedance-2.0-fast" if use_fast else "seedance-2.0"
+        # model_slug overrides the 2.0 fast/standard default (e.g. "seedance-v1.5-pro")
+        self.model_slug = model_slug or ("seedance-2.0-fast" if use_fast else "seedance-2.0")
+        # Seedance 2.0 family takes enable_web_search / reference_images;
+        # v1.5-pro family takes seed / camera_fixed instead.
+        self.is_v2 = self.model_slug.startswith("seedance-2.0")
 
         if not self.api_key:
             raise ValueError("WAVESPEED_API_KEY not set")
@@ -86,8 +91,14 @@ class WavespeedSeedanceProvider(VideoProvider):
             "duration": int(duration_sec),
             "resolution": res,
             "generate_audio": generate_audio,
-            "enable_web_search": enable_web_search,
         }
+        if self.is_v2:
+            payload["enable_web_search"] = enable_web_search
+        else:
+            # v1.5-pro family: seed / camera_fixed instead of web search
+            payload["camera_fixed"] = False
+            if seed is not None:
+                payload["seed"] = seed
 
         if primary_image:
             # image-to-video: `image` (required) + optional distinct `last_image`
@@ -96,8 +107,8 @@ class WavespeedSeedanceProvider(VideoProvider):
                 payload["last_image"] = last_frame_image_url
             submit_url = self._submit_url(has_image=True)
         else:
-            # text-to-video: extra refs go into `reference_images` array (max ~8)
-            if reference_images:
+            # text-to-video: 2.0 supports a `reference_images` array; v1.5-pro t2v does not
+            if self.is_v2 and reference_images:
                 refs = [u for u in reference_images if u][:8]
                 if refs:
                     payload["reference_images"] = refs
