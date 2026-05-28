@@ -537,7 +537,7 @@ export function useGenerationFlow() {
         // === Reference image selection ===
         let referenceImageUrl: string | undefined;
         const isSeriesMode = ideaForm.episodesCount > 1;
-        const supportsReferences = ['gemini', 'vertex', 'seedance', 'laozhang'].includes(effectiveModel);
+        const supportsReferences = ['gemini', 'vertex', 'seedance', 'laozhang', 'wavespeed', 'wavespeed-standard', 'wavespeed-v15'].includes(effectiveModel);
         const storyboardFrame = storyboardFrames[episode.number - 1];
 
         // Priority 1: Storyboard keyframe — ONLY for episode 1 (seeds the visual style)
@@ -575,10 +575,11 @@ export function useGenerationFlow() {
           }
         }
 
-        // Duration: force 8s ONLY for frame-chaining fallback (fl models need it)
-        // Storyboard keyframes and user photos work fine with user-selected duration
+        // Duration: force 8s ONLY for Veo -fl frame-chaining fallback (those models need it).
+        // Seedance/WaveSpeed keep the user-selected duration (v1.5 only allows 5/10).
+        const isVeoFamily = ['gemini', 'vertex', 'laozhang'].includes(effectiveModel);
         const isFrameChainFallback = referenceImageUrl && !storyboardFrame && episode.number > 1;
-        const duration = isFrameChainFallback ? 8 : effectiveDuration;
+        const duration = (isFrameChainFallback && isVeoFamily) ? 8 : effectiveDuration;
 
         // ALWAYS use full prompt — no motion-only replacement
         const promptText = episode.prompt.trim();
