@@ -705,20 +705,20 @@ export default function TrendsPage() {
                                         <div key={trend.id} className="bg-gray-900 rounded-2xl overflow-hidden flex flex-col group hover:ring-1 hover:ring-purple-500/40 transition-all">
                                             {/* ── Thumbnail ── */}
                                             <div className="relative aspect-[9/14] overflow-hidden bg-gray-800 flex-shrink-0">
-                                                {trend.thumbnail_url ? (
+                                                {/* Fallback placeholder — shown when no thumbnail or the image fails to load */}
+                                                <div className="absolute inset-0 flex items-center justify-center">
+                                                    <SourceIcon source={trend.source} className={`w-10 h-10 ${config.color} opacity-20`} />
+                                                </div>
+                                                {trend.thumbnail_url && (
                                                     <img
                                                         src={trend.source === 'instagram'
                                                             ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/v1/proxy/image?url=${encodeURIComponent(trend.thumbnail_url)}`
                                                             : trend.thumbnail_url}
                                                         alt={trend.title}
-                                                        className="w-full h-full object-cover"
+                                                        className="relative w-full h-full object-cover"
                                                         loading="lazy"
                                                         onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                                     />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center">
-                                                        <SourceIcon source={trend.source} className={`w-10 h-10 ${config.color} opacity-20`} />
-                                                    </div>
                                                 )}
 
                                                 {/* Platform badge — top left */}
