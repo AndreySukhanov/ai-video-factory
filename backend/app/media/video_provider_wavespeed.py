@@ -68,6 +68,7 @@ class WavespeedSeedanceProvider(VideoProvider):
         reference_images: Optional[List[str]] = None,
         resolution: str = "720p",
         generate_audio: bool = True,
+        enable_web_search: bool = False,        # Seedance 2.0: ground generation with web search
         negative_prompt: Optional[str] = None,  # ignored — Seedance 2.0 has no negative prompt
         seed: Optional[int] = None,             # ignored — Seedance 2.0 has no seed field
     ) -> str:
@@ -85,6 +86,7 @@ class WavespeedSeedanceProvider(VideoProvider):
             "duration": int(duration_sec),
             "resolution": res,
             "generate_audio": generate_audio,
+            "enable_web_search": enable_web_search,
         }
 
         if primary_image:

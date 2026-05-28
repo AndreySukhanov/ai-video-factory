@@ -58,7 +58,7 @@ const MODELS_WITH_TRANSITION: GenerationModel[] = ['vertex', 'laozhang'];
 function estimatePerEpisodeCost(model: GenerationModel, duration: number): number {
   switch (model) {
     case 'seedance': return 0.05;
-    case 'wavespeed': return 0.54;
+    case 'wavespeed': return 0.50;  // Seedance 2.0-fast base; standard variant ~$0.60
     case 'laozhang': return 0.15;
     case 'vertex': return duration * 0.15;
     case 'kling': return duration <= 5 ? 0.25 : 0.50;

@@ -36,8 +36,17 @@ def create_review_item(
     db: Session = Depends(get_db),
 ):
     """Create a new review item from a generated video."""
+    # Persist external provider URLs locally — they expire within hours/days.
+    video_url = payload.video_url
+    from app.media.video_download import download_video_locally, is_local_url
+    if video_url and not is_local_url(video_url):
+        try:
+            video_url = download_video_locally(video_url)
+        except Exception as e:
+            print(f"[REVIEW] Could not persist video locally, keeping original URL: {e}")
+
     item = ReviewItem(
-        video_url=payload.video_url,
+        video_url=video_url,
         title=payload.title,
         description=payload.description,
         tags_json=json.dumps(payload.tags),

@@ -4,7 +4,10 @@ from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
 
+import requests
+
 from app.core.db import get_db
+from app.core.config import settings
 from app.models.analytics import VideoAnalytics
 from app.models.youtube_channel import YouTubeUpload
 from app.services.youtube.analytics import YouTubeAnalyticsService
@@ -168,3 +171,23 @@ def test_alert(request: AlertRequest):
     alerter = AlertService()
     alerter.send_alert(request.title, request.message, request.level)
     return {"success": True, "message": "Alert sent"}
+
+
+@router.get("/wavespeed-balance")
+def wavespeed_balance():
+    """Current WaveSpeed account balance (USD). Used by the dashboard."""
+    if not settings.WAVESPEED_API_KEY:
+        return {"configured": False, "balance": None}
+    try:
+        base = settings.WAVESPEED_BASE_URL.rstrip("/")
+        resp = requests.get(
+            f"{base}/balance",
+            headers={"Authorization": f"Bearer {settings.WAVESPEED_API_KEY}"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        balance = (data.get("data") or {}).get("balance")
+        return {"configured": True, "balance": balance}
+    except Exception as e:
+        return {"configured": True, "balance": None, "error": str(e)}

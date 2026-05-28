@@ -246,9 +246,15 @@ def _handle_generate_scene_prompts(db: Session, job: Job, payload: dict):
     
     scene_id = payload["scene_id"]
     scene = db.query(Scene).filter(Scene.id == scene_id).first()
+    if not scene:
+        raise ValueError(f"Scene {scene_id} not found (deleted?)")
     episode = db.query(Episode).filter(Episode.id == scene.episode_id).first()
+    if not episode:
+        raise ValueError(f"Episode {scene.episode_id} not found for scene {scene_id}")
     project = db.query(Project).filter(Project.id == episode.project_id).first()
-    
+    if not project:
+        raise ValueError(f"Project {episode.project_id} not found for episode {episode.id}")
+
     # Get all project characters with their appearance data
     project_characters = db.query(Character).filter(
         Character.project_id == project.id
@@ -327,9 +333,15 @@ def _handle_generate_scene_media(db: Session, job: Job, payload: dict):
     
     scene_id = payload["scene_id"]
     scene = db.query(Scene).filter(Scene.id == scene_id).first()
+    if not scene:
+        raise ValueError(f"Scene {scene_id} not found (deleted?)")
     episode = db.query(Episode).filter(Episode.id == scene.episode_id).first()
+    if not episode:
+        raise ValueError(f"Episode {scene.episode_id} not found for scene {scene_id}")
     project = db.query(Project).filter(Project.id == episode.project_id).first()
-    
+    if not project:
+        raise ValueError(f"Project {episode.project_id} not found for episode {episode.id}")
+
     # Collect ALL character reference images for this scene
     reference_images = []
     primary_reference = None
