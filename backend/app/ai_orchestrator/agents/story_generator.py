@@ -42,12 +42,12 @@ class StoryGenerator:
     LLM_PRESETS = {
         "deepseek": ("openrouter", "deepseek/deepseek-chat-v3-0324"),
         "opus": ("laozhang", "claude-opus-4-6"),
-        "opus-thinking": ("laozhang", "claude-opus-4-6-thinking"),
+        "opus-4.7": ("laozhang", "claude-opus-4-7"),
     }
 
     def __init__(self, llm_preset: str | None = None):
         """
-        llm_preset: 'deepseek' | 'opus' | 'opus-thinking' | None (auto)
+        llm_preset: 'deepseek' | 'opus' | 'opus-4.7' | None (auto)
         Auto prefers LaoZhang+Claude if LAOZHANG_API_KEY else OpenRouter+DeepSeek else OpenAI.
         """
         self.client = None
@@ -503,7 +503,7 @@ _story_generators: dict[str, StoryGenerator] = {}
 def get_story_generator(llm_preset: str | None = None) -> StoryGenerator:
     """
     Get or create StoryGenerator instance for the given LLM preset.
-    llm_preset: 'deepseek' | 'opus' | 'opus-thinking' | None (auto-detect)
+    llm_preset: 'deepseek' | 'opus' | 'opus-4.7' | None (auto-detect)
     """
     cache_key = llm_preset or "auto"
     if cache_key not in _story_generators:
