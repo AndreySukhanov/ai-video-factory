@@ -9,6 +9,7 @@ const SERIES_MODELS: GenerationModel[] = ['seedance', 'laozhang', 'vertex', 'min
 
 const MODEL_LABELS: Record<GenerationModel, string> = {
   seedance: 'Seedance 2.0',
+  wavespeed: 'Seedance 2.0 (WaveSpeed)',
   laozhang: 'LaoZhang Veo 3.1',
   vertex: 'Vertex Veo 3.1',
   gemini: 'Gemini Veo 3.1',

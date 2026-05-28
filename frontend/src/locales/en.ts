@@ -249,6 +249,7 @@ const en: Record<string, string> = {
   "generateV2.llmOpusThinking": "Claude Opus 4.6 Thinking — deeper planning",
   "generateV2.llmDeepseek": "DeepSeek V3 — fast, cheap",
   "generateV2.videoModelSeedance": "Seedance 2.0 ($0.05/video) — cheapest, up to 15s",
+  "generateV2.videoModelWavespeed": "Seedance 2.0 WaveSpeed ($0.54/video) — backup route, image+text, up to 15s",
   "generateV2.videoModelLaozhang": "Veo 3.1 LaoZhang ($0.15/video) — best audio",
   "generateV2.videoModelVertex": "Veo 3.1 Vertex ($0.10–0.40/sec) — top quality",
   "generateV2.videoModelKling": "Kling 2.1 ($0.25–0.90/video) — motion control",

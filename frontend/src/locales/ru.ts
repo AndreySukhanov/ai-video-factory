@@ -249,6 +249,7 @@ const ru: Record<string, string> = {
   "generateV2.llmOpusThinking": "Claude Opus 4.6 Thinking — глубже планирует",
   "generateV2.llmDeepseek": "DeepSeek V3 — быстрый, дешёвый",
   "generateV2.videoModelSeedance": "Seedance 2.0 ($0.05/видео) — самый дешёвый, до 15с",
+  "generateV2.videoModelWavespeed": "Seedance 2.0 WaveSpeed ($0.54/видео) — резерв, image+text, до 15с",
   "generateV2.videoModelLaozhang": "Veo 3.1 LaoZhang ($0.15/видео) — лучший звук",
   "generateV2.videoModelVertex": "Veo 3.1 Vertex ($0.10–0.40/сек) — топ качество",
   "generateV2.videoModelKling": "Kling 2.1 ($0.25–0.90/видео) — контроль движений",
