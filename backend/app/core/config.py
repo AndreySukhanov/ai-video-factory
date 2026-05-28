@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     LAOZHANG_API_KEY: Optional[str] = None
     LAOZHANG_BASE_URL: str = "https://api.laozhang.ai/v1"
 
+    # WaveSpeed AI (Seedance 2.0 + 1000+ models, Bearer auth, async pred-id polling)
+    WAVESPEED_API_KEY: Optional[str] = None
+    WAVESPEED_BASE_URL: str = "https://api.wavespeed.ai/api/v3"
+
     # LLM model selection — if set, overrides default routing
     # Examples: "claude-opus-4-6" (via LaoZhang), "claude-opus-4-7"
     LLM_MODEL: Optional[str] = None
