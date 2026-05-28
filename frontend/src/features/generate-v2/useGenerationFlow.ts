@@ -31,6 +31,7 @@ const MODEL_DURATIONS: Record<GenerationModel, number[]> = {
   gemini: [4, 6, 8],
   vertex: [4, 6, 8],
   seedance: [4, 5, 8, 10, 15],
+  wavespeed: [4, 5, 8, 10, 15],
   fal: [5, 10],
 };
 

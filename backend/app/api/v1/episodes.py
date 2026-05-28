@@ -232,7 +232,7 @@ class EpisodeGenerateRequest(BaseModel):
     last_frame_image_url: Optional[str] = Field(default=None, description="Last frame image URL for transition videos (Veo 3.1 -fl models)")
     subject_reference_url: Optional[str] = Field(default=None, description="Character reference for identity consistency (MiniMax S2V-01)")
     reference_images: Optional[List[str]] = Field(default=None, description="1-3 reference images for Veo 3.1 R2V character consistency")
-    model: str = Field(default="laozhang", description="Video model: seedance, laozhang, vertex, gemini, kling, or minimax")
+    model: str = Field(default="laozhang", description="Video model: seedance, wavespeed, laozhang, vertex, gemini, kling, or minimax")
     session_id: Optional[str] = Field(default=None, description="WebSocket session ID for progress updates")
     seed: Optional[int] = Field(default=None, description="Fixed seed for visual stability")
     negative_prompt: Optional[str] = Field(default=None, description="Negative prompt (noun format: text overlays, subtitles, cartoon)")
@@ -298,6 +298,11 @@ def get_video_provider(model: str = "seedance", reference_image_url: str = None,
     if model == "seedance":
         from app.media.video_provider_seedance import SeedanceProvider
         return SeedanceProvider(aspect_ratio=aspect_ratio)
+
+    # Seedance 2.0 via WaveSpeed AI (альтернативный путь, Bearer auth)
+    if model == "wavespeed":
+        from app.media.video_provider_wavespeed import WavespeedSeedanceProvider
+        return WavespeedSeedanceProvider(aspect_ratio=aspect_ratio, use_fast=(quality_mode == "fast"))
 
     # LaoZhang provider (opt-in, requires API key)
     # Supports full matrix including landscape-fast (cheaper 16:9!)
@@ -431,8 +436,8 @@ async def generate_episode(request: EpisodeGenerateRequest):
         # Process reference image URL (first frame for I2V)
         await send_progress(session_id, "processing", 10, "Processing reference images...")
 
-        # Seedance/LaoZhang need public URLs (catbox), not base64 data URIs
-        needs_public_url = request.model in ("seedance", "laozhang")
+        # Seedance/LaoZhang/WaveSpeed need public URLs (catbox), not base64 data URIs
+        needs_public_url = request.model in ("seedance", "laozhang", "wavespeed")
 
         if needs_public_url and request.reference_image_url:
             # Upload local file to catbox for external API access
@@ -512,7 +517,7 @@ async def generate_episode(request: EpisodeGenerateRequest):
             clip_kwargs["negative_prompt"] = request.negative_prompt
 
         # Pass audio preference only to providers that support it
-        if request.model in ("gemini", "vertex", "laozhang", "seedance"):
+        if request.model in ("gemini", "vertex", "laozhang", "seedance", "wavespeed"):
             clip_kwargs["generate_audio"] = request.generate_audio
 
         variants_count = 1
@@ -564,7 +569,7 @@ async def generate_episode(request: EpisodeGenerateRequest):
 
             # Auto-download video to local server (Veo retention = 2 days!)
             local_video_url = video_url
-            if video_url and request.model in ("gemini", "vertex", "seedance", "laozhang"):
+            if video_url and request.model in ("gemini", "vertex", "seedance", "laozhang", "wavespeed"):
                 try:
                     await send_progress(session_id, "downloading", 85, "Saving video locally...")
                     local_video_url = await asyncio.to_thread(_download_video_locally, video_url)
