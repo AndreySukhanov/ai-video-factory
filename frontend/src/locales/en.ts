@@ -244,6 +244,7 @@ const en: Record<string, string> = {
   "generateV2.auditPerfect": "Perfect match with character description",
   "generateV2.auditRegenerated": "regenerated",
   "generateV2.promptWriter": "Prompt writer model",
+  "generateV2.generateAudio": "Generate audio (sound in video)",
   "generateV2.promptWriterHint": "Which model writes episode and storyboard prompts. Opus 4.6 produces more cinematic descriptions; DeepSeek is faster and cheaper.",
   "generateV2.llmOpus": "Claude Opus 4.6 (LaoZhang) — recommended, like Higgsfield",
   "generateV2.llmOpus47": "Claude Opus 4.7 (LaoZhang) — newest, best quality",

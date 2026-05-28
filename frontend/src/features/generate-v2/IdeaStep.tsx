@@ -77,6 +77,16 @@ export default function IdeaStep({ value, isPlanning, onChange, onGenerate }: Id
           <p className="text-xs text-[var(--muted)]">{t('generateV2.promptWriterHint')}</p>
         </div>
 
+        <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={value.generateAudio}
+            onChange={(event) => onChange('generateAudio', event.target.checked)}
+            className="w-4 h-4 accent-[var(--accent,#a855f7)]"
+          />
+          <span>{t('generateV2.generateAudio')}</span>
+        </label>
+
         <Button onClick={onGenerate} disabled={isPlanning || value.idea.trim().length < 10} className="w-full md:w-auto">
           {isPlanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
           {t('generate.generateEpisodePrompts')}

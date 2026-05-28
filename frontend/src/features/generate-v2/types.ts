@@ -18,6 +18,7 @@ export interface IdeaFormState {
   aspectRatio: string;
   model: GenerationModel;
   llmModel?: LlmModel;  // LLM preset for prompt writer (default: 'opus' if LaoZhang key set)
+  generateAudio: boolean;  // generate audio track with the video
 }
 
 export type EpisodeStatus = 'queued' | 'generating' | 'done' | 'error';
