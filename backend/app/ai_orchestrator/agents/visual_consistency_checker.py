@@ -82,14 +82,33 @@ class VisualConsistencyChecker:
         return (
             "You are a film continuity supervisor checking storyboard consistency.\n\n"
             f"REFERENCE CHARACTER CARD:\n{character_card}\n\n"
-            "Look at the image and answer with ONE JSON object:\n"
+            "STEP 1 — extract DEFINING TRAITS from the card. These are the anchoring "
+            "physical features without which the character is no longer recognizable.\n"
+            "  • For anthropomorphic, fantasy, or non-human characters, the SHAPE/ANATOMY "
+            "    is a DEFINING TRAIT, not a secondary attribute. Examples:\n"
+            "    'strawberry-shaped head', 'banana-shaped head/face', 'wolf ears', "
+            "    'cat tail', 'robot arm', 'green skin', 'fish scales', 'fox snout'.\n"
+            "  • For human characters: age + ethnicity + hair color/style + eye color.\n"
+            "  • Outfit color/style is SECONDARY (matters but doesn't define identity).\n\n"
+            "STEP 2 — look at the image and verify EACH defining trait is actually visible.\n\n"
+            "Output ONE JSON object:\n"
             "{\n"
-            '  "score": <int 0-100, how well the visible character matches the card>,\n'
-            '  "mismatches": [<short string per visible mismatch — e.g. "hair color: brown not blonde", "age: 35 not 24">]\n'
+            '  "score": <int 0-100>,\n'
+            '  "mismatches": [<short string per missing or wrong trait>]\n'
             "}\n\n"
-            "Score 100 = perfect match. Score below 70 means regeneration needed.\n"
-            "Ignore camera angle, action, location — focus ONLY on character identity (hair, eyes, age, ethnicity, outfit).\n"
-            "If the character is partially visible or hidden, give 60 with mismatch 'character not clearly visible'.\n"
+            "STRICT scoring rules:\n"
+            "  • If a DEFINING TRAIT is MISSING — e.g. card says 'strawberry-shaped head' "
+            "but the character has a regular human head; card says 'banana-shaped face' "
+            "but the character is a normal human — score MUST be ≤ 40.\n"
+            "  • If a defining trait is present but visibly wrong (right shape, wrong "
+            "    color/style) — score 55-70.\n"
+            "  • If only secondary attributes differ (e.g. dress shade, outfit detail) — "
+            "    score 75-90.\n"
+            "  • Score 100 only if ALL defining traits are visible AND correct.\n"
+            "  • Threshold for acceptance is 80. Anything below regenerates.\n\n"
+            "Ignore camera angle, action, location, lighting. Focus on character identity.\n"
+            "If the character is partially hidden or off-frame, give 60 with mismatch "
+            "'character not clearly visible'.\n"
             "Return ONLY the JSON object, no markdown fences."
         )
 
