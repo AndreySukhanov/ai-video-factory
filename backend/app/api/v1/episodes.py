@@ -177,27 +177,32 @@ def crop_image_to_aspect_ratio(image_data: bytes, target_aspect_ratio: str) -> b
     # Open image
     img = Image.open(io.BytesIO(image_data))
     width, height = img.size
+
+    # Downscale large images so base64 data URIs stay small (some providers reject big payloads)
+    MAX_DIM = 1280
+    if max(width, height) > MAX_DIM:
+        scale = MAX_DIM / max(width, height)
+        img = img.resize((max(1, int(width * scale)), max(1, int(height * scale))))
+        width, height = img.size
+
     current_ratio = width / height
-    
-    # If already correct aspect ratio (within 5% tolerance), return original
-    if abs(current_ratio - target_ratio) / target_ratio < 0.05:
-        return image_data
-    
-    if current_ratio > target_ratio:
-        # Image is too wide - crop horizontally (center crop)
-        new_width = int(height * target_ratio)
-        left = (width - new_width) // 2
-        img = img.crop((left, 0, left + new_width, height))
-    else:
-        # Image is too tall - crop vertically (center crop)
-        new_height = int(width / target_ratio)
-        top = (height - new_height) // 2
-        img = img.crop((0, top, width, top + new_height))
-    
-    # Save to bytes
+    needs_crop = abs(current_ratio - target_ratio) / target_ratio >= 0.05
+    if needs_crop:
+        if current_ratio > target_ratio:
+            # Image is too wide - crop horizontally (center crop)
+            new_width = int(height * target_ratio)
+            left = (width - new_width) // 2
+            img = img.crop((left, 0, left + new_width, height))
+        else:
+            # Image is too tall - crop vertically (center crop)
+            new_height = int(width / target_ratio)
+            top = (height - new_height) // 2
+            img = img.crop((0, top, width, top + new_height))
+
+    # Save to bytes (always re-encode so downscale/crop take effect)
     output = io.BytesIO()
     img_format = "PNG" if img.mode == "RGBA" else "JPEG"
-    img.save(output, format=img_format, quality=95)
+    img.save(output, format=img_format, quality=90)
     return output.getvalue()
 
 
@@ -461,8 +466,10 @@ async def generate_episode(request: EpisodeGenerateRequest):
         # Process reference image URL (first frame for I2V)
         await send_progress(session_id, "processing", 10, "Processing reference images...")
 
-        # Seedance/LaoZhang/WaveSpeed need public URLs (catbox), not base64 data URIs
-        needs_public_url = request.model in ("seedance", "laozhang", "wavespeed", "wavespeed-standard", "wavespeed-v15")
+        # LaoZhang routes ("seedance" $0.05, "laozhang") need a public URL → catbox.
+        # WaveSpeed/Seedance 2.0 backend can't fetch catbox (geo-blocked), so feed it a
+        # base64 data URI instead (works for v1.5 + 2.0 fast/standard, local and prod).
+        needs_public_url = request.model in ("seedance", "laozhang")
 
         if needs_public_url and request.reference_image_url:
             # Upload local file to catbox for external API access
