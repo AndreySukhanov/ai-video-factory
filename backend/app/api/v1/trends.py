@@ -9,7 +9,7 @@ from app.schemas.trend import (
     IdeaApproveResponse, IdeaGenerateRequest, IdeaGenerateResponse,
     TrendGenerateRequest, TrendGenerateResponse,
     NicheInfo, NichesResponse,
-    TrendPatternRead, ExtractPatternResponse, CloneBriefResponse,
+    TrendPatternRead, ExtractPatternResponse, CloneBriefResponse, CloneEpisode,
 )
 from app.models.trend_pattern import TrendPattern
 from app.services.trendwatcher.trend_analyzer import TrendAnalyzer
@@ -391,6 +391,43 @@ def clone_trend_to_brief(trend_id: int, db: Session = Depends(get_db)):
         except Exception as e:
             return CloneBriefResponse(success=False, error=f"Pattern extraction failed: {e}")
 
+    # Convert story_beats → episode prompts directly. Each beat becomes one episode.
+    # No second LLM call: the beats are already structured.
+    import json as _json
+    beats: list[dict] = []
+    try:
+        beats = _json.loads(pattern.story_beats_json or "[]") or []
+    except Exception:
+        beats = []
+
+    anchor = pattern.anchor_prompt or ""
+    char_card = pattern.character_card or ""
+    episodes: list[CloneEpisode] = []
+    for i, beat in enumerate(beats[:8], start=1):
+        action = (beat.get("what_happens") or "").strip()
+        emotion = (beat.get("emotion") or "").strip()
+        title = emotion.title() if emotion else f"Beat {i}"
+        # Compose a Veo-ready prompt: ANCHOR (style/setting) + VARIABLE (action + emotion)
+        prompt_parts = []
+        if anchor:
+            prompt_parts.append(anchor)
+        if char_card:
+            prompt_parts.append(f"Character: {char_card}")
+        if action:
+            prompt_parts.append(f"Action: {action}")
+        if emotion:
+            prompt_parts.append(f"Emotional tone: {emotion}")
+        prompt_parts.append("9:16 vertical, cinematic, 6 seconds")
+        episodes.append(CloneEpisode(
+            number=i,
+            title=title,
+            synopsis=action,
+            prompt=". ".join(p.rstrip(". ") for p in prompt_parts if p) + ".",
+        ))
+
+    # Wizard expects exactly N episodes; clamp episodes_count to what we actually have.
+    episodes_count = len(episodes) if episodes else 5
+
     # Choose duration based on original (clamp to wizard limits 4-8 sec per episode)
     duration_per_episode = 6
     if trend.duration_sec and 4 <= trend.duration_sec / 5 <= 8:
@@ -400,7 +437,7 @@ def clone_trend_to_brief(trend_id: int, db: Session = Depends(get_db)):
         success=True,
         idea=pattern.adaptation_brief or trend.title,
         genre="drama",
-        episodes_count=5,
+        episodes_count=episodes_count,
         duration=duration_per_episode,
         aspect_ratio="9:16",
         anchor_prompt=pattern.anchor_prompt,
@@ -408,4 +445,5 @@ def clone_trend_to_brief(trend_id: int, db: Session = Depends(get_db)):
         suggested_title=trend.title,
         title_formula=pattern.title_formula,
         viral_mechanic=pattern.viral_mechanic,
+        episodes=episodes,
     )
