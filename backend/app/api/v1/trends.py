@@ -396,27 +396,16 @@ def clone_trend_to_brief(trend_id: int, db: Session = Depends(get_db)):
     if trend.duration_sec and 4 <= trend.duration_sec / 5 <= 8:
         duration_per_episode = max(4, min(8, int(trend.duration_sec / 5)))
 
-    brief = {
-        "success": True,
-        "idea": pattern.adaptation_brief or trend.title,
-        "genre": "drama",
-        "episodes_count": 5,
-        "duration": duration_per_episode,
-        "aspect_ratio": "9:16",
-        "anchor_prompt": pattern.anchor_prompt,
-        "character_card": pattern.character_card,
-        "suggested_title": trend.title,
-        "title_formula": pattern.title_formula,
-        "viral_mechanic": pattern.viral_mechanic,
-    }
-
-    # Persist all artifacts into /static/clones/trend-{id}/ (pattern.json + brief.json +
-    # transcript.txt + original_meta.json + original.url + original.html).
-    folder_url = None
-    try:
-        from app.services.trendwatcher.clone_folder import save_pattern_artifacts
-        folder_url = save_pattern_artifacts(trend, pattern, brief)
-    except Exception as e:
-        print(f"[CLONE] Failed to save artifacts: {e}")
-
-    return CloneBriefResponse(folder_url=folder_url, **brief)
+    return CloneBriefResponse(
+        success=True,
+        idea=pattern.adaptation_brief or trend.title,
+        genre="drama",
+        episodes_count=5,
+        duration=duration_per_episode,
+        aspect_ratio="9:16",
+        anchor_prompt=pattern.anchor_prompt,
+        character_card=pattern.character_card,
+        suggested_title=trend.title,
+        title_formula=pattern.title_formula,
+        viral_mechanic=pattern.viral_mechanic,
+    )

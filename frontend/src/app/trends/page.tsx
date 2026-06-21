@@ -378,26 +378,10 @@ export default function TrendsPage() {
         }
     };
 
-    // Phase 3: clone a trend's pattern into a /generate wizard prefill.
-    // Fetches /clone-brief (which auto-runs Phase 2 pattern extraction if missing),
-    // stashes the brief in sessionStorage, then navigates to /generate.
-    const handleCloneTrend = async (trendId: number) => {
-        setGeneratingTrend(trendId);
-        setError('');
-        try {
-            const res = await fetch(`${API_V1_BASE_URL}/trends/${trendId}/clone-brief`, { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                try { sessionStorage.setItem('clone_brief', JSON.stringify(data)); } catch { /* ignore */ }
-                window.location.href = '/generate?source=clone';
-            } else {
-                setError(data.error || 'Clone-brief failed');
-            }
-        } catch (e: unknown) {
-            setError(toErrorMessage(e));
-        } finally {
-            setGeneratingTrend(null);
-        }
+    // Phase 3: open the clone preview page where user reviews extracted pattern
+    // and brief, then explicitly opts into the generation wizard.
+    const handleCloneTrend = (trendId: number) => {
+        window.location.href = `/trends/${trendId}/clone`;
     };
 
     const getStatusColor = (status: string) => {
