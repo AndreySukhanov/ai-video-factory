@@ -1367,3 +1367,307 @@ async def generate_consistent_story(request: ConsistentStoryRequest):
             success=False,
             error=f"Consistent story generation failed: {str(e)}"
         )
+
+
+# ─── TTS / Voiceover (Phase 1) ────────────────────────────────────────────────
+
+class VoiceoverRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=5000, description="Text to synthesize")
+    provider: Optional[str] = Field(None, description="elevenlabs | openai (auto if omitted)")
+    voice_id: Optional[str] = None
+    episode_id: Optional[int] = Field(None, description="If set, save voiceover to this episode")
+    video_url: Optional[str] = Field(None, description="If set, mux voiceover onto this video")
+    mute_original: bool = Field(True, description="When muxing, mute the video's original audio")
+
+
+class WordTimingDTO(BaseModel):
+    word: str
+    start: float
+    end: float
+
+
+class VoiceoverResponse(BaseModel):
+    success: bool
+    audio_url: Optional[str] = None
+    words: List[WordTimingDTO] = []
+    duration_sec: Optional[float] = None
+    provider: Optional[str] = None
+    video_with_voiceover_url: Optional[str] = None
+    error: Optional[str] = None
+
+
+@router.post("/voiceover", response_model=VoiceoverResponse)
+async def generate_voiceover(request: VoiceoverRequest):
+    """Synthesize voiceover for text, optionally mux onto a video and persist to an episode.
+
+    Provider routing: if `provider` omitted, picks ElevenLabs when ELEVENLABS_API_KEY is set,
+    otherwise falls back to OpenAI TTS. ElevenLabs returns native word timings; OpenAI returns
+    audio only (word-level alignment will be added in Phase 1.1 via Whisper).
+    """
+    from app.services import tts_service
+    from app.core.db import SessionLocal
+    from app.models.episode import Episode
+
+    def _run() -> VoiceoverResponse:
+        try:
+            tts = tts_service.synthesize(
+                request.text,
+                provider=request.provider,
+                voice_id=request.voice_id,
+            )
+        except Exception as e:
+            return VoiceoverResponse(success=False, error=f"TTS synthesis failed: {e}")
+
+        video_with_url: Optional[str] = None
+        if request.video_url:
+            if not is_safe_outbound_url(request.video_url, allow_private=_allow_private_fetch(request.video_url)):
+                return VoiceoverResponse(success=False, error="Unsafe video_url", audio_url=tts["audio_url"], words=tts["words"], provider=tts["provider"])
+
+            with tempfile.TemporaryDirectory() as tmp:
+                src_video = os.path.join(tmp, "src.mp4")
+                resp = requests.get(request.video_url, stream=True, timeout=120)
+                resp.raise_for_status()
+                with open(src_video, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        f.write(chunk)
+
+                out_name = f"voiced_{uuid.uuid4().hex[:10]}.mp4"
+                static_dir = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+                    "static",
+                )
+                out_dir = os.path.join(static_dir, "generated", "voiced")
+                os.makedirs(out_dir, exist_ok=True)
+                out_path = os.path.join(out_dir, out_name)
+
+                ok = tts_service.mux_voiceover(
+                    src_video, tts["audio_path"], out_path,
+                    mute_original=request.mute_original,
+                )
+                if not ok:
+                    return VoiceoverResponse(
+                        success=False,
+                        audio_url=tts["audio_url"],
+                        words=tts["words"],
+                        provider=tts["provider"],
+                        duration_sec=tts["duration_sec"],
+                        error="FFmpeg mux failed",
+                    )
+
+                base_url = settings.BACKEND_URL or os.getenv("BACKEND_URL", "http://localhost:8000")
+                video_with_url = f"{base_url}/static/generated/voiced/{out_name}"
+
+        if request.episode_id is not None:
+            db = SessionLocal()
+            try:
+                ep = db.query(Episode).filter(Episode.id == request.episode_id).first()
+                if ep:
+                    ep.voiceover_url = tts["audio_url"]
+                    ep.voiceover_words_json = tts_service.words_to_json(tts["words"])
+                    ep.voiceover_provider = tts["provider"]
+                    if video_with_url:
+                        ep.video_with_voiceover_url = video_with_url
+                    db.commit()
+            finally:
+                db.close()
+
+        return VoiceoverResponse(
+            success=True,
+            audio_url=tts["audio_url"],
+            words=[WordTimingDTO(**w) for w in tts["words"]],
+            duration_sec=tts["duration_sec"],
+            provider=tts["provider"],
+            video_with_voiceover_url=video_with_url,
+        )
+
+    return await asyncio.to_thread(_run)
+
+
+# ─── Captions burn-in (Phase 2) ───────────────────────────────────────────────
+
+class CaptionsRequest(BaseModel):
+    video_url: str = Field(..., description="Video to burn captions onto")
+    words: List[WordTimingDTO] = Field(..., min_length=1, description="Word-level timings")
+    style: str = Field("modern", description="modern | neon | bold | minimal | cinematic")
+    mode: str = Field("word_pop", description="word_pop | karaoke_line")
+    episode_id: Optional[int] = None
+
+
+class CaptionsResponse(BaseModel):
+    success: bool
+    video_with_captions_url: Optional[str] = None
+    error: Optional[str] = None
+
+
+@router.post("/captions", response_model=CaptionsResponse)
+async def burn_captions(request: CaptionsRequest):
+    """Burn TikTok-style word-level captions onto a video using ASS subtitles.
+
+    Pass any video URL and the word timings from `/voiceover` (or any source). The endpoint
+    downloads the video, builds an ASS subtitle track via `captions_service`, runs FFmpeg
+    to bake it into the pixels, and returns the new video URL.
+    """
+    from app.services import captions_service
+    from app.core.db import SessionLocal
+    from app.models.episode import Episode
+
+    if request.style not in captions_service.STYLES:
+        raise HTTPException(status_code=400, detail=f"Unknown style '{request.style}'")
+    if request.mode not in ("word_pop", "karaoke_line"):
+        raise HTTPException(status_code=400, detail=f"Unknown mode '{request.mode}'")
+
+    def _run() -> CaptionsResponse:
+        if not is_safe_outbound_url(request.video_url, allow_private=_allow_private_fetch(request.video_url)):
+            return CaptionsResponse(success=False, error="Unsafe video_url")
+
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                src_video = os.path.join(tmp, "src.mp4")
+                resp = requests.get(request.video_url, stream=True, timeout=120)
+                resp.raise_for_status()
+                with open(src_video, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        f.write(chunk)
+
+                out_name = f"captions_{uuid.uuid4().hex[:10]}.mp4"
+                static_dir = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+                    "static",
+                )
+                out_dir = os.path.join(static_dir, "generated", "captions")
+                os.makedirs(out_dir, exist_ok=True)
+                out_path = os.path.join(out_dir, out_name)
+
+                ok = captions_service.burn_captions(
+                    src_video,
+                    [w.model_dump() for w in request.words],
+                    out_path,
+                    style=request.style,
+                    mode=request.mode,
+                )
+                if not ok:
+                    return CaptionsResponse(success=False, error="FFmpeg captions burn failed")
+
+                base_url = settings.BACKEND_URL or os.getenv("BACKEND_URL", "http://localhost:8000")
+                captions_url = f"{base_url}/static/generated/captions/{out_name}"
+
+                if request.episode_id is not None:
+                    db = SessionLocal()
+                    try:
+                        ep = db.query(Episode).filter(Episode.id == request.episode_id).first()
+                        if ep:
+                            ep.video_with_captions_url = captions_url
+                            db.commit()
+                    finally:
+                        db.close()
+
+                return CaptionsResponse(success=True, video_with_captions_url=captions_url)
+        except Exception as e:
+            return CaptionsResponse(success=False, error=f"captions burn failed: {e}")
+
+    return await asyncio.to_thread(_run)
+
+
+# ─── Background music (Phase 3) ───────────────────────────────────────────────
+
+class MusicTrackDTO(BaseModel):
+    id: str
+    display_name: str
+    mood: str
+    url: str
+    duration_sec: Optional[float] = None
+    credit: Optional[str] = None
+
+
+class MusicTracksResponse(BaseModel):
+    tracks: List[MusicTrackDTO]
+
+
+class AddMusicRequest(BaseModel):
+    video_url: str = Field(..., description="Video to mix music onto")
+    track_id: str = Field(..., description="Track filename from /music/tracks list")
+    volume: float = Field(0.15, ge=0.0, le=1.0, description="Music volume relative to 1.0")
+    loop_music: bool = True
+    fade_in: float = Field(1.0, ge=0.0, le=10.0)
+    fade_out: float = Field(1.5, ge=0.0, le=10.0)
+    episode_id: Optional[int] = None
+
+
+class AddMusicResponse(BaseModel):
+    success: bool
+    video_with_music_url: Optional[str] = None
+    error: Optional[str] = None
+
+
+@router.get("/music/tracks", response_model=MusicTracksResponse)
+async def list_music_tracks(mood: Optional[str] = None):
+    """List royalty-free background tracks discovered in backend/static/music/.
+    Optionally filter by `mood` (matched against manifest.json or filename prefix)."""
+    from app.services import music_service
+    tracks = music_service.list_tracks(mood=mood)
+    return MusicTracksResponse(tracks=[MusicTrackDTO(**t) for t in tracks])
+
+
+@router.post("/music", response_model=AddMusicResponse)
+async def add_music_to_video(request: AddMusicRequest):
+    """Mix a background music track onto a video. Preserves the original audio
+    (voiceover etc.) and adds music underneath at `volume` (default 0.15). Loops
+    the track to cover the full video duration when `loop_music=True`."""
+    from app.services import music_service
+    from app.core.db import SessionLocal
+    from app.models.episode import Episode
+
+    track_path = music_service.resolve_track_path(request.track_id)
+    if track_path is None:
+        raise HTTPException(status_code=404, detail=f"Track '{request.track_id}' not found")
+
+    def _run() -> AddMusicResponse:
+        if not is_safe_outbound_url(request.video_url, allow_private=_allow_private_fetch(request.video_url)):
+            return AddMusicResponse(success=False, error="Unsafe video_url")
+
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                src_video = os.path.join(tmp, "src.mp4")
+                resp = requests.get(request.video_url, stream=True, timeout=120)
+                resp.raise_for_status()
+                with open(src_video, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        f.write(chunk)
+
+                out_name = f"music_{uuid.uuid4().hex[:10]}.mp4"
+                static_dir = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+                    "static",
+                )
+                out_dir = os.path.join(static_dir, "generated", "music")
+                os.makedirs(out_dir, exist_ok=True)
+                out_path = os.path.join(out_dir, out_name)
+
+                ok = music_service.add_music(
+                    src_video, str(track_path), out_path,
+                    music_volume=request.volume,
+                    loop_music=request.loop_music,
+                    fade_in=request.fade_in,
+                    fade_out=request.fade_out,
+                )
+                if not ok:
+                    return AddMusicResponse(success=False, error="FFmpeg music mix failed")
+
+                base_url = settings.BACKEND_URL or os.getenv("BACKEND_URL", "http://localhost:8000")
+                music_url = f"{base_url}/static/generated/music/{out_name}"
+
+                if request.episode_id is not None:
+                    db = SessionLocal()
+                    try:
+                        ep = db.query(Episode).filter(Episode.id == request.episode_id).first()
+                        if ep:
+                            ep.video_with_music_url = music_url
+                            db.commit()
+                    finally:
+                        db.close()
+
+                return AddMusicResponse(success=True, video_with_music_url=music_url)
+        except Exception as e:
+            return AddMusicResponse(success=False, error=f"music mix failed: {e}")
+
+    return await asyncio.to_thread(_run)

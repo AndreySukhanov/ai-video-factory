@@ -15,6 +15,12 @@ class Episode(Base):
     status = Column(String, default="pending") # pending, generating, ready, failed
     quality_score = Column(Float, nullable=True)
     quality_report = Column(Text, nullable=True) # JSON string
+    voiceover_url = Column(String, nullable=True)
+    voiceover_words_json = Column(Text, nullable=True)  # JSON: [{word, start, end}, ...]
+    voiceover_provider = Column(String, nullable=True)  # "elevenlabs" | "openai"
+    video_with_voiceover_url = Column(String, nullable=True)  # video after TTS mux
+    video_with_captions_url = Column(String, nullable=True)  # video after burning captions
+    video_with_music_url = Column(String, nullable=True)  # video after mixing background music
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

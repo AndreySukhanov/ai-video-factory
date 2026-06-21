@@ -259,6 +259,113 @@ export async function createReviewItem(payload: ReviewCreateRequest): Promise<vo
   });
 }
 
+// --- TTS / Voiceover (Phase 1) ---
+
+export type VoiceoverProvider = 'elevenlabs' | 'openai';
+
+export interface WordTiming {
+  word: string;
+  start: number;
+  end: number;
+}
+
+export interface VoiceoverRequest {
+  text: string;
+  provider?: VoiceoverProvider;
+  voice_id?: string;
+  episode_id?: number;
+  video_url?: string;
+  mute_original?: boolean;
+}
+
+export interface VoiceoverResponse {
+  success: boolean;
+  audio_url?: string;
+  words: WordTiming[];
+  duration_sec?: number;
+  provider?: string;
+  video_with_voiceover_url?: string;
+  error?: string;
+}
+
+export async function generateVoiceover(payload: VoiceoverRequest): Promise<VoiceoverResponse> {
+  return requestJson<VoiceoverResponse>(`${API_V1_BASE_URL}/episodes/voiceover`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+// --- Captions burn-in (Phase 2) ---
+
+export type CaptionStyle = 'modern' | 'neon' | 'bold' | 'minimal' | 'cinematic';
+export type CaptionMode = 'word_pop' | 'karaoke_line';
+
+export interface CaptionsRequest {
+  video_url: string;
+  words: WordTiming[];
+  style?: CaptionStyle;
+  mode?: CaptionMode;
+  episode_id?: number;
+}
+
+export interface CaptionsResponse {
+  success: boolean;
+  video_with_captions_url?: string;
+  error?: string;
+}
+
+export async function burnCaptions(payload: CaptionsRequest): Promise<CaptionsResponse> {
+  return requestJson<CaptionsResponse>(`${API_V1_BASE_URL}/episodes/captions`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+// --- Background music (Phase 3) ---
+
+export interface MusicTrack {
+  id: string;
+  display_name: string;
+  mood: string;
+  url: string;
+  duration_sec?: number;
+  credit?: string;
+}
+
+export interface MusicTracksResponse {
+  tracks: MusicTrack[];
+}
+
+export interface AddMusicRequest {
+  video_url: string;
+  track_id: string;
+  volume?: number;
+  loop_music?: boolean;
+  fade_in?: number;
+  fade_out?: number;
+  episode_id?: number;
+}
+
+export interface AddMusicResponse {
+  success: boolean;
+  video_with_music_url?: string;
+  error?: string;
+}
+
+export async function listMusicTracks(mood?: string): Promise<MusicTracksResponse> {
+  const qs = mood ? `?mood=${encodeURIComponent(mood)}` : '';
+  return requestJson<MusicTracksResponse>(`${API_V1_BASE_URL}/episodes/music/tracks${qs}`, {
+    method: 'GET',
+  });
+}
+
+export async function addMusicToVideo(payload: AddMusicRequest): Promise<AddMusicResponse> {
+  return requestJson<AddMusicResponse>(`${API_V1_BASE_URL}/episodes/music`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 // --- Image upload (multipart/form-data, NOT JSON) ---
 
 export interface UploadImageResponse {
