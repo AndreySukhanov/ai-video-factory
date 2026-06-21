@@ -22,15 +22,14 @@ import { EpisodeDraft, FlowStep, FlowStepId, GenerationDraftSnapshot, IdeaFormSt
 const DRAFT_STORAGE_KEY = 'ai_video_factory_generate_v2_draft';
 
 const STEP_ORDER: FlowStepId[] = ['idea', 'episodes', 'storyboard', 'generation', 'publish'];
-const SINGLE_EPISODE_MODELS: GenerationModel[] = ['seedance', 'wavespeed', 'wavespeed-standard', 'wavespeed-v15', 'laozhang', 'vertex', 'kling'];
-const SERIES_MODELS: GenerationModel[] = ['seedance', 'wavespeed', 'wavespeed-standard', 'wavespeed-v15', 'laozhang', 'vertex', 'minimax'];
+const SINGLE_EPISODE_MODELS: GenerationModel[] = ['wavespeed', 'wavespeed-standard', 'wavespeed-v15', 'laozhang', 'vertex', 'kling'];
+const SERIES_MODELS: GenerationModel[] = ['wavespeed', 'wavespeed-standard', 'wavespeed-v15', 'laozhang', 'vertex', 'minimax'];
 const MODEL_DURATIONS: Record<GenerationModel, number[]> = {
   kling: [5, 10],
   minimax: [6],
   laozhang: [4, 6, 8],
   gemini: [4, 6, 8],
   vertex: [4, 6, 8],
-  seedance: [4, 5, 8, 10, 15],
   wavespeed: [4, 5, 8, 10, 15],
   'wavespeed-standard': [4, 5, 8, 10, 15],
   'wavespeed-v15': [5, 10],
@@ -594,7 +593,7 @@ export function useGenerationFlow() {
         // === Reference image selection ===
         let referenceImageUrl: string | undefined;
         const isSeriesMode = ideaForm.episodesCount > 1;
-        const supportsReferences = ['gemini', 'vertex', 'seedance', 'laozhang', 'wavespeed', 'wavespeed-standard', 'wavespeed-v15'].includes(effectiveModel);
+        const supportsReferences = ['gemini', 'vertex', 'laozhang', 'wavespeed', 'wavespeed-standard', 'wavespeed-v15'].includes(effectiveModel);
         const storyboardFrame = storyboardFrames[episode.number - 1];
 
         // Priority 1: per-episode storyboard keyframe — used for EVERY episode that has one.
