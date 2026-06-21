@@ -43,8 +43,20 @@ class TrendAnalyzer:
 
     def fetch_all_trends(self, db: Session, region: str = "US", category: str = "",
                          max_per_source: int = 20, keywords: List[str] = None,
-                         platforms: List[str] = None) -> List[Trend]:
-        """Fetch trends from all sources. Clear old region data, insert fresh."""
+                         platforms: List[str] = None, niche: str | None = None) -> List[Trend]:
+        """Fetch trends from all sources. Clear old region data, insert fresh.
+
+        If `niche` is given, its hashtags/queries are used instead of keywords/defaults.
+        Per-source keyword resolution:
+          - TikTok/Instagram → niche hashtags for the region's locale
+          - YouTube          → niche YouTube queries for the region's locale
+        """
+        from .niches import get_hashtags, get_youtube_queries, get_niche
+
+        niche_data = get_niche(niche) if niche else None
+        if niche and not niche_data:
+            print(f"[TRENDS] Unknown niche '{niche}', falling back to default keywords")
+
         # Delete old trends for this region so the page always shows fresh data
         old_count = db.query(Trend).filter(Trend.region == region).delete()
         db.flush()
@@ -57,10 +69,20 @@ class TrendAnalyzer:
             if platforms and source.source_name not in platforms:
                 print(f"[TRENDS] Skipping {source.source_name} (not in selected platforms)")
                 continue
+
+            # Resolve effective keywords per source
+            source_keywords = keywords or []
+            if niche_data:
+                if source.source_name == "youtube":
+                    source_keywords = get_youtube_queries(niche, region)
+                else:  # tiktok, instagram, google_trends — hashtag-style search
+                    source_keywords = get_hashtags(niche, region)
+                print(f"[TRENDS] Niche '{niche}' → {source.source_name}: {len(source_keywords)} keywords")
+
             try:
                 items = source.fetch_trends(region=region, category=category,
                                             max_results=max_per_source,
-                                            keywords=keywords or [])
+                                            keywords=source_keywords)
                 for item in items:
                     title_hash = self._trend_hash(item.title, item.source, item.url)
 
@@ -93,6 +115,8 @@ class TrendAnalyzer:
                         existing.is_anomaly = 1 if item.is_anomaly else 0
                         if item.matched_keyword:
                             existing.matched_keyword = item.matched_keyword
+                        if niche:
+                            existing.niche = niche
 
                         # Classify trend stage based on velocity change
                         if old_velocity > 0:
@@ -127,6 +151,7 @@ class TrendAnalyzer:
                             viral_coef=item.viral_coef,
                             is_anomaly=1 if item.is_anomaly else 0,
                             matched_keyword=item.matched_keyword,
+                            niche=niche,
                         )
                         db.add(trend)
 

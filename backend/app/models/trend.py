@@ -34,6 +34,8 @@ class Trend(Base):
     is_anomaly = Column(Integer, default=0)  # 0/1
     # User keyword that found this trend (Trendsee-style keyword radar)
     matched_keyword = Column(String, nullable=True)
+    # Niche this trend was fetched under (astrology, relationships, motivation, ...)
+    niche = Column(String, nullable=True, index=True)
 
     ideas = relationship("StoryIdea", back_populates="trend")
 
