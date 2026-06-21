@@ -24,3 +24,4 @@ rq-scheduler
 python-telegram-bot
 faster-whisper
 youtube-transcript-api
+yt-dlp

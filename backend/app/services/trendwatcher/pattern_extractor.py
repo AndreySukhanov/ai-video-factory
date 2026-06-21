@@ -1,21 +1,16 @@
 """Deep pattern extraction from viral trends.
 
 Pipeline per trend:
-  1. Get transcript:
-     - YouTube → youtube-transcript-api (free, official captions)
-     - TikTok/Instagram → yt-dlp audio download → Whisper transcription (already in stack)
-     - Fallback: use just title + description
-  2. LLM call (structured JSON) extracts:
-     - hook (first 3-5 sec)
-     - story_beats (timeline)
-     - characters (role / age / appearance)
-     - title_formula (template with {placeholders})
-     - cta_structure (for app ads)
-     - visual_style
-     - viral_mechanic (taxonomy)
-     - adaptation_brief — ready-to-use idea for our generator
+  1. Best path — multimodal: yt-dlp downloads the video → ffmpeg extracts 6 evenly-spaced
+     keyframes (scaled 540w jpeg) → Opus 4.8 reads frames + transcript and returns
+     structured pattern (character incl. hat/clothing/gender, app UI text overlays, CTA).
+  2. Fallback path — transcript only:
+     - YouTube → youtube-transcript-api (free captions)
+     - TikTok/Instagram → yt-dlp audio + Whisper
+     - Final fallback: title + description
   3. Save as TrendPattern row.
 """
+import base64
 import json
 import os
 import subprocess
@@ -98,13 +93,66 @@ def get_youtube_transcript(url: str) -> tuple[Optional[str], str]:
         return None, "yt-error"
 
 
-def get_transcript_via_whisper(url: str) -> tuple[Optional[str], str]:
-    """Download video audio via yt-dlp and transcribe with our local Whisper.
+def download_video(url: str, out_dir: str) -> Optional[str]:
+    """Use yt-dlp to download a TikTok/Instagram/YouTube video. Returns local file path."""
+    out_template = os.path.join(out_dir, "video.%(ext)s")
+    try:
+        subprocess.run(
+            ["yt-dlp", "-f", "b", "-o", out_template, "--no-warnings", "--no-playlist", url],
+            capture_output=True, check=True, timeout=180,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+        print(f"[PATTERN] yt-dlp download failed: {e}")
+        return None
+    for ext in ("mp4", "webm", "mov", "mkv"):
+        path = os.path.join(out_dir, f"video.{ext}")
+        if os.path.exists(path):
+            return path
+    return None
 
-    Note: This requires yt-dlp installed and Whisper model. Currently yt-dlp is NOT in
-    requirements (we don't ship it yet). For Phase 2.0 this is a placeholder — falls back
-    to title-only when yt-dlp is missing.
-    """
+
+def extract_keyframes(video_path: str, out_dir: str, count: int = 6) -> list[str]:
+    """Extract `count` evenly-spaced JPEG keyframes (scaled to 540 wide) from a video."""
+    duration = _probe_duration(video_path)
+    if not duration or duration <= 0:
+        return []
+    step = duration / (count + 1)
+    paths: list[str] = []
+    for i in range(1, count + 1):
+        ts = step * i
+        out = os.path.join(out_dir, f"frame_{i}.jpg")
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-ss", f"{ts:.2f}", "-i", video_path,
+                    "-frames:v", "1", "-q:v", "5", "-vf", "scale=540:-1",
+                    "-update", "1", out,
+                ],
+                capture_output=True, check=True, timeout=30,
+            )
+            if os.path.exists(out) and os.path.getsize(out) > 1024:
+                paths.append(out)
+        except subprocess.CalledProcessError:
+            continue
+    return paths
+
+
+def _probe_duration(video_path: str) -> Optional[float]:
+    try:
+        out = subprocess.check_output(
+            [
+                "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1", video_path,
+            ],
+            text=True, timeout=15,
+        ).strip()
+        return float(out) if out else None
+    except Exception:
+        return None
+
+
+def get_transcript_via_whisper(url: str) -> tuple[Optional[str], str]:
+    """Download video audio via yt-dlp and transcribe with our local Whisper."""
     try:
         # Try yt-dlp to download the audio
         with tempfile.TemporaryDirectory() as tmp:
@@ -179,18 +227,51 @@ def build_user_prompt(trend: Trend, transcript: str) -> str:
 
 
 def extract_pattern(trend: Trend, db) -> TrendPattern:
-    """Run full extraction: transcript → LLM → save TrendPattern. Upserts on (trend_id)."""
-    transcript, source_tag = get_transcript(trend)
+    """Run full extraction with multimodal-first strategy:
+      1. yt-dlp downloads the trend video
+      2. ffmpeg extracts 6 keyframes
+      3. Opus 4.8 sees frames + transcript → structured pattern (character, app UI, CTA)
+      4. Fallback to transcript-only if download/frames fail
+    """
+    transcript, transcript_source = get_transcript(trend)
 
     llm = LLMClient()
+    images_b64: list[str] = []
+    used_source = transcript_source
+
+    # Try multimodal path: download + keyframes
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            video_path = download_video(trend.url, tmp) if trend.url else None
+            if video_path:
+                frames = extract_keyframes(video_path, tmp, count=6)
+                for f in frames:
+                    with open(f, "rb") as fp:
+                        images_b64.append(base64.b64encode(fp.read()).decode("ascii"))
+                if images_b64:
+                    used_source = "multimodal+" + transcript_source
+                    print(f"[PATTERN] Multimodal: {len(images_b64)} keyframes for trend-{trend.id}")
+    except Exception as e:
+        print(f"[PATTERN] Multimodal prep failed: {e}. Continuing transcript-only.")
+
     user_prompt = build_user_prompt(trend, transcript)
-    result = llm.generate_structured_output(SYSTEM_PROMPT, user_prompt)
+    if images_b64:
+        user_prompt += (
+            "\n\nAttached: 6 evenly-spaced keyframes from the video. Describe ONLY what you see "
+            "in the frames — gender, hair, hats/headwear, accessories, clothing, on-screen "
+            "text overlays, smartphone screens, app UI, percentages, zodiac symbols. Do not "
+            "guess what is not visible."
+        )
+
+    result = llm.generate_structured_output(
+        SYSTEM_PROMPT, user_prompt, images_base64=images_b64 or None,
+    )
 
     existing = db.query(TrendPattern).filter(TrendPattern.trend_id == trend.id).first()
     pattern = existing or TrendPattern(trend_id=trend.id)
 
     pattern.transcript = transcript[:8000] if transcript else None
-    pattern.transcript_source = source_tag
+    pattern.transcript_source = used_source
     pattern.hook = result.get("hook")
     pattern.story_beats_json = json.dumps(result.get("story_beats", []), ensure_ascii=False)
     pattern.characters_json = json.dumps(result.get("characters", []), ensure_ascii=False)
