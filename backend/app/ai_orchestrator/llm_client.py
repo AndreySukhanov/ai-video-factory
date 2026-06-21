@@ -54,7 +54,7 @@ class LLMClient:
                 api_key=settings.LAOZHANG_API_KEY,
                 base_url=settings.LAOZHANG_BASE_URL,
             )
-            self.model = settings.LLM_MODEL or "claude-opus-4-6"
+            self.model = settings.LLM_MODEL or "claude-opus-4-8"
             self.is_claude = self.model.startswith("claude")
             print(f"[LLM CLIENT] Using LaoZhang with {self.model}")
         elif provider == "openrouter":
@@ -62,7 +62,7 @@ class LLMClient:
                 api_key=settings.OPENROUTER_API_KEY,
                 base_url="https://openrouter.ai/api/v1",
             )
-            self.model = settings.LLM_MODEL or "deepseek/deepseek-chat-v3-0324"
+            self.model = settings.LLM_MODEL or "deepseek/deepseek-v4-pro"
             print(f"[LLM CLIENT] Using OpenRouter with {self.model}")
         else:  # openai
             self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
