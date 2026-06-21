@@ -294,7 +294,7 @@ const ru: Record<string, string> = {
   "generateV2.generateAudio": "Генерировать аудио (звук в видео)",
   "generateV2.promptWriterHint": "Какая модель пишет промпты эпизодов и раскадровки.",
   "generateV2.llmOpus48": "Claude Opus 4.8 (LaoZhang)",
-  "generateV2.llmGpt55": "GPT-5.5 (OpenRouter)",
+  "generateV2.llmGpt55": "GPT-5.5 (OpenAI)",
   "generateV2.llmDeepseek": "DeepSeek V4 (OpenRouter)",
   "generateV2.videoModelSeedance": "Seedance 2.0 (LaoZhang) — $0.05/видео, самый дешёвый, до 15с",
   "generateV2.videoModelWavespeed": "Seedance 2.0 Fast (WaveSpeed) — $0.50/видео, image+text, до 15с",
