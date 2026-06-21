@@ -73,25 +73,41 @@ class LLMClient:
         self,
         system_prompt: str,
         user_prompt: str,
-        response_format: Dict[str, Any] = None
+        response_format: Dict[str, Any] = None,
+        images_base64: list[str] | None = None,
     ) -> Dict[str, Any]:
         """
-        Generate structured JSON output from LLM
+        Generate structured JSON output from LLM.
+
+        If `images_base64` is given (list of base64-encoded JPEG strings), the user
+        message is sent as multimodal content (Opus 4.8 and OpenAI Vision will see
+        the images directly). LaoZhang passes through OpenAI-style image_url content.
         """
         if not self.use_real_api:
             print("[LLM CLIENT] Using mock response (no API key)")
             return self._mock_response(user_prompt)
 
         try:
-            print(f"[LLM CLIENT] Calling {self.model}...")
+            print(f"[LLM CLIENT] Calling {self.model}{' (multimodal)' if images_base64 else ''}...")
+
+            if images_base64:
+                user_content: Any = [{"type": "text", "text": user_prompt}]
+                for b64 in images_base64:
+                    user_content.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+                    })
+            else:
+                user_content = user_prompt
+
             kwargs = {
                 "model": self.model,
                 "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
+                    {"role": "user", "content": user_content},
                 ],
                 "temperature": 0.7,
-                "timeout": 90,
+                "timeout": 180 if images_base64 else 90,
             }
             # Claude on LaoZhang ignores response_format and wraps in markdown.
             # Instead nudge it via system prompt + parse with fence stripping.
