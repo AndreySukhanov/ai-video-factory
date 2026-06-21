@@ -127,50 +127,51 @@ NICHES: dict[str, dict] = {
         },
     },
 
-    # ── Специальная ниша: рекламные ролики астрологических дейтинг-апов ──
-    # Главный вирусный паттерн 2026: "Soulmate Sketch" (приложение рисует AI-портрет
-    # соулмейта по натальной карте). Топ-апы: Astra, NUiT, Boo, Co-Star, The Pattern.
-    # Видео по формуле: скептичная героиня → пробует апп → AI-портрет → шок → CTA скачать.
-    "dating_astrology": {
+    # ── Узкая ниша: рекламные ролики приложений типа "Soulmate Sketch" ──
+    # Главный вирусный паттерн 2026: приложение рисует AI-портрет соулмейта по натальной
+    # карте (топ-апы: Astra, NUiT). Шаблон ролика: скептичная героиня → пробует апп →
+    # AI-портрет → реакция шока/слёз → CTA. Только эта механика, ничего общего по астрологии.
+    "soulmate_sketch": {
         "display_name": {
-            "en": "Astrology Dating Apps (soulmate ads)",
-            "ru": "Астро-дейтинг приложения (реклама)",
+            "en": "Soulmate Sketch app ads",
+            "ru": "Soulmate Sketch (реклама приложений)",
         },
         "hashtags": {
             "en": [
-                "soulmatesketch", "soulmate", "astrologyapp", "astrologydating",
-                "birthchart", "birthchartreading", "natalchart",
-                "zodiaccompatibility", "zodiacmatch", "twinflame",
-                "astraapp", "nuit", "coastar", "thepattern",
-                "synastry", "love astrology", "lovecompatibility",
-                "manifestlove", "manifestation",
+                "soulmatesketch", "soulmateportrait", "soulmatereveal",
+                "aisoulmate", "aisketchapp", "soulmatedrawing",
+                "astraapp", "astraappsoulmate", "nuit", "nuitapp",
+                "birthchartsoulmate", "aidrewmysoulmate",
+                "mysoulmaterevealed", "futurespouseai",
+                "manifestedsoulmate", "twinflameportrait",
+                "aiportraitsoulmate", "soulmateappreveal",
             ],
             "ru": [
-                "соулмейт", "соулмейтскетч", "астроприложение",
-                "астропортрет", "астропортретсудьбы",
-                "натальнаякарта", "совместимостьзнаков",
-                "совместимость", "близнецовоепламя",
-                "синастрия", "ярусь судьбу", "судьбавтоммаппе",
-                "карматическаясвязь", "любовнаясовместимость",
-                "знакизодиакалюбовь", "тарорасклад",
+                "соулмейтскетч", "соулмейтпортрет", "портретсудьбы",
+                "ииисоулмейт", "ииинарисовалсоулмейта", "соулмейтреакция",
+                "astraприложение", "соулмейтpriложение",
+                "судьбавтоммаппе", "иипредсказалсудьбу",
+                "иирисуетсудьбу", "портретбудущегомужа",
+                "иипортретпарьня", "соулмейтаирасклад",
+                "иипоказалсоулмейта", "иирасклад",
             ],
         },
         "youtube_queries": {
             "en": [
                 "#shorts soulmate sketch app",
-                "#shorts astrology dating app review",
-                "#shorts birth chart soulmate reveal",
-                "#shorts AI soulmate portrait app",
-                "#shorts astra app soulmate",
-                "#shorts zodiac compatibility test",
+                "#shorts AI drew my soulmate",
+                "#shorts astra app soulmate reveal",
+                "#shorts AI portrait of soulmate",
+                "#shorts I tried the soulmate sketch app",
+                "#shorts soulmate revealed app",
             ],
             "ru": [
-                "#shorts соулмейт приложение",
-                "#shorts портрет судьбы по дате рождения",
-                "#shorts астро дейтинг",
-                "#shorts совместимость знаков расклад",
-                "#shorts таро на любовь",
-                "#shorts натальная карта совместимость",
+                "#shorts соулмейт скетч",
+                "#shorts ИИ нарисовал соулмейта",
+                "#shorts портрет судьбы по дате",
+                "#shorts соулмейт приложение реакция",
+                "#shorts ии показал моего соулмейта",
+                "#shorts портрет будущего мужа ии",
             ],
         },
     },
