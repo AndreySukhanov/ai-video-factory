@@ -93,6 +93,7 @@ class CloneBriefResponse(BaseModel):
     suggested_title: Optional[str] = None
     title_formula: Optional[str] = None
     viral_mechanic: Optional[str] = None
+    folder_url: Optional[str] = None  # /static/clones/trend-{id}/ — папка с артефактами
     error: Optional[str] = None
 
 class TrendFetchResponse(BaseModel):
