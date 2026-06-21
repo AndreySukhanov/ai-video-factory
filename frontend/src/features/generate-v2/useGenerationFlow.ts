@@ -187,7 +187,27 @@ export function useGenerationFlow() {
       if (brief.character_card) setCharacterCard(brief.character_card);
       if (brief.suggested_title) setSeriesTitle(brief.suggested_title);
 
-      setCurrentStep('idea');
+      // Pre-fill episode drafts from brief.episodes (derived from story_beats by
+      // /clone-brief). This skips the "Plan series" LLM step — beats are already
+      // structured, so we go straight to /generate ready to render.
+      if (Array.isArray(brief.episodes) && brief.episodes.length > 0) {
+        type BriefEp = { number: number; title: string; synopsis: string; prompt: string };
+        const drafts: EpisodeDraft[] = (brief.episodes as BriefEp[]).map((ep) => ({
+          id: createEpisodeId(ep.number),
+          number: ep.number,
+          title: ep.title,
+          synopsis: ep.synopsis,
+          prompt: ep.prompt,
+          status: 'queued' as const,
+          anchorPrompt: brief.anchor_prompt,
+        }));
+        setEpisodes(drafts);
+        // Episodes ready — jump straight to the Episodes step
+        setCurrentStep('episodes');
+      } else {
+        setCurrentStep('idea');
+      }
+
       hydratedRef.current = true;
       // Consume the brief so a page reload doesn't re-prefill
       try { sessionStorage.removeItem('clone_brief'); } catch { /* ignore */ }
