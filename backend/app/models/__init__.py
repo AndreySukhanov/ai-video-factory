@@ -6,6 +6,7 @@ from .asset import Asset
 from .job import Job
 from .character import Character
 from .trend import Trend, StoryIdea, TrendSnapshot
+from .trend_pattern import TrendPattern
 from .schedule import ScheduledTask
 from .youtube_channel import YouTubeChannel, YouTubeUpload
 from .analytics import VideoAnalytics

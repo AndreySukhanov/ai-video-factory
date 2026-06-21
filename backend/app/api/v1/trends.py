@@ -9,7 +9,9 @@ from app.schemas.trend import (
     IdeaApproveResponse, IdeaGenerateRequest, IdeaGenerateResponse,
     TrendGenerateRequest, TrendGenerateResponse,
     NicheInfo, NichesResponse,
+    TrendPatternRead, ExtractPatternResponse, CloneBriefResponse,
 )
+from app.models.trend_pattern import TrendPattern
 from app.services.trendwatcher.trend_analyzer import TrendAnalyzer
 from app.services.trendwatcher.niches import list_niches, resolve_lang
 
@@ -332,4 +334,78 @@ def generate_from_trend(trend_id: int, request: TrendGenerateRequest = None,
         seo_tags=seo_tags,
         seo_hashtags=seo_hashtags,
         message=f"Project {project.id} created from trend '{trend.title[:50]}'"
+    )
+
+
+# ─── Phase 2: Deep pattern extraction ─────────────────────────────────────────
+
+@router.post("/{trend_id}/extract-pattern", response_model=ExtractPatternResponse)
+def extract_trend_pattern(trend_id: int, db: Session = Depends(get_db)):
+    """Extract structural pattern (hook, story_beats, characters, title_formula, ...) from a trend.
+
+    Pipeline: transcript (YouTube captions / Whisper) → LLM-structured analysis → TrendPattern row.
+    Idempotent: re-running upserts on (trend_id).
+    """
+    from app.services.trendwatcher.pattern_extractor import extract_pattern
+
+    trend = db.query(Trend).filter(Trend.id == trend_id).first()
+    if not trend:
+        raise HTTPException(status_code=404, detail="Trend not found")
+
+    try:
+        pattern = extract_pattern(trend, db)
+        return ExtractPatternResponse(success=True, pattern=TrendPatternRead.model_validate(pattern))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return ExtractPatternResponse(success=False, error=f"Pattern extraction failed: {e}")
+
+
+@router.get("/{trend_id}/pattern", response_model=ExtractPatternResponse)
+def get_trend_pattern(trend_id: int, db: Session = Depends(get_db)):
+    """Return previously extracted pattern for a trend (if any)."""
+    pattern = db.query(TrendPattern).filter(TrendPattern.trend_id == trend_id).first()
+    if not pattern:
+        return ExtractPatternResponse(success=False, error="No pattern extracted yet for this trend")
+    return ExtractPatternResponse(success=True, pattern=TrendPatternRead.model_validate(pattern))
+
+
+# ─── Phase 3: Clone-to-brief ──────────────────────────────────────────────────
+
+@router.post("/{trend_id}/clone-brief", response_model=CloneBriefResponse)
+def clone_trend_to_brief(trend_id: int, db: Session = Depends(get_db)):
+    """Return a pre-filled generation brief based on the trend's extracted pattern.
+
+    Auto-extracts the pattern if missing. Frontend uses this to pre-fill /generate wizard.
+    """
+    from app.services.trendwatcher.pattern_extractor import extract_pattern
+
+    trend = db.query(Trend).filter(Trend.id == trend_id).first()
+    if not trend:
+        raise HTTPException(status_code=404, detail="Trend not found")
+
+    pattern = db.query(TrendPattern).filter(TrendPattern.trend_id == trend_id).first()
+    if not pattern:
+        try:
+            pattern = extract_pattern(trend, db)
+        except Exception as e:
+            return CloneBriefResponse(success=False, error=f"Pattern extraction failed: {e}")
+
+    # Choose duration based on original (clamp to wizard limits 4-8 sec per episode)
+    duration_per_episode = 6
+    if trend.duration_sec and 4 <= trend.duration_sec / 5 <= 8:
+        duration_per_episode = max(4, min(8, int(trend.duration_sec / 5)))
+
+    return CloneBriefResponse(
+        success=True,
+        idea=pattern.adaptation_brief or trend.title,
+        genre="drama",
+        episodes_count=5,
+        duration=duration_per_episode,
+        aspect_ratio="9:16",
+        anchor_prompt=pattern.anchor_prompt,
+        character_card=pattern.character_card,
+        suggested_title=trend.title,
+        title_formula=pattern.title_formula,
+        viral_mechanic=pattern.viral_mechanic,
     )

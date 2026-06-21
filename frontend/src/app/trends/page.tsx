@@ -378,6 +378,28 @@ export default function TrendsPage() {
         }
     };
 
+    // Phase 3: clone a trend's pattern into a /generate wizard prefill.
+    // Fetches /clone-brief (which auto-runs Phase 2 pattern extraction if missing),
+    // stashes the brief in sessionStorage, then navigates to /generate.
+    const handleCloneTrend = async (trendId: number) => {
+        setGeneratingTrend(trendId);
+        setError('');
+        try {
+            const res = await fetch(`${API_V1_BASE_URL}/trends/${trendId}/clone-brief`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                try { sessionStorage.setItem('clone_brief', JSON.stringify(data)); } catch { /* ignore */ }
+                window.location.href = '/generate?source=clone';
+            } else {
+                setError(data.error || 'Clone-brief failed');
+            }
+        } catch (e: unknown) {
+            setError(toErrorMessage(e));
+        } finally {
+            setGeneratingTrend(null);
+        }
+    };
+
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'pending': return 'bg-yellow-500/20 text-yellow-400';
@@ -867,16 +889,26 @@ export default function TrendsPage() {
                                                         )}
                                                     </div>
                                                 ) : (
-                                                    <button
-                                                        onClick={() => handleGenerateFromTrend(trend.id)}
-                                                        disabled={generatingTrend === trend.id}
-                                                        className="mt-auto w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
-                                                    >
-                                                        {generatingTrend === trend.id
-                                                            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('trends.analyzingTrend')}</>
-                                                            : <><Sparkles className="w-3.5 h-3.5" /> {t('trends.generateSimilar')}</>
-                                                        }
-                                                    </button>
+                                                    <div className="mt-auto flex flex-col gap-1.5">
+                                                        <button
+                                                            onClick={() => handleCloneTrend(trend.id)}
+                                                            disabled={generatingTrend === trend.id}
+                                                            className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                                                            title={t('trends.cloneSimilarTitle')}
+                                                        >
+                                                            {generatingTrend === trend.id
+                                                                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('trends.cloning')}</>
+                                                                : <><Sparkles className="w-3.5 h-3.5" /> {t('trends.cloneSimilar')}</>
+                                                            }
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleGenerateFromTrend(trend.id)}
+                                                            disabled={generatingTrend === trend.id}
+                                                            className="w-full bg-blue-600/50 hover:bg-blue-700/60 disabled:opacity-50 px-3 py-1.5 rounded-xl text-[10px] font-medium flex items-center justify-center gap-1 transition-colors"
+                                                        >
+                                                            {t('trends.generateSimilar')} (SEO)
+                                                        </button>
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>

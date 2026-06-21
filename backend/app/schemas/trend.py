@@ -51,6 +51,50 @@ class NicheInfo(BaseModel):
 class NichesResponse(BaseModel):
     niches: List[NicheInfo]
 
+
+# --- TrendPattern (Phase 2: deep extraction) ---
+class TrendPatternRead(BaseModel):
+    id: int
+    trend_id: int
+    transcript_source: Optional[str] = None
+    hook: Optional[str] = None
+    story_beats_json: Optional[str] = None
+    characters_json: Optional[str] = None
+    title_formula: Optional[str] = None
+    cta_structure_json: Optional[str] = None
+    visual_style_json: Optional[str] = None
+    viral_mechanic: Optional[str] = None
+    adaptation_brief: Optional[str] = None
+    anchor_prompt: Optional[str] = None
+    character_card: Optional[str] = None
+    extracted_at: Optional[datetime] = None
+    llm_model: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class ExtractPatternResponse(BaseModel):
+    success: bool
+    pattern: Optional[TrendPatternRead] = None
+    error: Optional[str] = None
+
+
+# --- Clone-to-brief (Phase 3) ---
+class CloneBriefResponse(BaseModel):
+    success: bool
+    # Pre-filled IdeaForm payload
+    idea: Optional[str] = None
+    genre: Optional[str] = "drama"
+    episodes_count: int = 5
+    duration: int = 6
+    aspect_ratio: str = "9:16"
+    anchor_prompt: Optional[str] = None
+    character_card: Optional[str] = None
+    suggested_title: Optional[str] = None
+    title_formula: Optional[str] = None
+    viral_mechanic: Optional[str] = None
+    error: Optional[str] = None
+
 class TrendFetchResponse(BaseModel):
     success: bool
     count: int
