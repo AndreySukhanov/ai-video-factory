@@ -37,6 +37,16 @@ class Settings(BaseSettings):
     WAVESPEED_API_KEY: Optional[str] = None
     WAVESPEED_BASE_URL: str = "https://api.wavespeed.ai/api/v3"
 
+    # TTS — ElevenLabs (с native word-level timestamps) и OpenAI TTS (с Whisper alignment, Phase 1.1)
+    ELEVENLABS_API_KEY: Optional[str] = None
+    ELEVENLABS_VOICE_ID: Optional[str] = None  # default voice; can be overridden per request
+    ELEVENLABS_MODEL_ID: Optional[str] = None  # default: eleven_multilingual_v2
+
+    # Whisper aligner — выровнять word-timestamps для TTS-провайдеров без нативной поддержки
+    WHISPER_MODEL: str = "tiny"  # tiny (39MB) | base (74MB) | small (244MB) | medium (769MB) | large-v3 (1.5GB)
+    WHISPER_DEVICE: str = "cpu"  # cpu | cuda
+    WHISPER_COMPUTE_TYPE: str = "int8"  # int8 (CPU-fast) | float16 (CUDA) | float32
+
     # LLM model selection — if set, overrides default routing
     # Examples: "claude-opus-4-6" (via LaoZhang), "claude-opus-4-7"
     LLM_MODEL: Optional[str] = None

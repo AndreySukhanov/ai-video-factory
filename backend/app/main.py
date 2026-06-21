@@ -111,6 +111,22 @@ def _migrate_add_columns():
                 conn.execute(text("ALTER TABLE trends ADD COLUMN matched_keyword VARCHAR"))
                 print("[MIGRATE] Added 'matched_keyword' column to trends table")
 
+    # Add voiceover columns to 'episodes' if missing (Phase 1: TTS support)
+    if "episodes" in insp.get_table_names():
+        columns = [c["name"] for c in insp.get_columns("episodes")]
+        for col_name, col_sql in [
+            ("voiceover_url", "ALTER TABLE episodes ADD COLUMN voiceover_url VARCHAR"),
+            ("voiceover_words_json", "ALTER TABLE episodes ADD COLUMN voiceover_words_json TEXT"),
+            ("voiceover_provider", "ALTER TABLE episodes ADD COLUMN voiceover_provider VARCHAR"),
+            ("video_with_voiceover_url", "ALTER TABLE episodes ADD COLUMN video_with_voiceover_url VARCHAR"),
+            ("video_with_captions_url", "ALTER TABLE episodes ADD COLUMN video_with_captions_url VARCHAR"),
+            ("video_with_music_url", "ALTER TABLE episodes ADD COLUMN video_with_music_url VARCHAR"),
+        ]:
+            if col_name not in columns:
+                with engine.begin() as conn:
+                    conn.execute(text(col_sql))
+                    print(f"[MIGRATE] Added '{col_name}' column to episodes table")
+
 _migrate_add_columns()
 
 app = FastAPI(

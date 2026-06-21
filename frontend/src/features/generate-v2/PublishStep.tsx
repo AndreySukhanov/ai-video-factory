@@ -2,6 +2,8 @@ import { Film, Loader2, Send } from 'lucide-react';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Select } from '@/components/ui';
 import { EpisodeDraft, PublishFormState } from './types';
 import { useLanguage } from '@/contexts/LanguageContext';
+import VoiceoverPanel from './VoiceoverPanel';
+import MusicPanel from './MusicPanel';
 
 interface PublishStepProps {
   episodes: EpisodeDraft[];
@@ -31,6 +33,9 @@ export default function PublishStep({
   const { t } = useLanguage();
   const readyEpisodes = episodes.filter((episode) => episode.status === 'done' && episode.videoUrl);
   const canStitch = readyEpisodes.length > 1;
+  const selectedEpisode = readyEpisodes.find((e) => e.id === form.selectedEpisodeId);
+  const voiceoverTargetUrl: string | null =
+    stitchedVideoUrl || selectedEpisode?.videoUrl || null;
 
   return (
     <Card>
@@ -89,6 +94,9 @@ export default function PublishStep({
             </Select>
           </div>
         )}
+
+        {voiceoverTargetUrl && <VoiceoverPanel videoUrl={voiceoverTargetUrl} />}
+        {voiceoverTargetUrl && <MusicPanel videoUrl={voiceoverTargetUrl} />}
 
         <div className="space-y-2">
           <label className="text-sm text-[var(--muted)]">{t('review.titleLabel')}</label>
