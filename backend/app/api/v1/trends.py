@@ -8,8 +8,10 @@ from app.schemas.trend import (
     StoryIdeaRead, TrendAnalyzeRequest, TrendAnalyzeResponse,
     IdeaApproveResponse, IdeaGenerateRequest, IdeaGenerateResponse,
     TrendGenerateRequest, TrendGenerateResponse,
+    NicheInfo, NichesResponse,
 )
 from app.services.trendwatcher.trend_analyzer import TrendAnalyzer
+from app.services.trendwatcher.niches import list_niches, resolve_lang
 
 router = APIRouter()
 _analyzer = None
@@ -24,13 +26,18 @@ def _get_analyzer() -> TrendAnalyzer:
 
 @router.post("/fetch", response_model=TrendFetchResponse)
 def fetch_trends(request: TrendFetchRequest, db: Session = Depends(get_db)):
-    """Fetch trends from all configured sources and save to DB."""
+    """Fetch trends from all configured sources and save to DB.
+
+    If `niche` is provided (e.g. "astrology"), uses niche-specific hashtags/queries
+    instead of `keywords`/defaults. Niches are defined in `app.services.trendwatcher.niches`.
+    """
     analyzer = _get_analyzer()
     trends = analyzer.fetch_all_trends(
         db, region=request.region, category=request.category,
         max_per_source=request.max_per_source,
         keywords=request.keywords,
         platforms=request.platforms,
+        niche=request.niche,
     )
     return TrendFetchResponse(
         success=True,
@@ -39,11 +46,19 @@ def fetch_trends(request: TrendFetchRequest, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/niches", response_model=NichesResponse)
+def get_niches(lang: str = Query("en", description="Display language: en | ru")):
+    """Return list of available niches with localized display names."""
+    niches = list_niches(lang=lang)
+    return NichesResponse(niches=[NicheInfo(**n) for n in niches])
+
+
 @router.get("/", response_model=List[TrendRead])
 def list_trends(
     source: Optional[str] = Query(None),
     region: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
+    niche: Optional[str] = Query(None),
     sort_by: Optional[str] = Query(None),  # velocity, viral_coef, score
     anomaly_only: bool = Query(False),
     skip: int = 0,
@@ -58,6 +73,8 @@ def list_trends(
         query = query.filter(Trend.region == region)
     if category:
         query = query.filter(Trend.category == category)
+    if niche:
+        query = query.filter(Trend.niche == niche)
     if anomaly_only:
         query = query.filter(Trend.is_anomaly == 1)
 

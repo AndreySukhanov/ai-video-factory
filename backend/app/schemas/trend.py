@@ -30,6 +30,7 @@ class TrendRead(TrendBase):
     viral_coef: Optional[float] = None
     is_anomaly: bool = False
     matched_keyword: Optional[str] = None
+    niche: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -40,6 +41,15 @@ class TrendFetchRequest(BaseModel):
     max_per_source: int = 30
     keywords: List[str] = []
     platforms: List[str] = []  # empty = all enabled sources
+    niche: Optional[str] = None  # astrology | relationships | motivation | ...
+
+class NicheInfo(BaseModel):
+    id: str
+    display_name: str
+    hashtag_count: int
+
+class NichesResponse(BaseModel):
+    niches: List[NicheInfo]
 
 class TrendFetchResponse(BaseModel):
     success: bool
