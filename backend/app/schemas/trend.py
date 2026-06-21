@@ -80,6 +80,12 @@ class ExtractPatternResponse(BaseModel):
 
 
 # --- Clone-to-brief (Phase 3) ---
+class CloneEpisode(BaseModel):
+    number: int
+    title: str
+    synopsis: str
+    prompt: str
+
 class CloneBriefResponse(BaseModel):
     success: bool
     # Pre-filled IdeaForm payload
@@ -93,6 +99,8 @@ class CloneBriefResponse(BaseModel):
     suggested_title: Optional[str] = None
     title_formula: Optional[str] = None
     viral_mechanic: Optional[str] = None
+    # Pre-filled episode list derived from story_beats — no extra LLM call needed
+    episodes: List[CloneEpisode] = []
     error: Optional[str] = None
 
 class TrendFetchResponse(BaseModel):
