@@ -42,7 +42,7 @@ class StoryGenerator:
     LLM_PRESETS = {
         "deepseek": ("openrouter", "deepseek/deepseek-v4-pro"),
         "opus-4.8": ("laozhang", "claude-opus-4-8"),
-        "gpt-5.5":  ("openrouter", "openai/gpt-5.5"),
+        "gpt-5.5":  ("openai", "gpt-5.5"),
     }
 
     def __init__(self, llm_preset: str | None = None):

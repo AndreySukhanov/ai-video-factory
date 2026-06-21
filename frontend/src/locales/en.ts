@@ -294,7 +294,7 @@ const en: Record<string, string> = {
   "generateV2.generateAudio": "Generate audio (sound in video)",
   "generateV2.promptWriterHint": "Which model writes episode and storyboard prompts.",
   "generateV2.llmOpus48": "Claude Opus 4.8 (LaoZhang)",
-  "generateV2.llmGpt55": "GPT-5.5 (OpenRouter)",
+  "generateV2.llmGpt55": "GPT-5.5 (OpenAI)",
   "generateV2.llmDeepseek": "DeepSeek V4 (OpenRouter)",
   "generateV2.videoModelSeedance": "Seedance 2.0 (LaoZhang) — $0.05/video, cheapest, up to 15s",
   "generateV2.videoModelWavespeed": "Seedance 2.0 Fast (WaveSpeed) — $0.50/video, image+text, up to 15s",
