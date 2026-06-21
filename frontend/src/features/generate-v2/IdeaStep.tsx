@@ -67,11 +67,11 @@ export default function IdeaStep({ value, isPlanning, onChange, onGenerate }: Id
         <div className="space-y-2">
           <label className="text-sm text-[var(--muted)]">{t('generateV2.promptWriter')}</label>
           <Select
-            value={value.llmModel ?? 'opus-4.7'}
+            value={value.llmModel ?? 'opus-4.8'}
             onChange={(event) => onChange('llmModel', event.target.value as IdeaFormState['llmModel'])}
           >
-            <option value="opus-4.7">{t('generateV2.llmOpus47')}</option>
             <option value="opus-4.8">{t('generateV2.llmOpus48')}</option>
+            <option value="gpt-5.5">{t('generateV2.llmGpt55')}</option>
             <option value="deepseek">{t('generateV2.llmDeepseek')}</option>
           </Select>
           <p className="text-xs text-[var(--muted)]">{t('generateV2.promptWriterHint')}</p>

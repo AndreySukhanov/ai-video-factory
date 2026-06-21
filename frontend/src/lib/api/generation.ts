@@ -8,7 +8,7 @@ export interface SeriesPlanRequest {
   episodes_count: number;
   duration: number;
   aspect_ratio: string;
-  llm_model?: 'deepseek' | 'opus-4.7' | 'opus-4.8' | null;
+  llm_model?: 'deepseek' | 'opus-4.8' | 'gpt-5.5' | null;
 }
 
 export interface SeriesPlanEpisode {

@@ -47,7 +47,7 @@ const DEFAULT_IDEA_FORM: IdeaFormState = {
   duration: 6,
   aspectRatio: '9:16',
   model: 'laozhang',
-  llmModel: 'opus-4.7',
+  llmModel: 'opus-4.8',
   generateAudio: true,
 };
 
@@ -473,7 +473,7 @@ export function useGenerationFlow() {
         episodes_count: ideaForm.episodesCount,
         duration: ideaForm.duration,
         aspect_ratio: ideaForm.aspectRatio,
-        llm_model: ideaForm.llmModel ?? 'opus-4.7',
+        llm_model: ideaForm.llmModel ?? 'opus-4.8',
       });
 
       if (!response.success) {
