@@ -41,13 +41,13 @@ class StoryGenerator:
     # Public aliases user can pick in UI → (provider, model_id)
     LLM_PRESETS = {
         "deepseek": ("openrouter", "deepseek/deepseek-v4-pro"),
-        "opus-4.7": ("laozhang", "claude-opus-4-7"),
         "opus-4.8": ("laozhang", "claude-opus-4-8"),
+        "gpt-5.5":  ("openrouter", "openai/gpt-5.5"),
     }
 
     def __init__(self, llm_preset: str | None = None):
         """
-        llm_preset: 'deepseek' | 'opus-4.7' | 'opus-4.8' | None (auto)
+        llm_preset: 'deepseek' | 'opus-4.8' | 'gpt-5.5' | None (auto)
         Auto prefers LaoZhang+Claude if LAOZHANG_API_KEY else OpenRouter+DeepSeek else OpenAI.
         """
         self.client = None
@@ -61,7 +61,7 @@ class StoryGenerator:
 
         if not provider:
             if settings.LAOZHANG_API_KEY:
-                provider, model = "laozhang", "claude-opus-4-7"
+                provider, model = "laozhang", "claude-opus-4-8"
             elif settings.OPENROUTER_API_KEY:
                 provider, model = "openrouter", "deepseek/deepseek-v4-pro"
             elif settings.OPENAI_API_KEY:
@@ -506,7 +506,7 @@ _story_generators: dict[str, StoryGenerator] = {}
 def get_story_generator(llm_preset: str | None = None) -> StoryGenerator:
     """
     Get or create StoryGenerator instance for the given LLM preset.
-    llm_preset: 'deepseek' | 'opus-4.7' | 'opus-4.8' | None (auto-detect)
+    llm_preset: 'deepseek' | 'opus-4.8' | 'gpt-5.5' | None (auto-detect)
     """
     cache_key = llm_preset or "auto"
     if cache_key not in _story_generators:
