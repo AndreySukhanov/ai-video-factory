@@ -94,30 +94,34 @@ export default function ClonePage() {
     setLoading(true);
     setError(null);
     try {
-      // Trend basic info
-      const tRes = await fetch(`${API_V1_BASE_URL}/trends/?limit=1`);
-      const allTrends: Trend[] = await tRes.json();
-      const t = allTrends.find((x) => x.id === trendId);
-      if (!t) {
-        // fall back: hit pattern endpoint anyway to get trend_id
-        const pr = await fetch(`${API_V1_BASE_URL}/trends/${trendId}/pattern`);
-        const pd = await pr.json();
-        if (pd.success && pd.pattern) setPattern(pd.pattern);
-        setError(t ? null : 'Тренд не найден в текущей выборке. Возможно, фетч стёр запись.');
-        return;
+      // Trend basic info — direct lookup by id
+      const tRes = await fetch(`${API_V1_BASE_URL}/trends/by-id/${trendId}`);
+      if (tRes.ok) {
+        const t: Trend = await tRes.json();
+        setTrend(t);
+      } else if (tRes.status === 404) {
+        setError('Тренд не найден. Возможно, был стёрт следующим фетчем.');
       }
-      setTrend(t);
 
-      // Existing pattern
+      // Existing pattern (if any)
       const pr = await fetch(`${API_V1_BASE_URL}/trends/${trendId}/pattern`);
       const pd = await pr.json();
       if (pd.success && pd.pattern) setPattern(pd.pattern);
 
-      // Brief (this also re-extracts pattern if it was missing — but we already
-      // checked above; calling again is idempotent and very cheap if pattern exists)
+      // Brief — auto-extracts pattern if missing
       const br = await fetch(`${API_V1_BASE_URL}/trends/${trendId}/clone-brief`, { method: 'POST' });
       const bd = await br.json();
-      if (bd.success) setBrief(bd);
+      if (bd.success) {
+        setBrief(bd);
+        // If pattern was just extracted (wasn't there before), re-fetch
+        if (!pd.success) {
+          const pr2 = await fetch(`${API_V1_BASE_URL}/trends/${trendId}/pattern`);
+          const pd2 = await pr2.json();
+          if (pd2.success && pd2.pattern) setPattern(pd2.pattern);
+        }
+      } else {
+        setError(bd.error || 'Не удалось получить бриф');
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

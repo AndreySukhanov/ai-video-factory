@@ -55,6 +55,16 @@ def get_niches(lang: str = Query("en", description="Display language: en | ru"))
     return NichesResponse(niches=[NicheInfo(**n) for n in niches])
 
 
+@router.get("/by-id/{trend_id}", response_model=TrendRead)
+def get_trend_by_id(trend_id: int, db: Session = Depends(get_db)):
+    """Fetch a single trend by ID (the list endpoint paginates; this is direct lookup)."""
+    trend = db.query(Trend).filter(Trend.id == trend_id).first()
+    if not trend:
+        raise HTTPException(status_code=404, detail="Trend not found")
+    trend.is_anomaly = bool(trend.is_anomaly)
+    return trend
+
+
 @router.get("/", response_model=List[TrendRead])
 def list_trends(
     source: Optional[str] = Query(None),
