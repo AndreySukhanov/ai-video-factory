@@ -168,6 +168,8 @@ export default function TrendsPage() {
     const [keywordInput, setKeywordInput] = useState('');
     const [keywordFilter, setKeywordFilter] = useState('');
     const [platforms, setPlatforms] = useState<Set<string>>(new Set(['youtube', 'tiktok', 'instagram']));
+    const [niche, setNiche] = useState<string>('');
+    const [availableNiches, setAvailableNiches] = useState<{ id: string; display_name: string; hashtag_count: number }[]>([]);
     const [activeTab, setActiveTab] = useState<'trends' | 'ideas'>('trends');
     const [error, setError] = useState('');
     const [expandedVariants, setExpandedVariants] = useState<Set<number>>(new Set());
@@ -219,7 +221,9 @@ export default function TrendsPage() {
     const fetchTrendsList = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_V1_BASE_URL}/trends/?region=${region}&limit=100`);
+            const params = new URLSearchParams({ region, limit: '100' });
+            if (niche) params.append('niche', niche);
+            const res = await fetch(`${API_V1_BASE_URL}/trends/?${params.toString()}`);
             const data = await res.json();
             setTrends(data);
         } catch (e: unknown) {
@@ -227,7 +231,7 @@ export default function TrendsPage() {
         } finally {
             setLoading(false);
         }
-    }, [region]);
+    }, [region, niche]);
 
     const fetchIdeasList = useCallback(async () => {
         try {
@@ -257,7 +261,28 @@ export default function TrendsPage() {
             const storedKws = localStorage.getItem('trend_keywords');
             if (storedKws) setKeywords(JSON.parse(storedKws));
         } catch { /* ignore */ }
+        try {
+            const storedNiche = localStorage.getItem('trend_niche');
+            if (storedNiche) setNiche(storedNiche);
+        } catch { /* ignore */ }
     }, []);
+
+    // Fetch available niches once at mount
+    useEffect(() => {
+        const lang = region === 'RU' ? 'ru' : 'en';
+        fetch(`${API_V1_BASE_URL}/trends/niches?lang=${lang}`)
+            .then((r) => r.json())
+            .then((d) => setAvailableNiches(d.niches || []))
+            .catch(() => { /* ignore */ });
+    }, [region]);
+
+    // Persist niche choice
+    useEffect(() => {
+        try {
+            if (niche) localStorage.setItem('trend_niche', niche);
+            else localStorage.removeItem('trend_niche');
+        } catch { /* ignore */ }
+    }, [niche]);
 
     const toggleFavorite = (id: number) => {
         setFavorites(prev => {
@@ -276,7 +301,7 @@ export default function TrendsPage() {
             const res = await fetch(`${API_V1_BASE_URL}/trends/fetch`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ region, max_per_source: 20, keywords, platforms: [...platforms] }),
+                body: JSON.stringify({ region, max_per_source: 20, keywords, platforms: [...platforms], niche: niche || null }),
             });
             const data = await res.json();
             if (data.success) {
@@ -459,6 +484,17 @@ export default function TrendsPage() {
                             </h1>
                         </div>
                         <div className="flex items-center gap-3">
+                            <select
+                                value={niche}
+                                onChange={(e) => setNiche(e.target.value)}
+                                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm"
+                                title={t('trends.nicheSelectorTitle')}
+                            >
+                                <option value="">{t('trends.nicheAll')}</option>
+                                {availableNiches.map((n) => (
+                                    <option key={n.id} value={n.id}>{n.display_name}</option>
+                                ))}
+                            </select>
                             <select value={region} onChange={(e) => setRegion(e.target.value)}
                                 className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm">
                                 <option value="US">US</option>

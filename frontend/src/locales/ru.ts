@@ -256,6 +256,8 @@ const ru: Record<string, string> = {
   "generateV2.musicReady": "Видео с музыкой",
   "generateV2.musicError": "Ошибка микширования",
   "generateV2.musicTracksLoadError": "Не удалось загрузить список треков",
+  "trends.nicheAll": "Все ниши",
+  "trends.nicheSelectorTitle": "Фильтр по нише: астрология, отношения, мотивация...",
   "generateV2.errorStitchFailed": "Не удалось склеить эпизоды",
   "generateV2.errorNoReadyEpisodes": "Нет готовых эпизодов для склейки",
   "generateV2.frameChaining": "Цепочка кадров",

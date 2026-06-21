@@ -256,6 +256,8 @@ const en: Record<string, string> = {
   "generateV2.musicReady": "Video with music",
   "generateV2.musicError": "Music mix failed",
   "generateV2.musicTracksLoadError": "Failed to load track list",
+  "trends.nicheAll": "All niches",
+  "trends.nicheSelectorTitle": "Filter by niche: astrology, relationships, motivation...",
   "generateV2.errorStitchFailed": "Failed to stitch episodes",
   "generateV2.errorNoReadyEpisodes": "No ready episodes to stitch",
   "generateV2.frameChaining": "Frame chaining",

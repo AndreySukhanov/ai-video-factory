@@ -110,6 +110,10 @@ def _migrate_add_columns():
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE trends ADD COLUMN matched_keyword VARCHAR"))
                 print("[MIGRATE] Added 'matched_keyword' column to trends table")
+        if "niche" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE trends ADD COLUMN niche VARCHAR"))
+                print("[MIGRATE] Added 'niche' column to trends table")
 
     # Add voiceover columns to 'episodes' if missing (Phase 1: TTS support)
     if "episodes" in insp.get_table_names():
