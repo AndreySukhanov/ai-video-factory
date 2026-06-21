@@ -8,7 +8,7 @@ export interface FlowStep {
   hint: string;
 }
 
-export type LlmModel = 'deepseek' | 'opus' | 'opus-4.7';
+export type LlmModel = 'deepseek' | 'opus-4.7' | 'opus-4.8';
 
 export interface IdeaFormState {
   idea: string;
@@ -17,7 +17,7 @@ export interface IdeaFormState {
   duration: number;
   aspectRatio: string;
   model: GenerationModel;
-  llmModel?: LlmModel;  // LLM preset for prompt writer (default: 'opus' if LaoZhang key set)
+  llmModel?: LlmModel;  // LLM preset for prompt writer (default: 'opus-4.7' if LaoZhang key set)
   generateAudio: boolean;  // generate audio track with the video
 }
 
