@@ -159,6 +159,43 @@ export function useGenerationFlow() {
   const [voiceDescription, setVoiceDescription] = useState<string | null>(null);
   const [anchorPrompt, setAnchorPrompt] = useState<string | null>(null);
 
+  // Phase 3: prefill from /trends "Сделать похожее" button.
+  // Trends page stashes the clone-brief in sessionStorage and navigates here with ?source=clone.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (searchParams.get('source') !== 'clone') return;
+    if (projectLoadedRef.current) return;
+    projectLoadedRef.current = true;
+
+    let raw: string | null = null;
+    try { raw = sessionStorage.getItem('clone_brief'); } catch { return; }
+    if (!raw) return;
+
+    try {
+      const brief = JSON.parse(raw);
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+
+      setIdeaForm(normalizeIdeaForm({
+        idea: brief.idea || '',
+        genre: normalizeGenre(brief.genre || 'drama'),
+        episodesCount: brief.episodes_count || 5,
+        duration: brief.duration || 6,
+        aspectRatio: brief.aspect_ratio || '9:16',
+      }));
+
+      if (brief.anchor_prompt) setAnchorPrompt(brief.anchor_prompt);
+      if (brief.character_card) setCharacterCard(brief.character_card);
+      if (brief.suggested_title) setSeriesTitle(brief.suggested_title);
+
+      setCurrentStep('idea');
+      hydratedRef.current = true;
+      // Consume the brief so a page reload doesn't re-prefill
+      try { sessionStorage.removeItem('clone_brief'); } catch { /* ignore */ }
+    } catch (e) {
+      console.warn('[clone-brief] failed to parse stashed brief:', e);
+    }
+  }, [searchParams]);
+
   // Load project from ?project=N URL parameter
   useEffect(() => {
     if (typeof window === 'undefined') return;
