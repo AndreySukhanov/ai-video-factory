@@ -18,7 +18,7 @@ class LLMClient:
 
     Provider priority (auto):
       1. LaoZhang + Claude Opus (if LAOZHANG_API_KEY set)
-      2. OpenRouter + DeepSeek V3 (if OPENROUTER_API_KEY set)
+      2. OpenRouter + DeepSeek V4 (if OPENROUTER_API_KEY set)
       3. OpenAI gpt-4-turbo (if OPENAI_API_KEY set)
       4. Mock
 
