@@ -26,7 +26,6 @@ interface EpisodesStepProps {
 }
 
 const SINGLE_MODEL_KEYS = [
-  { value: 'seedance', i18nKey: 'generateV2.videoModelSeedance' },
   { value: 'wavespeed', i18nKey: 'generateV2.videoModelWavespeed' },
   { value: 'wavespeed-standard', i18nKey: 'generateV2.videoModelWavespeedStandard' },
   { value: 'wavespeed-v15', i18nKey: 'generateV2.videoModelWavespeedV15' },
@@ -36,7 +35,6 @@ const SINGLE_MODEL_KEYS = [
 ] as const;
 
 const SERIES_MODEL_KEYS = [
-  { value: 'seedance', i18nKey: 'generateV2.videoModelSeedanceSeries' },
   { value: 'wavespeed', i18nKey: 'generateV2.videoModelWavespeed' },
   { value: 'wavespeed-standard', i18nKey: 'generateV2.videoModelWavespeedStandard' },
   { value: 'wavespeed-v15', i18nKey: 'generateV2.videoModelWavespeedV15' },
@@ -51,19 +49,17 @@ const MODEL_DURATION_OPTIONS: Record<IdeaFormState['model'], readonly number[]> 
   laozhang: [4, 6, 8],
   gemini: [4, 6, 8],
   vertex: [4, 6, 8],
-  seedance: [4, 5, 8, 10, 15],
   wavespeed: [4, 5, 8, 10, 15],
   'wavespeed-standard': [4, 5, 8, 10, 15],
   'wavespeed-v15': [5, 10],
   fal: [5, 10],
 };
 
-const MODELS_WITH_REFS: GenerationModel[] = ['vertex', 'laozhang', 'seedance', 'wavespeed', 'wavespeed-standard', 'wavespeed-v15'];
+const MODELS_WITH_REFS: GenerationModel[] = ['vertex', 'laozhang', 'wavespeed', 'wavespeed-standard', 'wavespeed-v15'];
 const MODELS_WITH_TRANSITION: GenerationModel[] = ['vertex', 'laozhang'];
 
 function estimatePerEpisodeCost(model: GenerationModel, duration: number): number {
   switch (model) {
-    case 'seedance': return 0.05;
     case 'wavespeed': return 0.50;  // Seedance 2.0-fast
     case 'wavespeed-standard': return 0.60;  // Seedance 2.0 standard
     case 'wavespeed-v15': return 0.26;  // Seedance v1.5-pro

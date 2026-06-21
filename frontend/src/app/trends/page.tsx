@@ -348,7 +348,7 @@ export default function TrendsPage() {
             const res = await fetch(`${API_V1_BASE_URL}/trends/ideas/${ideaId}/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ model: 'seedance', duration: 6, aspect_ratio: '9:16' }),
+                body: JSON.stringify({ model: 'wavespeed', duration: 6, aspect_ratio: '9:16' }),
             });
             const data = await res.json();
             if (data.success) await fetchIdeasList();
@@ -363,7 +363,7 @@ export default function TrendsPage() {
             const res = await fetch(`${API_V1_BASE_URL}/trends/${trendId}/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ genre: 'drama', model: 'seedance', duration: 6, aspect_ratio: '9:16' }),
+                body: JSON.stringify({ genre: 'drama', model: 'wavespeed', duration: 6, aspect_ratio: '9:16' }),
             });
             const data: TrendGenerateResult = await res.json();
             if (data.success) {

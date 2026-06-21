@@ -4,11 +4,10 @@ import { EpisodeDraft } from './types';
 import { GenerationModel } from '@/lib/api/generation';
 import { useLanguage } from '@/contexts/LanguageContext';
 
-const SINGLE_EPISODE_MODELS: GenerationModel[] = ['seedance', 'wavespeed', 'wavespeed-standard', 'wavespeed-v15', 'laozhang', 'vertex', 'kling'];
-const SERIES_MODELS: GenerationModel[] = ['seedance', 'wavespeed', 'wavespeed-standard', 'wavespeed-v15', 'laozhang', 'vertex', 'minimax'];
+const SINGLE_EPISODE_MODELS: GenerationModel[] = ['wavespeed', 'wavespeed-standard', 'wavespeed-v15', 'laozhang', 'vertex', 'kling'];
+const SERIES_MODELS: GenerationModel[] = ['wavespeed', 'wavespeed-standard', 'wavespeed-v15', 'laozhang', 'vertex', 'minimax'];
 
 const MODEL_LABELS: Record<GenerationModel, string> = {
-  seedance: 'Seedance 2.0 (LaoZhang)',
   wavespeed: 'Seedance 2.0 Fast (WaveSpeed)',
   'wavespeed-standard': 'Seedance 2.0 Standard (WaveSpeed)',
   'wavespeed-v15': 'Seedance v1.5-pro (WaveSpeed)',

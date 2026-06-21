@@ -1,6 +1,6 @@
 import { API_V1_BASE_URL } from '@/lib/apiBase';
 
-export type GenerationModel = 'kling' | 'minimax' | 'laozhang' | 'gemini' | 'vertex' | 'seedance' | 'wavespeed' | 'wavespeed-standard' | 'wavespeed-v15' | 'fal';
+export type GenerationModel = 'kling' | 'minimax' | 'laozhang' | 'gemini' | 'vertex' | 'wavespeed' | 'wavespeed-standard' | 'wavespeed-v15' | 'fal';
 
 export interface SeriesPlanRequest {
   idea: string;

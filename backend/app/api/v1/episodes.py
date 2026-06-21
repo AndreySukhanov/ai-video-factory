@@ -230,7 +230,7 @@ router = APIRouter()
 # Whitelisted video models — unknown values are rejected (422) instead of
 # silently falling through to a fallback provider.
 ALLOWED_VIDEO_MODELS = {
-    "seedance", "wavespeed", "wavespeed-standard", "wavespeed-v15", "laozhang",
+    "wavespeed", "wavespeed-standard", "wavespeed-v15", "laozhang",
     "vertex", "gemini", "kling", "minimax", "pika", "fal", "mock",
 }
 
@@ -298,7 +298,7 @@ STATIC_DIR = os.path.join(
 
 
 # Initialize video provider
-def get_video_provider(model: str = "seedance", reference_image_url: str = None, aspect_ratio: str = "9:16", quality_mode: str = "fast", generate_audio: bool = True):
+def get_video_provider(model: str = "wavespeed", reference_image_url: str = None, aspect_ratio: str = "9:16", quality_mode: str = "fast", generate_audio: bool = True):
     """Get the configured video provider based on model choice"""
     # Vertex AI provider (Google Cloud — supports generateAudio=false for cheaper no-audio)
     if model == "vertex":
@@ -314,12 +314,7 @@ def get_video_provider(model: str = "seedance", reference_image_url: str = None,
         use_fast = (quality_mode == "fast")
         return GeminiVeoProvider(use_fast=use_fast, use_fl=has_ref, aspect_ratio=aspect_ratio)
 
-    # Seedance 2.0 via LaoZhang ($0.05/video, up to 9 reference images)
-    if model == "seedance":
-        from app.media.video_provider_seedance import SeedanceProvider
-        return SeedanceProvider(aspect_ratio=aspect_ratio)
-
-    # Seedance 2.0 via WaveSpeed AI (альтернативный путь, Bearer auth)
+    # Seedance 2.0 via WaveSpeed AI (Bearer auth)
     if model == "wavespeed":
         from app.media.video_provider_wavespeed import WavespeedSeedanceProvider
         return WavespeedSeedanceProvider(aspect_ratio=aspect_ratio, use_fast=True)
@@ -466,10 +461,10 @@ async def generate_episode(request: EpisodeGenerateRequest):
         # Process reference image URL (first frame for I2V)
         await send_progress(session_id, "processing", 10, "Processing reference images...")
 
-        # LaoZhang routes ("seedance" $0.05, "laozhang") need a public URL → catbox.
+        # LaoZhang route ("laozhang" Veo) needs a public URL → catbox.
         # WaveSpeed/Seedance 2.0 backend can't fetch catbox (geo-blocked), so feed it a
         # base64 data URI instead (works for v1.5 + 2.0 fast/standard, local and prod).
-        needs_public_url = request.model in ("seedance", "laozhang")
+        needs_public_url = request.model in ("laozhang",)
 
         if needs_public_url and request.reference_image_url:
             # Upload local file to catbox for external API access
@@ -549,7 +544,7 @@ async def generate_episode(request: EpisodeGenerateRequest):
             clip_kwargs["negative_prompt"] = request.negative_prompt
 
         # Pass audio preference only to providers that support it
-        if request.model in ("gemini", "vertex", "laozhang", "seedance", "wavespeed", "wavespeed-standard", "wavespeed-v15"):
+        if request.model in ("gemini", "vertex", "laozhang", "wavespeed", "wavespeed-standard", "wavespeed-v15"):
             clip_kwargs["generate_audio"] = request.generate_audio
 
         variants_count = 1
@@ -601,7 +596,7 @@ async def generate_episode(request: EpisodeGenerateRequest):
 
             # Auto-download video to local server (Veo retention = 2 days!)
             local_video_url = video_url
-            if video_url and request.model in ("gemini", "vertex", "seedance", "laozhang", "wavespeed", "wavespeed-standard", "wavespeed-v15"):
+            if video_url and request.model in ("gemini", "vertex", "laozhang", "wavespeed", "wavespeed-standard", "wavespeed-v15"):
                 try:
                     await send_progress(session_id, "downloading", 85, "Saving video locally...")
                     local_video_url = await asyncio.to_thread(_download_video_locally, video_url)
@@ -655,7 +650,7 @@ async def get_generation_status():
     if settings.WAVESPEED_API_KEY:
         available.extend(["wavespeed", "wavespeed-standard", "wavespeed-v15"])
     if settings.LAOZHANG_API_KEY:
-        available.extend(["seedance", "laozhang"])
+        available.extend(["laozhang"])
     if settings.VERTEX_PROJECT_ID and settings.VERTEX_SA_KEY_PATH:
         available.append("vertex")
     if settings.GEMINI_API_KEY:
