@@ -8,7 +8,7 @@ Full-stack AI video generation platform: trend discovery, script generation, vid
 
 - **Frontend**: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4
 - **Backend**: FastAPI + SQLAlchemy (SQLite), Redis + RQ worker
-- **Deploy**: Docker Compose + nginx on VPS (`your-domain.com`)
+- **Deploy**: Docker Compose + nginx on VPS
 
 ## Common Commands
 
