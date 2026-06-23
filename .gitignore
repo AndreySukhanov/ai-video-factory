@@ -203,3 +203,33 @@ Gemini_Generated_Image_*
 
 # Agent configs with credentials
 AGENTS.md
+
+# Investor / business documents (private)
+docs/*INVESTOR*
+docs/*INVESTORS*
+*FOR_INVESTORS*
+
+# Database files (never commit user/session data)
+*.db
+*.sqlite
+*.sqlite3
+backend/sql_app.db
+backend/microdrama.db
+
+# Generated media (local outputs)
+backend/static/generated/
+backend/static/storyboard/
+backend/static/merged/
+backend/uploads/
+
+# Service account keys (never commit)
+vertex-sa-key.json
+*sa-key*.json
+google-credentials*.json
+
+# Build logs / temp
+*.log
+*.tar
+*.tmp
+tmpclaude-*
+nul
