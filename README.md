@@ -9,7 +9,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
-[![License](https://img.shields.io/badge/license-Proprietary-red)]()
+[![License](https://img.shields.io/badge/license-Source--Available-blue)](LICENSE)
 
 </div>
 
@@ -259,7 +259,9 @@ ai-video-factory/
 
 ## Лицензия
 
-Проприетарное ПО. Все права защищены.
+**Source-Available** — код открыт для чтения и обучения. Любое коммерческое или производное использование требует письменного разрешения. Подробности — в файле [LICENSE](LICENSE).
+
+Контакт по вопросам лицензирования: avsukhanov21@gmail.com
 
 ---
 
