@@ -269,7 +269,7 @@ CRITICAL RULES:
                     try:
                         result = json.loads(json_str)
                         print(f"[STORY GENERATOR] Fixed JSON successfully!")
-                    except:
+                    except Exception:
                         episodes_match = re.findall(
                             r'"number"\s*:\s*(\d+).*?"title"\s*:\s*"([^"]+)".*?"synopsis"\s*:\s*"([^"]+)".*?"visual_prompt"\s*:\s*"((?:[^"\\]|\\.)*)"|'
                             r'"number"\s*:\s*(\d+).*?"visual_prompt"\s*:\s*"((?:[^"\\]|\\.)*)"',

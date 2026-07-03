@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     CORS_ALLOW_ORIGINS: str = ""
     ALLOW_PRIVATE_URL_FETCH: bool = False
 
+    # API auth: если задан, все /api/v1/* требуют заголовок X-API-Key
+    # (кроме OPTIONS, /youtube/auth/callback и openapi.json). Пусто = auth выключен.
+    API_AUTH_KEY: Optional[str] = None
+
     # Trendwatcher
     YOUTUBE_API_KEY: Optional[str] = None
     APIFY_API_TOKEN: Optional[str] = None
