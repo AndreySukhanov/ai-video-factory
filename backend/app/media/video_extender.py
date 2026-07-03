@@ -179,7 +179,7 @@ class VeoVideoExtender:
         for seg in video_segments:
             try:
                 os.unlink(seg)
-            except:
+            except OSError:
                 pass
 
         return {

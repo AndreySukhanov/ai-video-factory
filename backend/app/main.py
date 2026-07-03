@@ -1,6 +1,8 @@
+import hmac
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.api.v1 import jobs, projects, characters, websocket, upload, episodes, trends, scheduler, youtube, analytics, review, proxy, pipeline_templates
 from app.core.config import settings
@@ -137,6 +139,33 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
+
+# API-key auth: включается, если в .env задан API_AUTH_KEY.
+# Исключения: OPTIONS (CORS preflight), OAuth-callback YouTube (редирект Google
+# приходит без заголовков), openapi.json (чтобы работал /docs),
+# proxy/image (грузится через <img src>, браузер не шлёт заголовки;
+# защищён собственным whitelist хостов).
+_AUTH_EXEMPT_PATHS = {f"{settings.API_V1_STR}/openapi.json"}
+_AUTH_EXEMPT_PREFIXES = (
+    f"{settings.API_V1_STR}/youtube/auth/callback",
+    f"{settings.API_V1_STR}/proxy/image",
+)
+
+
+@app.middleware("http")
+async def api_key_auth(request, call_next):
+    if settings.API_AUTH_KEY and request.url.path.startswith("/api/"):
+        path = request.url.path
+        exempt = (
+            request.method == "OPTIONS"
+            or path in _AUTH_EXEMPT_PATHS
+            or path.startswith(_AUTH_EXEMPT_PREFIXES)
+        )
+        if not exempt:
+            provided = request.headers.get("x-api-key") or ""
+            if not hmac.compare_digest(provided, settings.API_AUTH_KEY):
+                return JSONResponse(status_code=401, content={"detail": "Invalid or missing API key"})
+    return await call_next(request)
 
 # CORS middleware - MUST be added before routes
 cors_origins = [o.strip().rstrip("/") for o in (settings.CORS_ALLOW_ORIGINS or "").split(",") if o.strip()]

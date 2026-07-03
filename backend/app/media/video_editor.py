@@ -327,7 +327,7 @@ class VideoEditor:
                 capture_output=True, text=True
             )
             return "audio" in result.stdout
-        except:
+        except Exception:
             return False
     
     def _add_subtitles(self, input_path: str, subtitle_path: str, output_path: str) -> bool:
@@ -748,7 +748,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             dims = result.stdout.strip().split('x')
             width = int(dims[0]) if len(dims) > 0 else 720
             height = int(dims[1]) if len(dims) > 1 else 1280
-        except:
+        except Exception:
             width, height = 720, 1280
         
         # Create intro title card

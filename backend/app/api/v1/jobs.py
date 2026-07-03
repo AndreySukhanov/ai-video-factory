@@ -82,7 +82,7 @@ def get_project_jobs(project_id: int, db: Session = Depends(get_db)):
         payload = {}
         try:
             payload = json.loads(job.payload_json) if job.payload_json else {}
-        except:
+        except Exception:
             pass
         
         result.append({
