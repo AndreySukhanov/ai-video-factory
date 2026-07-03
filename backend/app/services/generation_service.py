@@ -43,20 +43,28 @@ def _get_job_queue():
             return None
     return _job_queue
 
+def _process_job_in_thread(job_id: int):
+    from app.core.db import SessionLocal
+    db = SessionLocal()
+    try:
+        process_job(db, job_id)
+    except Exception as e:
+        print(f"[ERROR] Fallback job {job_id} failed: {e}")
+    finally:
+        db.close()
+
+
 def enqueue_job(job_id: int):
     """Enqueue a job to Redis Queue for processing by the worker"""
     job_queue = _get_job_queue()
     if job_queue is None:
-        print(f"[WARNING] Redis not available. Job {job_id} will be processed synchronously.")
-        # Process job synchronously if Redis is not available
-        from app.core.db import SessionLocal
-        db = SessionLocal()
-        try:
-            process_job(db, job_id)
-        finally:
-            db.close()
+        # Без Redis обрабатываем job в фоновом потоке, чтобы не блокировать
+        # HTTP-запрос на минуты (генерация видео долгая).
+        print(f"[WARNING] Redis not available. Job {job_id} will run in a background thread.")
+        import threading
+        threading.Thread(target=_process_job_in_thread, args=(job_id,), daemon=True).start()
         return
-    
+
     from app.worker import job_processor
     job_queue.enqueue(job_processor, job_id)
     print(f"Job {job_id} enqueued to Redis Queue")
