@@ -11,7 +11,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { safeArray, safeStringArray } from '@/lib/safeJson';
 import { toErrorMessage } from '@/lib/errorUtils';
-import { API_V1_BASE_URL } from '@/lib/apiBase';
+import { API_V1_BASE_URL, apiFetch } from '@/lib/apiBase';
 
 interface TrendItem {
     id: number;
@@ -223,7 +223,7 @@ export default function TrendsPage() {
         try {
             const params = new URLSearchParams({ region, limit: '100' });
             if (niche) params.append('niche', niche);
-            const res = await fetch(`${API_V1_BASE_URL}/trends/?${params.toString()}`);
+            const res = await apiFetch(`${API_V1_BASE_URL}/trends/?${params.toString()}`);
             const data = await res.json();
             setTrends(data);
         } catch (e: unknown) {
@@ -270,7 +270,7 @@ export default function TrendsPage() {
     // Fetch available niches once at mount
     useEffect(() => {
         const lang = region === 'RU' ? 'ru' : 'en';
-        fetch(`${API_V1_BASE_URL}/trends/niches?lang=${lang}`)
+        apiFetch(`${API_V1_BASE_URL}/trends/niches?lang=${lang}`)
             .then((r) => r.json())
             .then((d) => setAvailableNiches(d.niches || []))
             .catch(() => { /* ignore */ });
@@ -298,7 +298,7 @@ export default function TrendsPage() {
         setError('');
         try {
             // Step 1: fetch trends from sources
-            const res = await fetch(`${API_V1_BASE_URL}/trends/fetch`, {
+            const res = await apiFetch(`${API_V1_BASE_URL}/trends/fetch`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ region, max_per_source: 20, keywords, platforms: [...platforms], niche: niche || null }),
@@ -310,7 +310,7 @@ export default function TrendsPage() {
                 // Step 2: auto-analyze with AI to generate story ideas
                 setAnalyzingTrends(true);
                 try {
-                    const analyzeRes = await fetch(`${API_V1_BASE_URL}/trends/analyze`, {
+                    const analyzeRes = await apiFetch(`${API_V1_BASE_URL}/trends/analyze`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ max_ideas: 5, genre: genreFilter }),
@@ -335,7 +335,7 @@ export default function TrendsPage() {
 
     const handleApprove = async (ideaId: number) => {
         try {
-            const res = await fetch(`${API_V1_BASE_URL}/trends/ideas/${ideaId}/approve`, { method: 'POST' });
+            const res = await apiFetch(`${API_V1_BASE_URL}/trends/ideas/${ideaId}/approve`, { method: 'POST' });
             const data = await res.json();
             if (data.success) await fetchIdeasList();
         } catch (e: unknown) { setError(toErrorMessage(e)); }
@@ -345,7 +345,7 @@ export default function TrendsPage() {
         setGeneratingIdea(ideaId);
         setError('');
         try {
-            const res = await fetch(`${API_V1_BASE_URL}/trends/ideas/${ideaId}/generate`, {
+            const res = await apiFetch(`${API_V1_BASE_URL}/trends/ideas/${ideaId}/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ model: 'wavespeed', duration: 6, aspect_ratio: '9:16' }),
@@ -360,7 +360,7 @@ export default function TrendsPage() {
         setGeneratingTrend(trendId);
         setError('');
         try {
-            const res = await fetch(`${API_V1_BASE_URL}/trends/${trendId}/generate`, {
+            const res = await apiFetch(`${API_V1_BASE_URL}/trends/${trendId}/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ genre: 'drama', model: 'wavespeed', duration: 6, aspect_ratio: '9:16' }),
@@ -447,11 +447,11 @@ export default function TrendsPage() {
     const formatTimeAgo = (dateStr: string): string => {
         const d = new Date(dateStr);
         const hours = (Date.now() - d.getTime()) / 3_600_000;
-        if (hours < 1) return 'только что';
-        if (hours < 24) return 'сегодня';
-        if (hours < 48) return 'вчера';
+        if (hours < 1) return t('trends.timeJustNow');
+        if (hours < 24) return t('trends.timeToday');
+        if (hours < 48) return t('trends.timeYesterday');
         const days = Math.floor(hours / 24);
-        return `${days} дн. назад`;
+        return t('trends.timeDaysAgo', { days });
     };
 
     const StageIcon = ({ stage }: { stage: string }) => {
@@ -552,8 +552,8 @@ export default function TrendsPage() {
                         {/* Left: status + keywords */}
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-3">
-                                <span className="text-sm font-semibold text-white">Ключевые слова</span>
-                                <span className="text-xs text-gray-500">{keywords.length > 0 ? `${keywords.length} настроено` : 'не заданы — используются темы по умолчанию'}</span>
+                                <span className="text-sm font-semibold text-white">{t('trends.radarKeywords')}</span>
+                                <span className="text-xs text-gray-500">{keywords.length > 0 ? t('trends.radarKeywordsCount', { count: keywords.length }) : t('trends.radarKeywordsEmpty')}</span>
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 {keywords.map(kw => (
@@ -567,7 +567,7 @@ export default function TrendsPage() {
                                 <button
                                     onClick={() => { const inp = document.getElementById('kw-input') as HTMLInputElement; inp?.focus(); }}
                                     className="flex items-center gap-1 text-sm text-purple-400 hover:text-purple-300 px-2 py-1 border border-dashed border-purple-500/30 rounded-lg transition-colors">
-                                    + Добавить слово
+                                    {t('trends.radarAddKeyword')}
                                 </button>
                             </div>
                             <input
@@ -581,14 +581,14 @@ export default function TrendsPage() {
                                         setKeywordInput('');
                                     }
                                 }}
-                                placeholder="Введите ключевое слово и нажмите Enter"
+                                placeholder={t('trends.radarKeywordPlaceholder')}
                                 className="mt-3 bg-gray-700/50 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 w-full sm:w-72"
                             />
                         </div>
 
                         {/* Center: platform selection */}
                         <div className="shrink-0">
-                            <div className="text-xs text-gray-500 mb-2">Платформы поиска</div>
+                            <div className="text-xs text-gray-500 mb-2">{t('trends.radarPlatforms')}</div>
                             <div className="flex items-center gap-2">
                                 {([
                                     { id: 'youtube', label: 'YouTube', icon: <Youtube className="w-4 h-4" />, color: 'text-red-500', active: 'bg-red-500/15 border-red-500/50 text-red-400' },
@@ -618,12 +618,12 @@ export default function TrendsPage() {
                             <button onClick={handleFetchTrends} disabled={fetchingTrends || analyzingTrends}
                                 className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 px-5 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors whitespace-nowrap">
                                 {(fetchingTrends || analyzingTrends) ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                                {analyzingTrends ? 'Анализ...' : fetchingTrends ? 'Загрузка...' : 'Загрузить тренды'}
+                                {analyzingTrends ? t('trends.radarAnalyzing') : fetchingTrends ? t('trends.radarLoading') : t('trends.radarFetch')}
                             </button>
                             {trends.length > 0 && (
                                 <div className="text-xs text-gray-500 text-right">
-                                    {trends.length} видео найдено
-                                    {anomalyCount > 0 && <span className="text-red-400 ml-1">· {anomalyCount} аномалий</span>}
+                                    {t('trends.radarVideosFound', { count: trends.length })}
+                                    {anomalyCount > 0 && <span className="text-red-400 ml-1">{t('trends.radarAnomalies', { count: anomalyCount })}</span>}
                                 </div>
                             )}
                         </div>
@@ -694,7 +694,7 @@ export default function TrendsPage() {
                             <div className="flex flex-wrap items-center gap-2 mb-4">
                                 <button onClick={() => setKeywordFilter('')}
                                     className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!keywordFilter ? 'bg-purple-600/30 border-purple-500/50 text-purple-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-500'}`}>
-                                    Все видео <span className="opacity-60">({trends.length})</span>
+                                    {t('trends.filterAllVideos')} <span className="opacity-60">({trends.length})</span>
                                 </button>
                                 {Object.entries(keywordCounts).map(([kw, count]) => (
                                     <button key={kw} onClick={() => setKeywordFilter(keywordFilter === kw ? '' : kw)}
@@ -712,14 +712,14 @@ export default function TrendsPage() {
                                 {anomalyCount > 0 && (
                                     <button onClick={() => setAnomalyOnly(!anomalyOnly)}
                                         className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-colors ${anomalyOnly ? 'bg-red-600/30 border-red-500/50 text-red-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-red-500/50'}`}>
-                                        🔥 Аномалии ({anomalyCount})
+                                        {t('trends.filterAnomalies', { count: anomalyCount })}
                                     </button>
                                 )}
                                 {favorites.size > 0 && (
                                     <button onClick={() => setFavoritesOnly(!favoritesOnly)}
                                         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border transition-colors ${favoritesOnly ? 'bg-pink-600/30 border-pink-500/50 text-pink-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-pink-500/50'}`}>
                                         <Heart className="w-3 h-3" fill={favoritesOnly ? 'currentColor' : 'none'} />
-                                        Избранные ({favorites.size})
+                                        {t('trends.filterFavorites', { count: favorites.size })}
                                     </button>
                                 )}
                             </div>
@@ -733,7 +733,7 @@ export default function TrendsPage() {
                             <div className="text-center py-20 text-gray-500">
                                 <TrendingUp className="w-12 h-12 mx-auto mb-4 opacity-50" />
                                 <p className="text-lg">{t('trends.noTrends')}</p>
-                                <p className="text-sm mt-2">Нет данных для региона <strong className="text-gray-300">{region}</strong> — нажмите «Загрузить тренды»</p>
+                                <p className="text-sm mt-2">{t('trends.noRegionData', { region })}</p>
                             </div>
                         ) : (
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
@@ -795,7 +795,7 @@ export default function TrendsPage() {
                                                     <div className="flex items-center gap-1.5 mb-2">
                                                         {isNew && (
                                                             <span className="bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full leading-none">
-                                                                Новый
+                                                                {t('trends.badgeNew')}
                                                             </span>
                                                         )}
                                                         {trend.viral_coef != null && trend.viral_coef >= 2 && (

@@ -14,7 +14,7 @@ import {
   ImageModel,
   FrameAuditReport,
 } from '@/lib/api/generation';
-import { API_V1_BASE_URL } from '@/lib/apiBase';
+import { API_V1_BASE_URL, apiFetch } from '@/lib/apiBase';
 import { safeJsonParse } from '@/lib/safeJson';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { EpisodeDraft, FlowStep, FlowStepId, GenerationDraftSnapshot, IdeaFormState, PublishFormState } from './types';
@@ -70,14 +70,11 @@ function normalizeEpisodesCount(value: number): number {
   return Math.min(10, Math.max(1, Math.round(value)));
 }
 
-function pickDefaultModelForCount(episodesCount: number): GenerationModel {
-  return episodesCount > 1 ? 'laozhang' : 'laozhang';
-}
-
+const DEFAULT_MODEL: GenerationModel = 'laozhang';
 
 function normalizeModelForCount(model: GenerationModel, episodesCount: number): GenerationModel {
   const allowedModels = episodesCount > 1 ? SERIES_MODELS : SINGLE_EPISODE_MODELS;
-  return allowedModels.includes(model) ? model : pickDefaultModelForCount(episodesCount);
+  return allowedModels.includes(model) ? model : DEFAULT_MODEL;
 }
 
 function normalizeDurationForModel(duration: number, model: GenerationModel): number {
@@ -227,7 +224,7 @@ export function useGenerationFlow() {
 
     localStorage.removeItem(DRAFT_STORAGE_KEY);
 
-    fetch(`${API_V1_BASE_URL}/projects/${pid}`)
+    apiFetch(`${API_V1_BASE_URL}/projects/${pid}`)
       .then((res) => {
         if (!res.ok) throw new Error('Project not found');
         return res.json();
@@ -784,13 +781,6 @@ export function useGenerationFlow() {
     setPublishForm((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  const upgradeToStandard = useCallback(
-    async (_episodeId: string, _variantsCount: number = 2): Promise<boolean> => {
-      return false;
-    },
-    [],
-  );
-
   const selectVariant = useCallback(
     (episodeId: string, variantIndex: number) => {
       const episode = episodes.find((item) => item.id === episodeId);
@@ -996,7 +986,6 @@ export function useGenerationFlow() {
     regenerateEpisode,
     selectPublishEpisode,
     updatePublishForm,
-    upgradeToStandard,
     selectVariant,
     stitchEpisodes,
     publishToReview,

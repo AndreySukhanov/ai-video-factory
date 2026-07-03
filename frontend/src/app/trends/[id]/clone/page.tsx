@@ -7,7 +7,7 @@ import {
   ArrowLeft, ExternalLink, Sparkles, Loader2, RefreshCw,
   AlertCircle, Film, Eye, TrendingUp, BookOpen, Users, Image as ImageIcon,
 } from 'lucide-react';
-import { API_V1_BASE_URL } from '@/lib/apiBase';
+import { API_V1_BASE_URL, apiFetch } from '@/lib/apiBase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 
@@ -95,32 +95,32 @@ export default function ClonePage() {
     setError(null);
     try {
       // Trend basic info — direct lookup by id
-      const tRes = await fetch(`${API_V1_BASE_URL}/trends/by-id/${trendId}`);
+      const tRes = await apiFetch(`${API_V1_BASE_URL}/trends/by-id/${trendId}`);
       if (tRes.ok) {
         const t: Trend = await tRes.json();
         setTrend(t);
       } else if (tRes.status === 404) {
-        setError('Тренд не найден. Возможно, был стёрт следующим фетчем.');
+        setError(t('clone.trendNotFound'));
       }
 
       // Existing pattern (if any)
-      const pr = await fetch(`${API_V1_BASE_URL}/trends/${trendId}/pattern`);
+      const pr = await apiFetch(`${API_V1_BASE_URL}/trends/${trendId}/pattern`);
       const pd = await pr.json();
       if (pd.success && pd.pattern) setPattern(pd.pattern);
 
       // Brief — auto-extracts pattern if missing
-      const br = await fetch(`${API_V1_BASE_URL}/trends/${trendId}/clone-brief`, { method: 'POST' });
+      const br = await apiFetch(`${API_V1_BASE_URL}/trends/${trendId}/clone-brief`, { method: 'POST' });
       const bd = await br.json();
       if (bd.success) {
         setBrief(bd);
         // If pattern was just extracted (wasn't there before), re-fetch
         if (!pd.success) {
-          const pr2 = await fetch(`${API_V1_BASE_URL}/trends/${trendId}/pattern`);
+          const pr2 = await apiFetch(`${API_V1_BASE_URL}/trends/${trendId}/pattern`);
           const pd2 = await pr2.json();
           if (pd2.success && pd2.pattern) setPattern(pd2.pattern);
         }
       } else {
-        setError(bd.error || 'Не удалось получить бриф');
+        setError(bd.error || t('clone.briefFailed'));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -135,12 +135,12 @@ export default function ClonePage() {
     setExtracting(true);
     setError(null);
     try {
-      const r = await fetch(`${API_V1_BASE_URL}/trends/${trendId}/extract-pattern`, { method: 'POST' });
+      const r = await apiFetch(`${API_V1_BASE_URL}/trends/${trendId}/extract-pattern`, { method: 'POST' });
       const d = await r.json();
       if (d.success && d.pattern) {
         setPattern(d.pattern);
         // Also refresh brief
-        const br = await fetch(`${API_V1_BASE_URL}/trends/${trendId}/clone-brief`, { method: 'POST' });
+        const br = await apiFetch(`${API_V1_BASE_URL}/trends/${trendId}/clone-brief`, { method: 'POST' });
         const bd = await br.json();
         if (bd.success) setBrief(bd);
       } else {

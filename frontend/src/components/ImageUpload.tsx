@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { ImagePlus, X, AlertTriangle } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { apiFetch } from '@/lib/apiBase';
 
 interface ImageUploadProps {
     onImageUploaded: (url: string) => void;
@@ -66,7 +67,7 @@ export default function ImageUpload({
             const formData = new FormData();
             formData.append('file', file);
 
-            const response = await fetch(`${apiBaseUrl}/api/v1/upload/image`, {
+            const response = await apiFetch(`${apiBaseUrl}/api/v1/upload/image`, {
                 method: 'POST',
                 body: formData,
             });
@@ -111,7 +112,7 @@ export default function ImageUpload({
     const handleRemove = async () => {
         if (uploadedFilename) {
             try {
-                await fetch(`${apiBaseUrl}/api/v1/upload/image/${uploadedFilename}`, {
+                await apiFetch(`${apiBaseUrl}/api/v1/upload/image/${uploadedFilename}`, {
                     method: 'DELETE',
                 });
             } catch (err) {

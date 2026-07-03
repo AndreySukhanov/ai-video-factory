@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { LanguageProvider, type Locale } from "@/contexts/LanguageContext";
-import { isUiV2Enabled } from "@/lib/featureFlags";
 import { cookies } from "next/headers";
 import Sidebar from "@/components/Sidebar";
 
@@ -26,10 +25,7 @@ export default async function RootLayout({
 
   return (
     <html lang={initialLocale} className="dark" suppressHydrationWarning>
-      <body
-        className={`${inter.className} bg-gray-900 text-white antialiased`}
-        data-ui-v2={isUiV2Enabled ? "1" : "0"}
-      >
+      <body className={`${inter.className} bg-gray-900 text-white antialiased`}>
         <LanguageProvider initialLocale={initialLocale}>
           <div className="flex min-h-screen">
             <Sidebar />

@@ -10,7 +10,7 @@ import {
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { toErrorMessage } from '@/lib/errorUtils';
-import { API_V1_BASE_URL } from '@/lib/apiBase';
+import { API_V1_BASE_URL, apiFetch } from '@/lib/apiBase';
 
 interface AnalyticsSummary {
     total_videos: number;
@@ -60,10 +60,10 @@ export default function DashboardPage() {
         setLoading(true);
         try {
             const [summaryRes, healthRes, videosRes, balanceRes] = await Promise.all([
-                fetch(`${API_V1_BASE_URL}/analytics/summary`),
-                fetch(`${API_V1_BASE_URL}/analytics/health`),
-                fetch(`${API_V1_BASE_URL}/analytics/videos?limit=20`),
-                fetch(`${API_V1_BASE_URL}/analytics/wavespeed-balance`),
+                apiFetch(`${API_V1_BASE_URL}/analytics/summary`),
+                apiFetch(`${API_V1_BASE_URL}/analytics/health`),
+                apiFetch(`${API_V1_BASE_URL}/analytics/videos?limit=20`),
+                apiFetch(`${API_V1_BASE_URL}/analytics/wavespeed-balance`),
             ]);
             setSummary(await summaryRes.json());
             setHealth(await healthRes.json());
@@ -86,7 +86,7 @@ export default function DashboardPage() {
     const handleTestAlert = async () => {
         setAlerting(true);
         try {
-            await fetch(`${API_V1_BASE_URL}/analytics/alert/test`, {
+            await apiFetch(`${API_V1_BASE_URL}/analytics/alert/test`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -105,7 +105,7 @@ export default function DashboardPage() {
 
     const handleHealthAlert = async () => {
         try {
-            await fetch(`${API_V1_BASE_URL}/analytics/health/check-and-alert`, { method: 'POST' });
+            await apiFetch(`${API_V1_BASE_URL}/analytics/health/check-and-alert`, { method: 'POST' });
             setSuccess(t('dashboard.healthCheckDone'));
         } catch (e: unknown) {
             setError(toErrorMessage(e));

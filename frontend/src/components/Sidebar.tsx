@@ -7,7 +7,7 @@ import {
     TrendingUp, Video, ClipboardList, Youtube, BarChart3, Home, Zap
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { API_V1_BASE_URL } from '@/lib/apiBase';
+import { API_V1_BASE_URL, apiFetch } from '@/lib/apiBase';
 
 interface SidebarItemProps {
     href: string;
@@ -64,7 +64,7 @@ export default function Sidebar() {
         const fetchAndCount = async () => {
             try {
                 const lastVisited = localStorage.getItem('sidebar_last_visited_trends');
-                const res = await fetch(`${API_V1_BASE_URL}/trends/?limit=50`);
+                const res = await apiFetch(`${API_V1_BASE_URL}/trends/?limit=50`);
                 if (!res.ok) return;
                 const trends = await res.json();
                 if (lastVisited && Array.isArray(trends)) {
@@ -80,10 +80,17 @@ export default function Sidebar() {
         fetchAndCount();
     }, []);
 
-    // Clear badge when visiting trends page
+    // Clear badge when visiting trends page (setState during render — React's
+    // documented pattern for adjusting state on prop change)
+    const [prevPathname, setPrevPathname] = useState(pathname);
+    if (prevPathname !== pathname) {
+        setPrevPathname(pathname);
+        if (pathname === '/trends') setNewTrendsCount(0);
+    }
+
+    // Remember the visit so the badge stays cleared on next mount
     useEffect(() => {
         if (pathname === '/trends') {
-            setNewTrendsCount(0);
             localStorage.setItem('sidebar_last_visited_trends', new Date().toISOString());
         }
     }, [pathname]);

@@ -10,7 +10,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { safeStringArray } from '@/lib/safeJson';
 import { toErrorMessage } from '@/lib/errorUtils';
-import { API_V1_BASE_URL } from '@/lib/apiBase';
+import { API_V1_BASE_URL, apiFetch } from '@/lib/apiBase';
 
 interface ReviewItem {
     id: number;
@@ -93,7 +93,7 @@ export default function ReviewPage() {
                 body.description = editDescription;
                 body.tags = editTags.split(',').map(tag => tag.trim()).filter(Boolean);
             }
-            const res = await fetch(`${API_V1_BASE_URL}/review/${itemId}/approve`, {
+            const res = await apiFetch(`${API_V1_BASE_URL}/review/${itemId}/approve`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
@@ -125,7 +125,7 @@ export default function ReviewPage() {
                 body.description = editDescription;
                 body.tags = editTags.split(',').map(tag => tag.trim()).filter(Boolean);
             }
-            const res = await fetch(`${API_V1_BASE_URL}/review/${itemId}/schedule`, {
+            const res = await apiFetch(`${API_V1_BASE_URL}/review/${itemId}/schedule`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
@@ -145,7 +145,7 @@ export default function ReviewPage() {
         setActionLoading(itemId);
         setError('');
         try {
-            const res = await fetch(`${API_V1_BASE_URL}/review/${itemId}/reject`, {
+            const res = await apiFetch(`${API_V1_BASE_URL}/review/${itemId}/reject`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({}),
@@ -164,7 +164,7 @@ export default function ReviewPage() {
         setActionLoading(itemId);
         setError('');
         try {
-            const res = await fetch(`${API_V1_BASE_URL}/review/${itemId}/regenerate`, {
+            const res = await apiFetch(`${API_V1_BASE_URL}/review/${itemId}/regenerate`, {
                 method: 'POST',
             });
             const data = await res.json();
@@ -181,7 +181,7 @@ export default function ReviewPage() {
         setActionLoading(itemId);
         setError('');
         try {
-            const res = await fetch(`${API_V1_BASE_URL}/review/${itemId}/publish`, {
+            const res = await apiFetch(`${API_V1_BASE_URL}/review/${itemId}/publish`, {
                 method: 'POST',
             });
             const data = await res.json();
@@ -199,7 +199,7 @@ export default function ReviewPage() {
         setActionLoading(itemId);
         setError('');
         try {
-            const res = await fetch(`${API_V1_BASE_URL}/review/${itemId}`, {
+            const res = await apiFetch(`${API_V1_BASE_URL}/review/${itemId}`, {
                 method: 'DELETE',
             });
             const data = await res.json();
