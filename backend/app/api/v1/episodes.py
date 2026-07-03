@@ -1368,7 +1368,7 @@ async def generate_consistent_story(request: ConsistentStoryRequest):
 
 class VoiceoverRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=5000, description="Text to synthesize")
-    provider: Optional[str] = Field(None, description="elevenlabs | openai (auto if omitted)")
+    provider: Optional[str] = Field(None, description="elevenlabs | edge | openai (auto if omitted)")
     voice_id: Optional[str] = None
     episode_id: Optional[int] = Field(None, description="If set, save voiceover to this episode")
     video_url: Optional[str] = Field(None, description="If set, mux voiceover onto this video")
@@ -1396,8 +1396,9 @@ async def generate_voiceover(request: VoiceoverRequest):
     """Synthesize voiceover for text, optionally mux onto a video and persist to an episode.
 
     Provider routing: if `provider` omitted, picks ElevenLabs when ELEVENLABS_API_KEY is set,
-    otherwise falls back to OpenAI TTS. ElevenLabs returns native word timings; OpenAI returns
-    audio only (word-level alignment will be added in Phase 1.1 via Whisper).
+    otherwise falls back to Edge TTS (free, no key required, native word timings via
+    WordBoundary events). OpenAI TTS is also available — pass `provider="openai"` to use
+    it; word-level alignment is added afterwards via Whisper forced alignment.
     """
     from app.services import tts_service
     from app.core.db import SessionLocal
