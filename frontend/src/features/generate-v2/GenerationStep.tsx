@@ -175,7 +175,7 @@ export default function GenerationStep({
                       <div className="text-xs text-red-400 mt-1">
                         {episode.error}
                         {(episode.error.includes('503') || episode.error.includes('Service Unavailable')) && (
-                          <span className="block mt-1 text-amber-400">⚠ Модель временно недоступна — выберите Kling 2.1 в настройках выше.</span>
+                          <span className="block mt-1 text-amber-400">{t('generateV2.modelUnavailableHint')}</span>
                         )}
                       </div>
                     )}

@@ -125,7 +125,7 @@ export default function StatusPanel({ currentStep, episodes, isGenerating, onRet
                     <span>
                       {episode.error || t('generateV2.statusFailed')}
                       {episode.error && (episode.error.includes('503') || episode.error.includes('Service Unavailable')) && (
-                        <span className="block mt-1 text-amber-400">⚠ Переключитесь на Kling 2.1</span>
+                        <span className="block mt-1 text-amber-400">{t('generateV2.modelUnavailableSwitchKling')}</span>
                       )}
                     </span>
                   </div>
