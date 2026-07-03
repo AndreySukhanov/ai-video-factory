@@ -150,6 +150,13 @@ export function useGenerationFlow() {
   const episodesRef = useRef(episodes);
   useEffect(() => { episodesRef.current = episodes; }, [episodes]);
 
+  // Атомарное обновление ref + state. В async-флоу (очередь генерации) использовать
+  // только его: ref обновляется синхронно до следующего await, state — для рендера.
+  const applyEpisodesUpdate = useCallback((updater: (prev: EpisodeDraft[]) => EpisodeDraft[]) => {
+    episodesRef.current = updater(episodesRef.current);
+    setEpisodes(episodesRef.current);
+  }, []);
+
   // Veo 3.1 series metadata
   const [characterCard, setCharacterCard] = useState<string | null>(null);
   const [voiceDescription, setVoiceDescription] = useState<string | null>(null);
@@ -577,11 +584,11 @@ export function useGenerationFlow() {
       const episode = freshEpisodes.find((item) => item.id === episodeId);
       if (!episode) return false;
       if (!episode.prompt.trim()) {
-        setEpisodes((prev) => updateEpisodeById(prev, episodeId, { status: 'error', error: t('generateV2.errorPromptEmpty') }));
+        applyEpisodesUpdate((prev) => updateEpisodeById(prev, episodeId, { status: 'error', error: t('generateV2.errorPromptEmpty') }));
         return false;
       }
 
-      setEpisodes((prev) => updateEpisodeById(prev, episodeId, { status: 'generating', error: undefined }));
+      applyEpisodesUpdate((prev) => updateEpisodeById(prev, episodeId, { status: 'generating', error: undefined }));
       try {
         // Per-episode model/duration override (falls back to ideaForm)
         const effectiveModel = (episode.model ?? ideaForm.model) as GenerationModel;
@@ -661,15 +668,14 @@ export function useGenerationFlow() {
           throw new Error(response.error || t('generateV2.errorNoVideoUrl'));
         }
 
-        episodesRef.current = updateEpisodeById(episodesRef.current, episodeId, {
+        applyEpisodesUpdate((prev) => updateEpisodeById(prev, episodeId, {
           status: 'done',
           videoUrl: response.video_url,
           error: undefined,
-        });
-        setEpisodes(episodesRef.current);
+        }));
         return true;
       } catch (generationError) {
-        setEpisodes((prev) =>
+        applyEpisodesUpdate((prev) =>
           updateEpisodeById(prev, episodeId, {
             status: 'error',
             error: generationError instanceof Error ? generationError.message : t('generateV2.errorGenerationFailed'),
@@ -678,7 +684,7 @@ export function useGenerationFlow() {
         return false;
       }
     },
-    [ideaForm.aspectRatio, ideaForm.duration, ideaForm.model, ideaForm.episodesCount, storyboardFrames, referenceImages, t],
+    [ideaForm.aspectRatio, ideaForm.duration, ideaForm.model, ideaForm.episodesCount, ideaForm.generateAudio, storyboardFrames, referenceImages, t, applyEpisodesUpdate],
   );
 
   const runQueue = useCallback(async () => {
@@ -749,11 +755,8 @@ export function useGenerationFlow() {
       setError(null);
       setNotice(null);
       // Reset episode to queued, keeping the same prompt
-      setEpisodes((prev) =>
+      applyEpisodesUpdate((prev) =>
         updateEpisodeById(prev, episodeId, { status: 'queued', videoUrl: undefined, error: undefined }),
-      );
-      episodesRef.current = episodesRef.current.map((ep) =>
-        ep.id === episodeId ? { ...ep, status: 'queued' as const, videoUrl: undefined, error: undefined } : ep,
       );
       // Invalidate stitched video
       setStitchedVideoUrl(null);
@@ -761,7 +764,7 @@ export function useGenerationFlow() {
       // Run generation with the same prompt (character card, anchor prompt preserved)
       await runEpisodeGeneration(episodeId);
     },
-    [runEpisodeGeneration],
+    [runEpisodeGeneration, applyEpisodesUpdate],
   );
 
   const selectPublishEpisode = useCallback(
