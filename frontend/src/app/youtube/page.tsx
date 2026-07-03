@@ -9,7 +9,7 @@ import {
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { toErrorMessage } from '@/lib/errorUtils';
-import { API_V1_BASE_URL } from '@/lib/apiBase';
+import { API_V1_BASE_URL, apiFetch } from '@/lib/apiBase';
 
 interface YouTubeChannel {
     id: number;
@@ -70,9 +70,9 @@ export default function YouTubePage() {
         setLoading(true);
         try {
             const [channelsRes, uploadsRes, quotaRes] = await Promise.all([
-                fetch(`${API_V1_BASE_URL}/youtube/channels`),
-                fetch(`${API_V1_BASE_URL}/youtube/uploads?limit=50`),
-                fetch(`${API_V1_BASE_URL}/youtube/quota`),
+                apiFetch(`${API_V1_BASE_URL}/youtube/channels`),
+                apiFetch(`${API_V1_BASE_URL}/youtube/uploads?limit=50`),
+                apiFetch(`${API_V1_BASE_URL}/youtube/quota`),
             ]);
             setChannels(await channelsRes.json());
             setUploads(await uploadsRes.json());
@@ -99,7 +99,7 @@ export default function YouTubePage() {
 
     const handleConnect = async () => {
         try {
-            const res = await fetch(`${API_V1_BASE_URL}/youtube/auth/url`);
+            const res = await apiFetch(`${API_V1_BASE_URL}/youtube/auth/url`);
             const data = await res.json().catch(() => ({} as Record<string, unknown>));
 
             if (!res.ok) {
@@ -121,7 +121,7 @@ export default function YouTubePage() {
 
     const handleDisconnect = async (channelId: number) => {
         try {
-            await fetch(`${API_V1_BASE_URL}/youtube/channels/${channelId}`, { method: 'DELETE' });
+            await apiFetch(`${API_V1_BASE_URL}/youtube/channels/${channelId}`, { method: 'DELETE' });
             await fetchData();
         } catch (e: unknown) {
             setError(toErrorMessage(e));
@@ -137,7 +137,7 @@ export default function YouTubePage() {
         setUploading(true);
         setError('');
         try {
-            const res = await fetch(`${API_V1_BASE_URL}/youtube/upload`, {
+            const res = await apiFetch(`${API_V1_BASE_URL}/youtube/upload`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -1,4 +1,4 @@
-import { API_V1_BASE_URL } from '@/lib/apiBase';
+import { API_AUTH_HEADERS, API_V1_BASE_URL } from '@/lib/apiBase';
 
 export type GenerationModel = 'kling' | 'minimax' | 'laozhang' | 'gemini' | 'vertex' | 'wavespeed' | 'wavespeed-standard' | 'wavespeed-v15' | 'fal';
 
@@ -85,6 +85,7 @@ function xhrJson<T>(url: string, init?: RequestInit): Promise<T> {
     xhr.open(init?.method || 'GET', url);
     // Set headers
     xhr.setRequestHeader('Content-Type', 'application/json');
+    Object.entries(API_AUTH_HEADERS).forEach(([k, v]) => xhr.setRequestHeader(k, v));
     const headers = init?.headers as Record<string, string> | undefined;
     if (headers) {
       Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
@@ -119,6 +120,7 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      ...API_AUTH_HEADERS,
       ...(init?.headers || {}),
     },
   });
