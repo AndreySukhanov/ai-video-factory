@@ -16,18 +16,28 @@ def _ensure_dir(path: Path) -> None:
 
 
 def get_provider(name: str | None = None, *, align: bool = True) -> TTSProvider:
-    """Resolve a TTSProvider by name. Default: elevenlabs if configured, otherwise openai.
+    """Resolve a TTSProvider by name.
+
+    Default priority: ElevenLabs (if `ELEVENLABS_API_KEY` is set) → Edge TTS
+    (free, no key required, native word-timings) → OpenAI (if `OPENAI_API_KEY` is set).
 
     When `align=True`, providers that don't return native word-timings (currently OpenAI)
     are wrapped in `AlignedTTSProvider` which runs Whisper forced alignment after synthesis.
+    Edge TTS and ElevenLabs already emit native timings, so alignment is skipped.
     """
     resolved = (name or "").lower().strip()
     if not resolved:
-        resolved = "elevenlabs" if settings.ELEVENLABS_API_KEY else "openai"
+        if settings.ELEVENLABS_API_KEY:
+            resolved = "elevenlabs"
+        else:
+            resolved = "edge"
 
     if resolved == "elevenlabs":
         from app.media.tts_provider_elevenlabs import ElevenLabsTTS
         return ElevenLabsTTS()
+    if resolved == "edge":
+        from app.media.tts_provider_edge import EdgeTTS
+        return EdgeTTS()
     if resolved == "openai":
         from app.media.tts_provider_openai import OpenAITTS
         from app.media.tts_provider_aligned import AlignedTTSProvider

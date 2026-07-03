@@ -193,6 +193,7 @@ docs/
 tmpclaude-*
 nul
 tmp/
+scratchpad/
 
 # Backend generated static (storyboard frames, generated videos)
 backend/static/

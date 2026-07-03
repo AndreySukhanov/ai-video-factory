@@ -25,3 +25,4 @@ python-telegram-bot
 faster-whisper
 youtube-transcript-api
 yt-dlp
+edge-tts>=7.0.0
