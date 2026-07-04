@@ -7,6 +7,7 @@ import {
     ArrowLeft, CheckCircle, XCircle, AlertTriangle, BarChart3
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { display } from '@/lib/fonts';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { toErrorMessage } from '@/lib/errorUtils';
 import { API_V1_BASE_URL, apiFetch } from '@/lib/apiBase';
@@ -175,16 +176,16 @@ export default function YouTubePage() {
     return (
         <div className="min-h-screen bg-[var(--background)] text-white">
             {/* Header */}
-            <div className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
+            <div className="border-b border-white/[0.06] bg-[var(--surface-1)]/70 backdrop-blur-sm sticky top-0 z-10">
                 <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <Link href="/" className="text-gray-400 hover:text-white transition-colors">
                             <ArrowLeft className="w-5 h-5" />
                         </Link>
-                        <h1 className="text-xl font-bold flex items-center gap-2">
-                            <Youtube className="w-6 h-6 text-red-500" />
-                            {t('youtube.title')}
-                        </h1>
+                        <div>
+                            <div className="font-mono text-[9px] uppercase tracking-[0.35em] text-[var(--brand-1)]">● 05 · {t('sidebar.youtube')}</div>
+                            <h1 className={`${display.className} text-lg font-bold text-white leading-tight`}>{t('youtube.title')}</h1>
+                        </div>
                     </div>
                     <div className="flex items-center gap-3">
                         <LanguageSwitcher />
@@ -211,7 +212,7 @@ export default function YouTubePage() {
                     <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-2">
                             <h2 className="text-sm font-medium flex items-center gap-2">
-                                <BarChart3 className="w-4 h-4 text-purple-400" />
+                                <BarChart3 className="w-4 h-4 text-teal-400" />
                                 {t('youtube.apiQuota')}
                             </h2>
                             <span className="text-xs text-gray-400">
@@ -235,7 +236,7 @@ export default function YouTubePage() {
                         {/* Channels */}
                         <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4">
                             <h2 className="text-sm font-medium mb-3 flex items-center gap-2">
-                                <Link2 className="w-4 h-4 text-purple-400" />
+                                <Link2 className="w-4 h-4 text-teal-400" />
                                 {t('youtube.connectedChannels')}
                             </h2>
                             {channels.length === 0 ? (
@@ -270,7 +271,7 @@ export default function YouTubePage() {
                         {/* Upload Form */}
                         <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4">
                             <h2 className="text-sm font-medium mb-3 flex items-center gap-2">
-                                <Upload className="w-4 h-4 text-purple-400" />
+                                <Upload className="w-4 h-4 text-teal-400" />
                                 {t('youtube.uploadVideo')}
                             </h2>
                             <form onSubmit={handleUpload} className="space-y-3">
@@ -360,12 +361,12 @@ export default function YouTubePage() {
                     <div className="lg:col-span-2">
                         <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4">
                             <h2 className="text-sm font-medium mb-3 flex items-center gap-2">
-                                <Clock className="w-4 h-4 text-purple-400" />
+                                <Clock className="w-4 h-4 text-teal-400" />
                                 {t('youtube.uploadHistory', { count: uploads.length })}
                             </h2>
                             {loading ? (
                                 <div className="flex items-center justify-center py-10">
-                                    <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+                                    <Loader2 className="w-6 h-6 animate-spin text-teal-400" />
                                 </div>
                             ) : uploads.length === 0 ? (
                                 <p className="text-gray-500 text-sm text-center py-10">{t('youtube.noUploads')}</p>

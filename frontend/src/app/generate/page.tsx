@@ -8,7 +8,7 @@ import FeatureErrorBoundary from '@/components/FeatureErrorBoundary';
 export default function GenerateEpisodePageWrapper() {
     return (
         <FeatureErrorBoundary featureName="Generation Wizard">
-            <Suspense fallback={<div className="min-h-screen bg-gray-900 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-purple-400" /></div>}>
+            <Suspense fallback={<div className="min-h-screen bg-gray-900 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-teal-400" /></div>}>
                 <GenerationWizardV2 />
             </Suspense>
         </FeatureErrorBoundary>

@@ -8,6 +8,7 @@ import {
     Music, ArrowUpRight, ArrowRight, ArrowDownRight, Target, ChevronDown, ChevronUp, Heart
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { display } from '@/lib/fonts';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { safeArray, safeStringArray } from '@/lib/safeJson';
 import { toErrorMessage } from '@/lib/errorUtils';
@@ -116,7 +117,7 @@ const SOURCE_CONFIG: Record<string, { label: string; icon: string; color: string
 };
 
 const CONTENT_TYPE_CONFIG: Record<string, { label: string; badgeClass: string }> = {
-    ai_generated: { label: 'AI Generated', badgeClass: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+    ai_generated: { label: 'AI Generated', badgeClass: 'bg-teal-500/20 text-teal-400 border-teal-500/30' },
     animation: { label: 'Animation', badgeClass: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
     story: { label: 'Story', badgeClass: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
     skit: { label: 'Skit', badgeClass: 'bg-green-500/20 text-green-400 border-green-500/30' },
@@ -389,7 +390,7 @@ export default function TrendsPage() {
             case 'pending': return 'bg-yellow-500/20 text-yellow-400';
             case 'approved': return 'bg-blue-500/20 text-blue-400';
             case 'generated': return 'bg-green-500/20 text-green-400';
-            case 'published': return 'bg-purple-500/20 text-purple-400';
+            case 'published': return 'bg-teal-500/20 text-teal-400';
             default: return 'bg-gray-500/20 text-gray-400';
         }
     };
@@ -477,17 +478,17 @@ export default function TrendsPage() {
     return (
         <div className="min-h-screen bg-[var(--background)] text-white">
             {/* Header */}
-            <div className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
+            <div className="border-b border-white/[0.06] bg-[var(--surface-1)]/70 backdrop-blur-sm sticky top-0 z-10">
                 <div className="max-w-7xl mx-auto px-4 py-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                             <Link href="/" className="text-gray-400 hover:text-white transition-colors">
                                 <ArrowLeft className="w-5 h-5" />
                             </Link>
-                            <h1 className="text-xl font-bold flex items-center gap-2">
-                                <TrendingUp className="w-6 h-6 text-purple-400" />
-                                {t('trends.title')}
-                            </h1>
+                            <div>
+                                <div className="font-mono text-[9px] uppercase tracking-[0.35em] text-[var(--brand-1)]">● 01 · {t('sidebar.trends')}</div>
+                                <h1 className={`${display.className} text-lg font-bold text-white leading-tight`}>{t('trends.title')}</h1>
+                            </div>
                         </div>
                         <div className="flex items-center gap-3">
                             <select
@@ -517,7 +518,7 @@ export default function TrendsPage() {
 
                     {/* Workflow hint */}
                     <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
-                        <span className="bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded">1</span>
+                        <span className="bg-teal-500/20 text-teal-400 px-2 py-0.5 rounded">1</span>
                         <span>{t('trends.step1')}</span>
                         <span className="text-gray-700">&rarr;</span>
                         <span className="bg-pink-500/20 text-pink-400 px-2 py-0.5 rounded">2</span>
@@ -566,7 +567,7 @@ export default function TrendsPage() {
                                 ))}
                                 <button
                                     onClick={() => { const inp = document.getElementById('kw-input') as HTMLInputElement; inp?.focus(); }}
-                                    className="flex items-center gap-1 text-sm text-purple-400 hover:text-purple-300 px-2 py-1 border border-dashed border-purple-500/30 rounded-lg transition-colors">
+                                    className="flex items-center gap-1 text-sm text-teal-400 hover:text-teal-300 px-2 py-1 border border-dashed border-teal-500/30 rounded-lg transition-colors">
                                     {t('trends.radarAddKeyword')}
                                 </button>
                             </div>
@@ -582,7 +583,7 @@ export default function TrendsPage() {
                                     }
                                 }}
                                 placeholder={t('trends.radarKeywordPlaceholder')}
-                                className="mt-3 bg-gray-700/50 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 w-full sm:w-72"
+                                className="mt-3 bg-gray-700/50 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-teal-500 w-full sm:w-72"
                             />
                         </div>
 
@@ -616,7 +617,7 @@ export default function TrendsPage() {
                         {/* Right: actions */}
                         <div className="shrink-0 flex flex-col gap-2 sm:items-end">
                             <button onClick={handleFetchTrends} disabled={fetchingTrends || analyzingTrends}
-                                className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 px-5 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors whitespace-nowrap">
+                                className="bg-teal-600 hover:bg-teal-700 disabled:opacity-50 px-5 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors whitespace-nowrap">
                                 {(fetchingTrends || analyzingTrends) ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                                 {analyzingTrends ? t('trends.radarAnalyzing') : fetchingTrends ? t('trends.radarLoading') : t('trends.radarFetch')}
                             </button>
@@ -634,12 +635,12 @@ export default function TrendsPage() {
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex gap-1 bg-gray-800/50 rounded-lg p-1">
                         <button onClick={() => setActiveTab('trends')}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'trends' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}>
+                            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'trends' ? 'bg-teal-600 text-white' : 'text-gray-400 hover:text-white'}`}>
                             <TrendingUp className="w-4 h-4 inline mr-2" />
                             {t('trends.tabs.trends')} ({trends.length})
                         </button>
                         <button onClick={() => setActiveTab('ideas')}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors relative ${activeTab === 'ideas' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}>
+                            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors relative ${activeTab === 'ideas' ? 'bg-teal-600 text-white' : 'text-gray-400 hover:text-white'}`}>
                             <Sparkles className="w-4 h-4 inline mr-2" />
                             {t('trends.tabs.ideas')} ({ideas.length})
                             {pendingIdeasCount > 0 && activeTab !== 'ideas' && (
@@ -658,7 +659,7 @@ export default function TrendsPage() {
                         {trends.length > 0 && (
                             <div className="flex flex-wrap items-center gap-2 mb-5">
                                 <button onClick={() => setSourceFilter('')}
-                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${!sourceFilter ? 'bg-purple-600/30 border-purple-500/50 text-purple-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-500'}`}>
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${!sourceFilter ? 'bg-teal-600/30 border-teal-500/50 text-teal-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-500'}`}>
                                     <TrendingUp className="w-3.5 h-3.5" /> {t('trends.allSources')}
                                     <span className="text-xs opacity-70">({trends.length})</span>
                                 </button>
@@ -693,7 +694,7 @@ export default function TrendsPage() {
                         {Object.keys(keywordCounts).length > 0 && (
                             <div className="flex flex-wrap items-center gap-2 mb-4">
                                 <button onClick={() => setKeywordFilter('')}
-                                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!keywordFilter ? 'bg-purple-600/30 border-purple-500/50 text-purple-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-500'}`}>
+                                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!keywordFilter ? 'bg-teal-600/30 border-teal-500/50 text-teal-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-500'}`}>
                                     {t('trends.filterAllVideos')} <span className="opacity-60">({trends.length})</span>
                                 </button>
                                 {Object.entries(keywordCounts).map(([kw, count]) => (
@@ -727,7 +728,7 @@ export default function TrendsPage() {
 
                         {loading ? (
                             <div className="flex items-center justify-center py-20">
-                                <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
+                                <Loader2 className="w-8 h-8 animate-spin text-teal-400" />
                             </div>
                         ) : trends.length === 0 ? (
                             <div className="text-center py-20 text-gray-500">
@@ -744,7 +745,7 @@ export default function TrendsPage() {
                                         ? (Date.now() - new Date(trend.published_at).getTime()) < 48 * 3_600_000
                                         : false;
                                     return (
-                                        <div key={trend.id} className="bg-gray-900 rounded-2xl overflow-hidden flex flex-col group hover:ring-1 hover:ring-purple-500/40 transition-all">
+                                        <div key={trend.id} className="bg-gray-900 rounded-2xl overflow-hidden flex flex-col group hover:ring-1 hover:ring-teal-500/40 transition-all">
                                             {/* ── Thumbnail ── */}
                                             <div className="relative aspect-[9/14] overflow-hidden bg-gray-800 flex-shrink-0">
                                                 {/* Fallback placeholder — shown when no thumbnail or the image fails to load */}
@@ -877,7 +878,7 @@ export default function TrendsPage() {
                                                         <button
                                                             onClick={() => handleCloneTrend(trend.id)}
                                                             disabled={generatingTrend === trend.id}
-                                                            className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                                                            className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-50 px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
                                                             title={t('trends.cloneSimilarTitle')}
                                                         >
                                                             {generatingTrend === trend.id
@@ -942,16 +943,16 @@ export default function TrendsPage() {
                                     const isExpanded = expandedVariants.has(idea.id);
 
                                     return (
-                                        <div key={idea.id} className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 hover:border-purple-500/50 transition-colors">
+                                        <div key={idea.id} className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 hover:border-teal-500/50 transition-colors">
                                             {/* Header: genre + status + hook + virality */}
                                             <div className="flex items-center gap-2 mb-3 flex-wrap">
                                                 <span className="text-lg">{getGenreEmoji(idea.genre)}</span>
-                                                <span className="text-xs font-medium text-purple-400 uppercase">{idea.genre}</span>
+                                                <span className="text-xs font-medium text-teal-400 uppercase">{idea.genre}</span>
                                                 <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusColor(idea.status)}`}>
                                                     {idea.status}
                                                 </span>
                                                 {idea.hook_type && (
-                                                    <span className="text-[10px] bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded">
+                                                    <span className="text-[10px] bg-teal-500/20 text-teal-400 px-1.5 py-0.5 rounded">
                                                         Hook: {HOOK_LABELS[idea.hook_type] || idea.hook_type}
                                                     </span>
                                                 )}
@@ -1011,7 +1012,7 @@ export default function TrendsPage() {
                                                         <div className="mt-2 space-y-2">
                                                             {variants.map((v, idx: number) => (
                                                                 <div key={idx} className="bg-gray-700/30 rounded-lg p-2 text-xs text-gray-400">
-                                                                    <span className="text-purple-400 font-medium">
+                                                                    <span className="text-teal-400 font-medium">
                                                                         {HOOK_LABELS[v.hook_type || ''] || v.hook_type || 'Hook'}:
                                                                     </span>{' '}
                                                                     {v.angle || ''}
@@ -1034,7 +1035,7 @@ export default function TrendsPage() {
                                                             <ThumbsUp className="w-3 h-3" /> {t('trends.approve')}
                                                         </button>
                                                         <button onClick={() => handleGenerate(idea.id)} disabled={generatingIdea === idea.id}
-                                                            className="bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 disabled:opacity-50 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors">
+                                                            className="bg-gradient-to-r from-pink-600 to-teal-600 hover:from-pink-700 hover:to-teal-700 disabled:opacity-50 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors">
                                                             {generatingIdea === idea.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
                                                             {t('trends.generate')}
                                                         </button>
@@ -1042,7 +1043,7 @@ export default function TrendsPage() {
                                                 )}
                                                 {idea.status === 'approved' && (
                                                     <button onClick={() => handleGenerate(idea.id)} disabled={generatingIdea === idea.id}
-                                                        className="bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 disabled:opacity-50 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors">
+                                                        className="bg-gradient-to-r from-pink-600 to-teal-600 hover:from-pink-700 hover:to-teal-700 disabled:opacity-50 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors">
                                                         {generatingIdea === idea.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
                                                         {t('trends.generateVideo')}
                                                     </button>

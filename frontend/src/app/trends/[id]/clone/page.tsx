@@ -10,6 +10,7 @@ import {
 import { API_V1_BASE_URL, apiFetch } from '@/lib/apiBase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { display } from '@/lib/fonts';
 
 interface Trend {
   id: number;
@@ -165,18 +166,18 @@ export default function ClonePage() {
   const cta = safeParse<CtaStructure | null>(pattern?.cta_structure_json, null);
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-[var(--background)] text-white">
       {/* Header */}
-      <header className="border-b border-gray-800 bg-gray-900/70 backdrop-blur sticky top-0 z-10">
+      <header className="border-b border-white/[0.06] bg-[var(--surface-1)]/70 backdrop-blur sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/trends" className="text-gray-400 hover:text-white flex items-center gap-1.5 text-sm">
               <ArrowLeft className="w-4 h-4" /> {t('clone.backToTrends')}
             </Link>
-            <h1 className="text-lg font-bold flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-purple-400" />
-              {t('clone.title')}
-            </h1>
+            <div>
+              <div className="font-mono text-[9px] uppercase tracking-[0.35em] text-[var(--brand-1)]">● 01 · {t('sidebar.trends')}</div>
+              <h1 className={`${display.className} text-base font-bold text-white leading-tight`}>{t('clone.title')}</h1>
+            </div>
           </div>
           <LanguageSwitcher />
         </div>
@@ -215,7 +216,7 @@ export default function ClonePage() {
                 <div className="flex flex-wrap gap-3 text-xs text-gray-400">
                   <span className="bg-gray-800 px-2 py-0.5 rounded uppercase">{trend.source}</span>
                   <span>{trend.region}</span>
-                  {trend.niche && <span className="bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded">{trend.niche}</span>}
+                  {trend.niche && <span className="bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded">{trend.niche}</span>}
                   <span className="flex items-center gap-1"><Eye className="w-3 h-3" /> {formatViews(trend.view_count)}</span>
                   {trend.viral_coef && <span className="flex items-center gap-1"><TrendingUp className="w-3 h-3" /> {trend.viral_coef.toFixed(1)}×</span>}
                 </div>
@@ -307,7 +308,7 @@ export default function ClonePage() {
               {cta && (cta.app_name || cta.cta_phrase) && (
                 <div>
                   <div className="text-xs text-gray-500 mb-1">{t('clone.cta')}</div>
-                  <div className="bg-purple-500/10 border border-purple-500/30 rounded px-3 py-2 text-xs">
+                  <div className="bg-teal-500/10 border border-teal-500/30 rounded px-3 py-2 text-xs">
                     {cta.app_name && <div><span className="text-gray-400">app:</span> <span className="font-medium">{cta.app_name}</span></div>}
                     {cta.cta_phrase && <div><span className="text-gray-400">phrase:</span> {cta.cta_phrase}</div>}
                     {cta.position && <div className="text-gray-500">position: {cta.position}</div>}
@@ -359,7 +360,7 @@ export default function ClonePage() {
 
               <button
                 onClick={handleOpenInWizard}
-                className="w-full bg-purple-600 hover:bg-purple-700 px-4 py-2.5 rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors"
+                className="w-full bg-teal-600 hover:bg-teal-700 px-4 py-2.5 rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors"
               >
                 <Sparkles className="w-4 h-4" />
                 {t('clone.openInWizard')}

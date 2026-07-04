@@ -14,6 +14,7 @@ import StatusPanel from './StatusPanel';
 import { FlowStepId } from './types';
 import { useGenerationFlow } from './useGenerationFlow';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { display } from '@/lib/fonts';
 
 export default function GenerationWizardV2() {
   const { t } = useLanguage();
@@ -34,15 +35,16 @@ export default function GenerationWizardV2() {
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-6 [--brand-1:#a855f7] [--brand-2:#ec4899]">
+    <div className="min-h-screen p-4 md:p-6">
       <div className="max-w-[1440px] mx-auto space-y-4">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
             <Link href="/" className="inline-flex items-center gap-2 text-sm text-[var(--muted)] hover:text-white mb-2">
               <ArrowLeft className="w-4 h-4" /> {t('generateV2.backToHome')}
             </Link>
-            <h1 className="text-3xl md:text-4xl font-semibold">{t('generateV2.title')}</h1>
-            <p className="text-[var(--muted)] text-sm mt-1">{t('generateV2.subtitle')}</p>
+            <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-[var(--brand-1)] mb-1.5">● 02–03 · {t('home.stScript')} / {t('home.stRender')}</div>
+            <h1 className={`${display.className} text-2xl md:text-3xl font-bold leading-tight`}>{t('generateV2.title')}</h1>
+            <p className="text-[var(--muted)] text-sm mt-1.5">{t('generateV2.subtitle')}</p>
           </div>
           <Button variant="ghost" onClick={flow.resetFlow}>
             <RotateCcw className="w-4 h-4" /> {t('generateV2.resetDraft')}

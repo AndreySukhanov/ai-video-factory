@@ -2,19 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Unbounded } from 'next/font/google';
 import {
   Play, TrendingUp, PenLine, Clapperboard, Eye, Youtube, BarChart3, Zap, ArrowUpRight,
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { API_BASE_URL, apiFetch } from '@/lib/apiBase';
-
-const display = Unbounded({
-  subsets: ['latin', 'cyrillic'],
-  weight: ['500', '700', '900'],
-  display: 'swap',
-});
+import { display } from '@/lib/fonts';
 
 type SystemStatus = 'checking' | 'online' | 'offline';
 

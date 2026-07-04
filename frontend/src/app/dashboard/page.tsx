@@ -8,6 +8,7 @@ import {
     ArrowLeft, RefreshCw, Loader2, CheckCircle, XCircle, AlertTriangle, Zap, Bell
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { display } from '@/lib/fonts';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { toErrorMessage } from '@/lib/errorUtils';
 import { API_V1_BASE_URL, apiFetch } from '@/lib/apiBase';
@@ -121,16 +122,16 @@ export default function DashboardPage() {
     return (
         <div className="min-h-screen bg-[var(--background)] text-white">
             {/* Header */}
-            <div className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
+            <div className="border-b border-white/[0.06] bg-[var(--surface-1)]/70 backdrop-blur-sm sticky top-0 z-10">
                 <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <Link href="/" className="text-gray-400 hover:text-white transition-colors">
                             <ArrowLeft className="w-5 h-5" />
                         </Link>
-                        <h1 className="text-xl font-bold flex items-center gap-2">
-                            <BarChart3 className="w-6 h-6 text-purple-400" />
-                            {t('dashboard.title')}
-                        </h1>
+                        <div>
+                            <div className="font-mono text-[9px] uppercase tracking-[0.35em] text-[var(--brand-1)]">● {t('sidebar.dashboard')}</div>
+                            <h1 className={`${display.className} text-lg font-bold text-white leading-tight`}>{t('dashboard.title')}</h1>
+                        </div>
                     </div>
                     <div className="flex items-center gap-3">
                         <button
@@ -144,7 +145,7 @@ export default function DashboardPage() {
                         <button
                             onClick={fetchData}
                             disabled={loading}
-                            className="bg-purple-600 hover:bg-purple-700 px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors"
+                            className="bg-teal-600 hover:bg-teal-700 px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors"
                         >
                             {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                             {t('dashboard.refresh')}
@@ -172,7 +173,7 @@ export default function DashboardPage() {
                 <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-sm font-medium flex items-center gap-2">
-                            <Activity className="w-4 h-4 text-purple-400" />
+                            <Activity className="w-4 h-4 text-teal-400" />
                             {t('dashboard.systemHealth')}
                         </h2>
                         {health && (
@@ -252,7 +253,7 @@ export default function DashboardPage() {
                         </div>
                     ) : (
                         <div className="flex items-center justify-center py-6">
-                            <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+                            <Loader2 className="w-6 h-6 animate-spin text-teal-400" />
                         </div>
                     )}
                 </div>
@@ -261,7 +262,7 @@ export default function DashboardPage() {
                 {summary && (
                     <div>
                         <h2 className="text-sm font-medium mb-3 flex items-center gap-2">
-                            <TrendingUp className="w-4 h-4 text-purple-400" />
+                            <TrendingUp className="w-4 h-4 text-teal-400" />
                             {t('dashboard.videoPerformance')}
                         </h2>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -281,7 +282,7 @@ export default function DashboardPage() {
                                 <p className="text-xs text-gray-400">{t('dashboard.comments')}</p>
                             </div>
                             <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 text-center">
-                                <Users className="w-5 h-5 text-purple-400 mx-auto mb-2" />
+                                <Users className="w-5 h-5 text-teal-400 mx-auto mb-2" />
                                 <p className="text-2xl font-bold">+{formatNumber(summary.total_subscriber_gain)}</p>
                                 <p className="text-xs text-gray-400">{t('dashboard.subscribersGained')}</p>
                             </div>
@@ -314,7 +315,7 @@ export default function DashboardPage() {
                 {/* Video Analytics Table */}
                 <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4">
                     <h2 className="text-sm font-medium mb-3 flex items-center gap-2">
-                        <BarChart3 className="w-4 h-4 text-purple-400" />
+                        <BarChart3 className="w-4 h-4 text-teal-400" />
                         {t('dashboard.videoAnalytics', { count: videos.length })}
                     </h2>
                     {videos.length === 0 ? (
@@ -343,7 +344,7 @@ export default function DashboardPage() {
                                             <td className="py-2 px-2">
                                                 <a href={`https://youtube.com/watch?v=${v.youtube_video_id}`}
                                                    target="_blank" rel="noopener noreferrer"
-                                                   className="text-purple-400 hover:text-purple-300">
+                                                   className="text-teal-400 hover:text-teal-300">
                                                     {v.youtube_video_id}
                                                 </a>
                                             </td>
@@ -367,21 +368,21 @@ export default function DashboardPage() {
 
                 {/* Quick Navigation */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <Link href="/generate" className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 text-center hover:border-purple-500/50 transition-colors">
-                        <Zap className="w-6 h-6 text-purple-400 mx-auto mb-2" />
+                    <Link href="/generate" className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 text-center hover:border-teal-500/50 transition-colors">
+                        <Zap className="w-6 h-6 text-teal-400 mx-auto mb-2" />
                         <p className="text-sm font-medium">{t('dashboard.generate')}</p>
                     </Link>
-                    <Link href="/trends" className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 text-center hover:border-purple-500/50 transition-colors">
+                    <Link href="/trends" className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 text-center hover:border-teal-500/50 transition-colors">
                         <TrendingUp className="w-6 h-6 text-pink-400 mx-auto mb-2" />
                         <p className="text-sm font-medium">{t('dashboard.trends')}</p>
                     </Link>
-                    <Link href="/youtube" className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 text-center hover:border-purple-500/50 transition-colors">
+                    <Link href="/youtube" className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 text-center hover:border-teal-500/50 transition-colors">
                         <Youtube className="w-6 h-6 text-red-400 mx-auto mb-2" />
                         <p className="text-sm font-medium">{t('dashboard.youtubeNav')}</p>
                     </Link>
                     <button
                         onClick={handleHealthAlert}
-                        className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 text-center hover:border-purple-500/50 transition-colors"
+                        className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 text-center hover:border-teal-500/50 transition-colors"
                     >
                         <Bell className="w-6 h-6 text-yellow-400 mx-auto mb-2" />
                         <p className="text-sm font-medium">{t('dashboard.runHealthCheck')}</p>

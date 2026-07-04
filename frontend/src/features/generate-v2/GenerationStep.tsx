@@ -148,7 +148,7 @@ export default function GenerationStep({
                             const next = e.target.value as GenerationModel;
                             onSetEpisodeModel(episode.id, next === defaultModel ? null : next);
                           }}
-                          className="text-xs bg-black/30 border border-white/10 rounded px-2 py-1 text-white focus:outline-none focus:border-purple-500"
+                          className="text-xs bg-black/30 border border-white/10 rounded px-2 py-1 text-white focus:outline-none focus:border-teal-500"
                         >
                           {allowedModels.map((m) => (
                             <option key={m} value={m} className="bg-gray-800">
@@ -162,7 +162,7 @@ export default function GenerationStep({
                             type="button"
                             onClick={() => onSetEpisodeModel(episode.id, null)}
                             disabled={isGenerating}
-                            className="text-xs text-purple-400 hover:text-purple-300 disabled:opacity-50"
+                            className="text-xs text-teal-400 hover:text-teal-300 disabled:opacity-50"
                             title={t('generateV2.useDefault')}
                           >
                             {t('generateV2.useDefault')}
