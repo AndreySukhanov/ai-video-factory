@@ -5,8 +5,8 @@ from app.core.config import settings
 
 _is_sqlite = settings.SQLALCHEMY_DATABASE_URI.startswith("sqlite")
 
-# timeout=30 — сколько секунд sqlite3 ждёт снятия блокировки записи,
-# прежде чем бросить "database is locked" (API и RQ-воркер пишут конкурентно).
+# timeout=30 — how many seconds sqlite3 waits for a write lock to be released
+# before raising "database is locked" (the API and the RQ worker write concurrently).
 connect_args = {"check_same_thread": False, "timeout": 30} if _is_sqlite else {}
 
 engine = create_engine(settings.SQLALCHEMY_DATABASE_URI, connect_args=connect_args)
@@ -14,8 +14,8 @@ engine = create_engine(settings.SQLALCHEMY_DATABASE_URI, connect_args=connect_ar
 if _is_sqlite:
     @event.listens_for(engine, "connect")
     def _set_sqlite_pragma(dbapi_connection, connection_record):
-        # WAL позволяет читать во время записи; busy_timeout дублирует timeout
-        # на уровне PRAGMA для соединений, переживших реконнект.
+        # WAL allows reads during writes; busy_timeout duplicates the timeout
+        # at the PRAGMA level for connections that survived a reconnect.
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA busy_timeout=30000")

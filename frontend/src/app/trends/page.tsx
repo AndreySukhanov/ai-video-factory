@@ -546,7 +546,7 @@ export default function TrendsPage() {
                     </div>
                 )}
 
-                {/* ====== Контент-радар (Trendsee-style config card) ====== */}
+                {/* ====== Content radar (Trendsee-style config card) ====== */}
                 <div className="bg-gray-800/40 border border-gray-700 rounded-xl p-4 mb-6">
                     <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                         {/* Left: status + keywords */}

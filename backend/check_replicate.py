@@ -10,7 +10,7 @@ if token:
     try:
         import replicate
         model = replicate.models.get("google/veo-3-fast")
-        print(f"✅ Replicate подключен!")
+        print(f"✅ Replicate connected!")
         print(f"Model: {model.name}")
     except Exception as e:
-        print(f"❌ Ошибка: {e}")
+        print(f"❌ Error: {e}")

@@ -8,8 +8,8 @@ from app.core.security import is_safe_outbound_url
 
 router = APIRouter()
 
-# Суффиксы доменов CDN, с которых разрешено проксировать картинки.
-# Сравнение идёт по hostname (точное совпадение или поддомен), не по подстроке URL.
+# CDN domain suffixes from which image proxying is allowed.
+# Matching is done by hostname (exact match or subdomain), not by URL substring.
 ALLOWED_HOST_SUFFIXES = [
     "cdninstagram.com",
     "instagram.com",
@@ -50,8 +50,8 @@ async def proxy_image(url: str = Query(...)):
         "Referer": "https://www.instagram.com/",
     }
     try:
-        # Редиректы проходим вручную, валидируя хост на каждом хопе,
-        # чтобы CDN не мог увести запрос на произвольный адрес.
+        # Follow redirects manually, validating the host on every hop,
+        # so a CDN cannot redirect the request to an arbitrary address.
         async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
             current_url = url
             for _ in range(MAX_REDIRECTS + 1):

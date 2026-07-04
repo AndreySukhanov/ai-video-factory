@@ -21,7 +21,7 @@ export default async function RootLayout({
 }>) {
   const cookieStore = await cookies();
   const cookieLocale = cookieStore.get("locale")?.value;
-  const initialLocale: Locale = cookieLocale === "en" || cookieLocale === "ru" ? cookieLocale : "ru";
+  const initialLocale: Locale = cookieLocale === "en" || cookieLocale === "ru" ? cookieLocale : "en";
 
   return (
     <html lang={initialLocale} className="dark" suppressHydrationWarning>

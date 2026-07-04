@@ -1,6 +1,6 @@
 # AI Video Factory - Quick Start
 
-## Запуск системы
+## Starting the system
 
 ### 1. Backend
 ```bash
@@ -9,7 +9,7 @@ pip install -r requirements.txt
 python -m uvicorn app.main:app --reload
 ```
 
-### 2. RQ Worker (фоновая обработка)
+### 2. RQ Worker (background processing)
 ```bash
 cd backend
 python -m rq worker --with-scheduler
@@ -22,14 +22,14 @@ npm install
 npm run dev
 ```
 
-## API ключи (.env)
+## API keys (.env)
 ```
-FAL_KEY=ваш_ключ
-VIDEO_API_KEY=ваш_ключ
-OPENAI_API_KEY=ваш_ключ
+FAL_KEY=your_key
+VIDEO_API_KEY=your_key
+OPENAI_API_KEY=your_key
 ```
 
-## Доступ
+## Access
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 - API Docs: http://localhost:8000/docs

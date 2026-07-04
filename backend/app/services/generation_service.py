@@ -58,8 +58,8 @@ def enqueue_job(job_id: int):
     """Enqueue a job to Redis Queue for processing by the worker"""
     job_queue = _get_job_queue()
     if job_queue is None:
-        # Без Redis обрабатываем job в фоновом потоке, чтобы не блокировать
-        # HTTP-запрос на минуты (генерация видео долгая).
+        # Without Redis, process the job in a background thread so we don't
+        # block the HTTP request for minutes (video generation is slow).
         print(f"[WARNING] Redis not available. Job {job_id} will run in a background thread.")
         import threading
         threading.Thread(target=_process_job_in_thread, args=(job_id,), daemon=True).start()

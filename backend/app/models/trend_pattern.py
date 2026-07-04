@@ -22,7 +22,7 @@ class TrendPattern(Base):
     hook = Column(Text, nullable=True)  # first 3-5 seconds, hook phrase
     story_beats_json = Column(Text, nullable=True)  # [{start, end, what_happens, emotion}, ...]
     characters_json = Column(Text, nullable=True)  # [{role, gender, age_range, appearance, voice_tone}, ...]
-    title_formula = Column(Text, nullable=True)  # template like "POV: я {action} и {outcome}"
+    title_formula = Column(Text, nullable=True)  # template like "POV: I {action} and {outcome}"
     cta_structure_json = Column(Text, nullable=True)  # {app_name, cta_phrase, position} | null
     visual_style_json = Column(Text, nullable=True)  # {lighting, location, framing, color_palette}
 

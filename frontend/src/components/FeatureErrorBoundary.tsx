@@ -5,7 +5,7 @@ import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface Props {
     children: React.ReactNode;
-    /** Название фичи для сообщения об ошибке */
+    /** Feature name for the error message */
     featureName?: string;
 }
 
@@ -14,9 +14,9 @@ interface State {
 }
 
 /**
- * Гранулярный error boundary для тяжёлых фич (визард генерации и т.п.):
- * падение внутри фичи не рушит весь маршрут — показывается локальная
- * заглушка с кнопкой повторного монтирования.
+ * Granular error boundary for heavy features (generation wizard, etc.):
+ * a crash inside the feature doesn't take down the whole route — a local
+ * fallback with a remount button is shown instead.
  */
 export default class FeatureErrorBoundary extends React.Component<Props, State> {
     state: State = { error: null };

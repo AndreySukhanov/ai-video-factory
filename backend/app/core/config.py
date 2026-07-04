@@ -37,12 +37,12 @@ class Settings(BaseSettings):
     WAVESPEED_API_KEY: Optional[str] = None
     WAVESPEED_BASE_URL: str = "https://api.wavespeed.ai/api/v3"
 
-    # TTS — ElevenLabs (с native word-level timestamps) и OpenAI TTS (с Whisper alignment, Phase 1.1)
+    # TTS — ElevenLabs (with native word-level timestamps) and OpenAI TTS (with Whisper alignment, Phase 1.1)
     ELEVENLABS_API_KEY: Optional[str] = None
     ELEVENLABS_VOICE_ID: Optional[str] = None  # default voice; can be overridden per request
     ELEVENLABS_MODEL_ID: Optional[str] = None  # default: eleven_multilingual_v2
 
-    # Whisper aligner — выровнять word-timestamps для TTS-провайдеров без нативной поддержки
+    # Whisper aligner — align word timestamps for TTS providers without native support
     WHISPER_MODEL: str = "tiny"  # tiny (39MB) | base (74MB) | small (244MB) | medium (769MB) | large-v3 (1.5GB)
     WHISPER_DEVICE: str = "cpu"  # cpu | cuda
     WHISPER_COMPUTE_TYPE: str = "int8"  # int8 (CPU-fast) | float16 (CUDA) | float32
@@ -59,8 +59,8 @@ class Settings(BaseSettings):
     CORS_ALLOW_ORIGINS: str = ""
     ALLOW_PRIVATE_URL_FETCH: bool = False
 
-    # API auth: если задан, все /api/v1/* требуют заголовок X-API-Key
-    # (кроме OPTIONS, /youtube/auth/callback и openapi.json). Пусто = auth выключен.
+    # API auth: if set, all /api/v1/* routes require the X-API-Key header
+    # (except OPTIONS, /youtube/auth/callback and openapi.json). Empty = auth disabled.
     API_AUTH_KEY: Optional[str] = None
 
     # Trendwatcher
