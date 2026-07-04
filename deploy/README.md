@@ -1,128 +1,128 @@
-# Deployment Guide для DigitalOcean
+# Deployment Guide for DigitalOcean
 
-## Информация о сервере
+## Server information
 
 - **IP**: SERVER_IP
 - **OS**: Ubuntu 22.04 LTS
 - **User**: root
 
-## Шаг 1: Первоначальная настройка сервера
+## Step 1: Initial server setup
 
-### 1.1 Подключитесь к серверу
+### 1.1 Connect to the server
 
 ```bash
 ssh root@SERVER_IP
 ```
 
-Пароль: задаётся отдельно (не хранить в репозитории)
+Password: set separately (do not store it in the repository)
 
-### 1.2 Запустите скрипт настройки сервера
+### 1.2 Run the server setup script
 
 ```bash
-# На сервере выполните:
+# Run on the server:
 curl -fsSL https://get.docker.com -o get-docker.sh
 sh get-docker.sh
 
-# Установите Docker Compose
+# Install Docker Compose
 apt-get install -y docker-compose-plugin
 
-# Настройте файрвол
+# Configure the firewall
 ufw --force enable
 ufw allow ssh
 ufw allow 80/tcp
 ufw allow 443/tcp
 ufw allow 8000/tcp
 
-# Создайте директорию для приложения
+# Create the application directory
 mkdir -p /opt/microdrama-ai
 ```
 
-## Шаг 2: Загрузка кода на сервер
+## Step 2: Uploading the code to the server
 
-### Вариант A: Через Git (рекомендуется)
+### Option A: Via Git (recommended)
 
 ```bash
-# На сервере
+# On the server
 cd /opt/microdrama-ai
 git clone https://github.com/AndreySukhanov/ai-video-factory.git .
 
-# Или если репозиторий приватный, загрузите через ZIP
+# Or, if the repository is private, upload it as a ZIP
 ```
 
-### Вариант B: Загрузка с локальной машины
+### Option B: Upload from your local machine
 
 ```bash
-# С вашей локальной машины (Windows)
-# Используйте WinSCP или scp для загрузки файлов
+# From your local machine (Windows)
+# Use WinSCP or scp to upload the files
 scp -r C:\Users\Пользователь\Desktop\X4\AI_VIDEO\microdrama-ai root@SERVER_IP:/opt/microdrama-ai
 ```
 
-## Шаг 3: Настройка окружения
+## Step 3: Environment setup
 
 ```bash
-# На сервере
+# On the server
 cd /opt/microdrama-ai
 
-# Создайте .env файл для backend
+# Create the .env file for the backend
 cp backend/.env.example backend/.env
 nano backend/.env
 
-# Добавьте ваши API ключи:
+# Add your API keys:
 # OPENROUTER_API_KEY=sk-or-v1-xxxxx
 # REPLICATE_API_TOKEN=r8_xxxxx
-# FAL_KEY=xxxxx (если используете)
+# FAL_KEY=xxxxx (if used)
 ```
 
-## Шаг 4: Запуск приложения
+## Step 4: Starting the application
 
 ```bash
-# На сервере
+# On the server
 cd /opt/microdrama-ai
 
-# Скопируйте production config
+# Copy the production config
 cp docker-compose.prod.yml docker-compose.yml
 
-# Запустите приложение
+# Start the application
 docker compose up -d --build
 
-# Проверьте статус
+# Check the status
 docker compose ps
 
-# Посмотрите логи
+# View the logs
 docker compose logs -f
 ```
 
-## Шаг 5: Проверка работоспособности
+## Step 5: Health check
 
-Откройте в браузере:
+Open in a browser:
 - Frontend: http://SERVER_IP
 - Backend API: http://SERVER_IP/api/v1/docs
 
-## Управление приложением
+## Managing the application
 
-### Просмотр логов
+### Viewing logs
 
 ```bash
-# Все сервисы
+# All services
 docker compose logs -f
 
-# Отдельный сервис
+# A specific service
 docker compose logs -f frontend
 docker compose logs -f backend
 docker compose logs -f worker
 ```
 
-### Перезапуск
+### Restart
 
 ```bash
-# Перезапустить все
+# Restart everything
 docker compose restart
 
-# Перезапустить конкретный сервис
+# Restart a specific service
 docker compose restart backend
 ```
 
-### Обновление кода
+### Updating the code
 
 ```bash
 cd /opt/microdroma-ai
@@ -131,75 +131,75 @@ docker compose down
 docker compose up -d --build
 ```
 
-### Остановка
+### Stopping
 
 ```bash
 docker compose down
 ```
 
-### Очистка (удаление данных)
+### Cleanup (deletes data)
 
 ```bash
 docker compose down -v
 ```
 
-## Настройка SSL (HTTPS)
+## SSL setup (HTTPS)
 
-### Опция 1: Let's Encrypt (рекомендуется)
+### Option 1: Let's Encrypt (recommended)
 
 ```bash
-# Установите certbot
+# Install certbot
 apt-get install -y certbot python3-certbot-nginx
 
-# Получите сертификат (замените your-domain.com)
+# Obtain a certificate (replace your-domain.com)
 certbot --nginx -d your-domain.com
 
-# Certbot автоматически обновит nginx конфигурацию
+# Certbot will update the nginx configuration automatically
 ```
 
-### Опция 2: Cloudflare (если используете)
+### Option 2: Cloudflare (if you use it)
 
-1. Добавьте домен в Cloudflare
-2. Включите Proxy (оранжевое облако)
-3. SSL/TLS режим: "Full" или "Full (strict)"
-4. В Cloudflare DNS добавьте A-запись: `@` → `SERVER_IP`
+1. Add the domain to Cloudflare
+2. Enable Proxy (orange cloud)
+3. SSL/TLS mode: "Full" or "Full (strict)"
+4. In Cloudflare DNS add an A record: `@` → `SERVER_IP`
 
-## Мониторинг ресурсов
+## Resource monitoring
 
 ```bash
-# Использование контейнерами
+# Container usage
 docker stats
 
-# Системные ресурсы
+# System resources
 htop
 
-# Дисковое пространство
+# Disk space
 df -h
 
-# Использование Docker
+# Docker usage
 docker system df
 ```
 
 ## Troubleshooting
 
-### Контейнеры не запускаются
+### Containers won't start
 
 ```bash
-# Проверьте логи
+# Check the logs
 docker compose logs
 
-# Проверьте конфигурацию
+# Check the configuration
 docker compose config
 
-# Пересоздайте контейнеры
+# Recreate the containers
 docker compose down
 docker compose up -d --build --force-recreate
 ```
 
-### Недостаточно памяти
+### Not enough memory
 
 ```bash
-# Добавьте swap
+# Add swap
 fallocate -l 2G /swapfile
 chmod 600 /swapfile
 mkswap /swapfile
@@ -207,85 +207,85 @@ swapon /swapfile
 echo '/swapfile none swap sw 0 0' >> /etc/fstab
 ```
 
-### Порты заняты
+### Ports are in use
 
 ```bash
-# Проверьте какие порты используются
+# Check which ports are being used
 netstat -tulpn | grep LISTEN
 
-# Или
+# Or
 ss -tulpn | grep LISTEN
 
-# Остановите конфликтующие процессы
-sudo systemctl stop apache2  # если запущен Apache
-sudo systemctl stop nginx    # если запущен Nginx системный
+# Stop conflicting processes
+sudo systemctl stop apache2  # if Apache is running
+sudo systemctl stop nginx    # if the system Nginx is running
 ```
 
 ## Backup
 
-### Создание резервной копии
+### Creating a backup
 
 ```bash
-# Остановите приложение
+# Stop the application
 docker compose down
 
-# Создайте backup
+# Create a backup
 cd /opt
 tar -czf microdrama-ai-backup-$(date +%Y%m%d).tar.gz microdrama-ai/
 
-# Скачайте на локальную машину
+# Download to your local machine
 # scp root@SERVER_IP:/opt/microdrama-ai-backup-*.tar.gz ./
 ```
 
-### Восстановление
+### Restore
 
 ```bash
-# Загрузите backup на сервер
+# Upload the backup to the server
 scp ./microdrama-ai-backup-*.tar.gz root@SERVER_IP:/opt/
 
-# На сервере
+# On the server
 cd /opt
 tar -xzf microdrama-ai-backup-*.tar.gz
 cd microdrama-ai
 docker compose up -d
 ```
 
-## Безопасность
+## Security
 
-### Рекомендации:
+### Recommendations:
 
-1. **Смените пароль root**:
+1. **Change the root password**:
 ```bash
 passwd
 ```
 
-2. **Создайте отдельного пользователя**:
+2. **Create a dedicated user**:
 ```bash
 adduser deploy
 usermod -aG sudo deploy
 usermod -aG docker deploy
 ```
 
-3. **Настройте SSH ключи** вместо пароля
+3. **Set up SSH keys** instead of a password
 
-4. **Отключите root login через SSH**:
+4. **Disable root login over SSH**:
 ```bash
 nano /etc/ssh/sshd_config
-# Установите: PermitRootLogin no
+# Set: PermitRootLogin no
 systemctl restart sshd
 ```
 
-5. **Используйте fail2ban**:
+5. **Use fail2ban**:
 ```bash
 apt-get install -y fail2ban
 systemctl enable fail2ban
 systemctl start fail2ban
 ```
 
-## Поддержка
+## Support
 
-Если возникли проблемы:
-1. Проверьте логи: `docker compose logs -f`
-2. Проверьте статус: `docker compose ps`
-3. Проверьте .env файлы
-4. Проверьте доступные ресурсы: `free -h`, `df -h`
+If you run into problems:
+1. Check the logs: `docker compose logs -f`
+2. Check the status: `docker compose ps`
+3. Check the .env files
+4. Check available resources: `free -h`, `df -h`

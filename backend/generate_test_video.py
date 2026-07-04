@@ -8,13 +8,13 @@ os.environ["REPLICATE_API_TOKEN"] = os.getenv("REPLICATE_API_TOKEN", "")
 
 import replicate
 
-print("🎬 Генерация тестового видео через Veo 3...")
-print("Это займёт 1-3 минуты\n")
+print("🎬 Generating a test video via Veo 3...")
+print("This takes 1-3 minutes\n")
 
 prompt = "A beautiful woman with long dark hair walks through neon-lit Tokyo streets at night. Cinematic, 4K, rain reflections."
 
 print(f"📝 Prompt: {prompt}")
-print("⏳ Отправляю запрос...\n")
+print("⏳ Sending request...\n")
 
 start = time.time()
 
@@ -40,9 +40,9 @@ while prediction.status not in ["succeeded", "failed", "canceled"]:
 elapsed = int(time.time() - start)
 
 if prediction.status == "succeeded":
-    print(f"\n✅ УСПЕХ! Видео готово за {elapsed} секунд")
+    print(f"\n✅ SUCCESS! Video ready in {elapsed} seconds")
     print(f"📹 URL: {prediction.output}")
 else:
-    print(f"\n❌ Ошибка: {prediction.status}")
+    print(f"\n❌ Error: {prediction.status}")
     if prediction.error:
         print(f"Details: {prediction.error}")

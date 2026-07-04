@@ -16,12 +16,13 @@ export const API_BASE_URL = normalizeApiOrigin(rawApiBaseUrl);
 export const API_V1_BASE_URL = `${API_BASE_URL}/api/v1`;
 export const WS_BASE_URL = API_BASE_URL.replace(/^http/, 'ws');
 
-// Если бэкенд защищён API_AUTH_KEY, ключ прокидывается через NEXT_PUBLIC_API_KEY
-// и уходит в каждый запрос заголовком X-API-Key. Пусто = заголовок не шлём.
+// If the backend is protected with API_AUTH_KEY, the key is provided via
+// NEXT_PUBLIC_API_KEY and sent with every request as the X-API-Key header.
+// Empty = the header is not sent.
 const apiKey = (process.env.NEXT_PUBLIC_API_KEY || '').trim();
 export const API_AUTH_HEADERS: Record<string, string> = apiKey ? { 'X-API-Key': apiKey } : {};
 
-// Обёртка над fetch для прямых вызовов API со страниц: добавляет X-API-Key.
+// Fetch wrapper for direct API calls from pages: adds the X-API-Key header.
 export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   return fetch(input, {
     ...init,

@@ -1,5 +1,5 @@
-"""Pydantic-схемы генерации эпизода (вынесены из api/v1/episodes.py,
-чтобы сервисный слой не импортировал модели из роутера)."""
+"""Pydantic schemas for episode generation (extracted from api/v1/episodes.py
+so the service layer does not import models from the router)."""
 from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator

@@ -140,11 +140,11 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
 
-# API-key auth: включается, если в .env задан API_AUTH_KEY.
-# Исключения: OPTIONS (CORS preflight), OAuth-callback YouTube (редирект Google
-# приходит без заголовков), openapi.json (чтобы работал /docs),
-# proxy/image (грузится через <img src>, браузер не шлёт заголовки;
-# защищён собственным whitelist хостов).
+# API-key auth: enabled when API_AUTH_KEY is set in .env.
+# Exemptions: OPTIONS (CORS preflight), YouTube OAuth callback (Google's redirect
+# arrives without headers), openapi.json (so /docs keeps working),
+# proxy/image (loaded via <img src>, the browser sends no headers;
+# protected by its own host whitelist).
 _AUTH_EXEMPT_PATHS = {f"{settings.API_V1_STR}/openapi.json"}
 _AUTH_EXEMPT_PREFIXES = (
     f"{settings.API_V1_STR}/youtube/auth/callback",

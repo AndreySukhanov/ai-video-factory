@@ -1,8 +1,8 @@
 """
-Сервис генерации одного эпизода: роутинг провайдеров, подготовка референсов,
-enhance промпта, smягчение при модерации, fallback Vertex→Gemini, авто-скачивание.
+Single-episode generation service: provider routing, reference preparation,
+prompt enhancement, moderation softening, Vertex→Gemini fallback, auto-download.
 
-Вынесено из api/v1/episodes.py::generate_episode (распил god-router'а).
+Extracted from api/v1/episodes.py::generate_episode (god-router split).
 """
 import asyncio
 import time
@@ -42,12 +42,12 @@ def get_video_provider(model: str = "wavespeed", reference_image_url: str = None
         from app.media.video_provider_wavespeed import WavespeedSeedanceProvider
         return WavespeedSeedanceProvider(aspect_ratio=aspect_ratio, use_fast=True)
 
-    # Seedance 2.0 Standard via WaveSpeed (дороже, выше качество)
+    # Seedance 2.0 Standard via WaveSpeed (more expensive, higher quality)
     if model == "wavespeed-standard":
         from app.media.video_provider_wavespeed import WavespeedSeedanceProvider
         return WavespeedSeedanceProvider(aspect_ratio=aspect_ratio, use_fast=False)
 
-    # Seedance v1.5-pro via WaveSpeed (дешевле $0.26, прошлое поколение)
+    # Seedance v1.5-pro via WaveSpeed (cheaper at $0.26, previous generation)
     if model == "wavespeed-v15":
         from app.media.video_provider_wavespeed import WavespeedSeedanceProvider
         return WavespeedSeedanceProvider(aspect_ratio=aspect_ratio, model_slug="seedance-v1.5-pro")
@@ -90,16 +90,16 @@ async def send_progress(session_id: Optional[str], stage: str, progress: int, me
         print(f"[WS] Progress send error: {e}")
 
 
-# Модели, которым нужен публичный URL референса (catbox) вместо base64
+# Models that need a public reference URL (catbox) instead of base64
 _NEEDS_PUBLIC_URL = ("laozhang",)
-# Модели с поддержкой generate_audio
+# Models that support generate_audio
 _AUDIO_CAPABLE = ("gemini", "vertex", "laozhang", "wavespeed", "wavespeed-standard", "wavespeed-v15")
-# Модели, чьи результаты живут недолго → скачиваем локально (Veo retention = 2 дня)
+# Models whose results expire quickly → download locally (Veo retention = 2 days)
 _AUTO_DOWNLOAD = ("gemini", "vertex", "laozhang", "wavespeed", "wavespeed-standard", "wavespeed-v15")
 
 
 async def generate_episode_flow(request: EpisodeGenerateRequest) -> EpisodeGenerateResponse:
-    """Полный флоу генерации эпизода. Не бросает исключений — ошибки в response."""
+    """Full episode generation flow. Never raises — errors go into the response."""
     start_time = time.time()
     session_id = request.session_id
 

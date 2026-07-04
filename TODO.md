@@ -1,48 +1,48 @@
-# TODO — доработки по результатам QA
+# TODO — follow-ups from QA results
 
-Источник: функциональное тестирование сайта (2026-05-28). Все страницы грузятся без
-ошибок консоли/сети; основной пайплайн (идея → серия → видео → склейка) работает E2E
-на интеграции WaveSpeed Seedance 2.0. Ниже — найденные баги, оптимизации и инсайты.
+Source: functional testing of the site (2026-05-28). All pages load without
+console/network errors; the main pipeline (idea → series → video → stitching) works E2E
+on the WaveSpeed Seedance 2.0 integration. Below are the bugs found, optimizations and insights.
 
-## 🔴 Баги (исправить)
+## 🔴 Bugs (fix)
 
-- [ ] **Падающие джобы `'NoneType' object has no attribute 'id'`** в `/api/v1/jobs/`
-      (легаси-флоу `GENERATE_SCENE_MEDIA`, напр. scene_id 22). Null-deref — починить
-      или удалить мёртвый флоу.
-- [ ] **Ревью-элементы ссылаются на `replicate.delivery`** — эти URL протухают (~24ч),
-      превью и публикация со временем ломаются. Новый episode-флоу качает видео в
-      `/static/generated/`, а ревью/старый флоу — нет. → сохранять медиа ревью локально.
-- [ ] **Чёрные превью у части карточек трендов** (Instagram) — вероятно сбой
-      `/api/v1/proxy/image`. → проверить fallback прокси картинок.
+- [ ] **Failing jobs `'NoneType' object has no attribute 'id'`** in `/api/v1/jobs/`
+      (legacy flow `GENERATE_SCENE_MEDIA`, e.g. scene_id 22). Null-deref — fix
+      or remove the dead flow.
+- [ ] **Review items reference `replicate.delivery`** — these URLs expire (~24h),
+      so previews and publishing break over time. The new episode flow downloads videos to
+      `/static/generated/`, but the review/old flow does not. → save review media locally.
+- [ ] **Black previews on some trend cards** (Instagram) — likely a failure of
+      `/api/v1/proxy/image`. → check the image proxy fallback.
 
-## 🟡 Оптимизации
+## 🟡 Optimizations
 
-- [ ] **Certbot renewal без перезагрузки nginx** на проде — сертификат обновится, но
-      контейнер nginx не подхватит новый. → deploy-hook `docker compose exec nginx nginx -s reload`.
-- [ ] **Уточнить оценку стоимости WaveSpeed**: сейчас зашит `$0.54`, реально $0.5 (fast)
-      / $0.6 (standard), зависит от resolution. → считать по res/duration; для дешёвых
-      тестов дефолт fast + 480p.
-- [ ] **uvicorn `--reload` на Windows bind-mount** ловит ложные перезагрузки и убивает
-      длинные генерации (поймано при тесте). Прода не касается. →
-      `--reload-exclude static,uploads` или гонять долгие задачи без reload.
-- [ ] **`/api/v1/episodes/status`** всегда отдаёт `replicate_minimax` независимо от
-      выбранной модели — вводит в заблуждение, привязать к реальному выбору.
+- [ ] **Certbot renewal without nginx reload** on prod — the certificate will renew, but
+      the nginx container won't pick up the new one. → deploy-hook `docker compose exec nginx nginx -s reload`.
+- [ ] **Refine the WaveSpeed cost estimate**: currently hardcoded at `$0.54`, actually $0.5 (fast)
+      / $0.6 (standard), depends on resolution. → compute by res/duration; for cheap
+      tests default to fast + 480p.
+- [ ] **uvicorn `--reload` on a Windows bind-mount** catches spurious reloads and kills
+      long generations (caught during testing). Does not affect prod. →
+      `--reload-exclude static,uploads` or run long tasks without reload.
+- [ ] **`/api/v1/episodes/status`** always returns `replicate_minimax` regardless of
+      the selected model — misleading; tie it to the actual selection.
 
-## 🟢 Инсайты / возможности
+## 🟢 Insights / opportunities
 
-- [ ] **WaveSpeed = 996 моделей / 36 Seedance-вариантов по одному ключу.** Доступны более
-      дешёвые тиры **Seedance v1.5-pro ($0.2)** и turbo, а также нативные **`video-extend`**
-      и **`reference-to-video`** — потенциально заменяют кастомный frame-chaining extender.
-- [ ] **Баланс WaveSpeed конечен** — добавить отображение/алерт низкого баланса в дашборд
-      рядом с YT-квотой (`GET /api/v3/balance`).
-- [ ] **Два «Seedance 2.0»**: LaoZhang $0.05 vs WaveSpeed $0.5+ (10× разница). В тесте
-      LaoZhang отдавал 503 — это обосновывает WaveSpeed как надёжный резерв. Зафиксировать
-      в доке «когда что использовать».
-- [ ] **Параметр `enable_web_search`** у Seedance 2.0 не используется — может повысить
-      тематическую релевантность.
+- [ ] **WaveSpeed = 996 models / 36 Seedance variants under a single key.** Cheaper
+      tiers are available — **Seedance v1.5-pro ($0.2)** and turbo, as well as native **`video-extend`**
+      and **`reference-to-video`** — potentially replacing the custom frame-chaining extender.
+- [ ] **WaveSpeed balance is finite** — add a low-balance display/alert to the dashboard
+      next to the YT quota (`GET /api/v3/balance`).
+- [ ] **Two "Seedance 2.0"s**: LaoZhang $0.05 vs WaveSpeed $0.5+ (10× difference). During testing
+      LaoZhang was returning 503 — which justifies WaveSpeed as a reliable backup. Document
+      "when to use which" in the docs.
+- [ ] **The `enable_web_search` parameter** of Seedance 2.0 is unused — could improve
+      topical relevance.
 
-## ⚪ Не тестировалось (требует расходов/состояния)
+## ⚪ Not tested (requires spending/state)
 
-YouTube-аплоад (нет подключённого канала), фетч трендов (квоты), удаления/approve/publish/
-reject/regenerate в ревью, создание задач планировщика, video-extend, кнопка «Тест
-уведомления» (шлёт реальный алерт).
+YouTube upload (no connected channel), trend fetching (quotas), delete/approve/publish/
+reject/regenerate in review, creating scheduler tasks, video-extend, the "Test
+notification" button (sends a real alert).

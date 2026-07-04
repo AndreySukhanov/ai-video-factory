@@ -85,7 +85,7 @@ npm run lint     # eslint (uses eslint-config-next)
 
 ### Frontend i18n
 - Custom Context-based system (no `next-intl`): `frontend/src/contexts/LanguageContext.tsx`, dictionaries in `frontend/src/locales/{en,ru}.ts`, switcher at `frontend/src/components/LanguageSwitcher.tsx`.
-- Default locale `ru`, persisted in `localStorage('locale')`. Use `t(key, params?)` with `{param}` interpolation. All user-visible strings go through `useLanguage()`.
+- Default locale `en` (switched July 2026), persisted in `localStorage('locale')` + cookie. Use `t(key, params?)` with `{param}` interpolation. All user-visible strings go through `useLanguage()`.
 
 ### Static & uploads
 - `/uploads` (mounted from `backend/uploads/`) — user-uploaded reference images, kept locally for backend processing.
@@ -95,8 +95,9 @@ npm run lint     # eslint (uses eslint-config-next)
 ## Conventions
 
 ### Git & releases
-- Commit messages in **Russian**. No "Claude Code", no `Co-Authored-By`.
-- Releases: invoke the `/deploy` skill — it handles git push, `gh release create` (Russian notes), investor `.docx` in `docs/`, and server deploy via `scp`/`plink`. Tags follow semver `vX.Y.Z`.
+- Commit messages in **English**. No "Claude Code", no `Co-Authored-By`.
+- The repo is fully English-facing on GitHub: docs, comments, commit messages, release notes. Russian survives only as functional data (`frontend/src/locales/ru.ts`, RU locale keywords in `backend/app/services/trendwatcher/niches.py`).
+- Releases: invoke the `/deploy` skill — it handles git push, `gh release create` (English notes), investor `.docx` in `docs/`, and server deploy via `scp`/`plink`. Tags follow semver `vX.Y.Z`.
 
 ### Code
 - `'use client'` on every interactive page.
@@ -107,7 +108,7 @@ npm run lint     # eslint (uses eslint-config-next)
 `.env`, `*.tar`, `tmpclaude-*`, `*.docx`, `nul`, `Gemini_Generated_Image_*`, `node_modules/`, API keys, `vertex-sa-key.json`.
 
 ## Reference docs in repo
-- `README.md` — user-facing overview (in Russian) with API endpoints and env var table.
+- `README.md` — user-facing overview (in English) with API endpoints and env var table.
 - `QUICKSTART.md` — non-Docker dev startup commands.
 - `DEPLOYMENT.md` — DigitalOcean droplet bootstrap.
 - `AGENTS.md` — duplicated subset of these rules; keep in sync if you change them here.

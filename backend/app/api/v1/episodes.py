@@ -1,10 +1,10 @@
 """
 API for generating episodes from prompt and reference image.
 
-Бизнес-логика вынесена в сервисный слой:
-- генерация эпизода → app/services/episode_generation_service.py
-- медиа-утилиты (catbox, base64, кроп, скачивание) → app/media/local_media.py
-- схемы запроса/ответа генерации → app/schemas/episodes.py
+Business logic is extracted into the service layer:
+- episode generation → app/services/episode_generation_service.py
+- media utilities (catbox, base64, crop, download) → app/media/local_media.py
+- generation request/response schemas → app/schemas/episodes.py
 """
 import os
 import asyncio
@@ -71,7 +71,7 @@ async def generate_episode(request: EpisodeGenerateRequest):
     """
     Generate a video episode from a text prompt and optional reference image.
 
-    Вся логика — в episode_generation_service.generate_episode_flow.
+    All logic lives in episode_generation_service.generate_episode_flow.
     """
     return await generate_episode_flow(request)
 

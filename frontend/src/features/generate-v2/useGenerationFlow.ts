@@ -150,8 +150,8 @@ export function useGenerationFlow() {
   const episodesRef = useRef(episodes);
   useEffect(() => { episodesRef.current = episodes; }, [episodes]);
 
-  // Атомарное обновление ref + state. В async-флоу (очередь генерации) использовать
-  // только его: ref обновляется синхронно до следующего await, state — для рендера.
+  // Atomic ref + state update. In async flows (generation queue) use only this:
+  // the ref updates synchronously before the next await, state drives rendering.
   const applyEpisodesUpdate = useCallback((updater: (prev: EpisodeDraft[]) => EpisodeDraft[]) => {
     episodesRef.current = updater(episodesRef.current);
     setEpisodes(episodesRef.current);
@@ -162,7 +162,7 @@ export function useGenerationFlow() {
   const [voiceDescription, setVoiceDescription] = useState<string | null>(null);
   const [anchorPrompt, setAnchorPrompt] = useState<string | null>(null);
 
-  // Phase 3: prefill from /trends "Сделать похожее" button.
+  // Phase 3: prefill from the /trends "Make similar" button.
   // Trends page stashes the clone-brief in sessionStorage and navigates here with ?source=clone.
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -652,7 +652,7 @@ export function useGenerationFlow() {
         // Filter valid reference images
         const validRefImages = referenceImages.filter((url) => url.trim());
 
-        // Single attempt — retry manually via "Повторить" button
+        // Single attempt — retry manually via the "Retry" button
         const response = await generateEpisodeClip({
           prompt: promptText,
           duration: lastFrameUrl ? 8 : duration, // transition mode forces 8s

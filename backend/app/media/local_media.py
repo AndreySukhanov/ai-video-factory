@@ -1,9 +1,9 @@
 """
-Локальные медиа-утилиты, общие для эндпоинтов и сервисов генерации:
-резолв локальных /uploads//static путей, загрузка на catbox, кроп под
-aspect ratio, конвертация в base64 data URI, скачивание видео в /static.
+Local media utilities shared by endpoints and generation services:
+resolving local /uploads//static paths, uploading to catbox, cropping to
+aspect ratio, converting to base64 data URI, downloading videos into /static.
 
-Вынесено из app/api/v1/episodes.py (распил god-router'а).
+Extracted from app/api/v1/episodes.py (god-router split).
 """
 import asyncio
 import base64
