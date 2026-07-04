@@ -212,6 +212,8 @@ docs/*INVESTORS*
 
 # Database files (never commit user/session data)
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 backend/sql_app.db
