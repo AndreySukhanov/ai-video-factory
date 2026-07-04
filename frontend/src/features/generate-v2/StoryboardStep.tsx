@@ -60,7 +60,7 @@ export default function StoryboardStep({
                 value={imageModel}
                 disabled={isStoryboarding}
                 onChange={(e) => onImageModelChange(e.target.value as ImageModel)}
-                className="text-sm bg-black/30 border border-white/10 rounded px-2 py-1.5 text-white focus:outline-none focus:border-purple-500"
+                className="text-sm bg-black/30 border border-white/10 rounded px-2 py-1.5 text-white focus:outline-none focus:border-teal-500"
               >
                 <option value="gemini">Gemini Nano Banana</option>
                 <option value="seedream">Seedream 5.0</option>
@@ -116,7 +116,7 @@ export default function StoryboardStep({
                       </span>
                     )}
                     {audit?.regenerated && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded border bg-purple-500/20 text-purple-300 border-purple-500/40">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded border bg-teal-500/20 text-teal-300 border-teal-500/40">
                         {t('generateV2.auditRegenerated')}
                       </span>
                     )}

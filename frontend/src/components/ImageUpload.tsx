@@ -142,8 +142,8 @@ export default function ImageUpload({
                         transition-all duration-200
                         ${compact ? 'p-2 h-24 flex flex-col items-center justify-center' : 'p-8'}
                         ${isDragging
-                            ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                            : 'border-gray-300 dark:border-gray-600 hover:border-purple-400 dark:hover:border-purple-500'
+                            ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20'
+                            : 'border-gray-300 dark:border-gray-600 hover:border-teal-400 dark:hover:border-teal-500'
                         }
                         ${isUploading ? 'opacity-50 pointer-events-none' : ''}
                     `}
@@ -158,7 +158,7 @@ export default function ImageUpload({
 
                     {isUploading ? (
                         <div className="flex flex-col items-center gap-2">
-                            <div className={`border-3 border-purple-500 border-t-transparent rounded-full animate-spin ${compact ? 'w-6 h-6' : 'w-10 h-10'}`} />
+                            <div className={`border-3 border-teal-500 border-t-transparent rounded-full animate-spin ${compact ? 'w-6 h-6' : 'w-10 h-10'}`} />
                             {!compact && <p className="text-gray-500">{t('imageUpload.uploading')}</p>}
                         </div>
                     ) : (

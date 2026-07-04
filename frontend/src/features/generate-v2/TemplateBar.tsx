@@ -94,7 +94,7 @@ export default function TemplateBar({ onApply, onDump }: TemplateBarProps) {
             value={selected}
             onChange={(e) => setSelected(e.target.value ? Number(e.target.value) : '')}
             disabled={loading || templates.length === 0}
-            className="text-sm bg-black/30 border border-white/10 rounded px-2 py-1 text-white focus:outline-none focus:border-purple-500 min-w-[200px]"
+            className="text-sm bg-black/30 border border-white/10 rounded px-2 py-1 text-white focus:outline-none focus:border-teal-500 min-w-[200px]"
           >
             <option value="">
               {templates.length === 0
@@ -127,14 +127,14 @@ export default function TemplateBar({ onApply, onDump }: TemplateBarProps) {
               placeholder={t('generateV2.templateName') || 'Template name'}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full text-sm bg-black/30 border border-white/10 rounded px-2 py-1.5 text-white focus:outline-none focus:border-purple-500"
+              className="w-full text-sm bg-black/30 border border-white/10 rounded px-2 py-1.5 text-white focus:outline-none focus:border-teal-500"
             />
             <input
               type="text"
               placeholder={t('generateV2.templateDescription') || 'Description (optional)'}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full text-sm bg-black/30 border border-white/10 rounded px-2 py-1.5 text-white focus:outline-none focus:border-purple-500"
+              className="w-full text-sm bg-black/30 border border-white/10 rounded px-2 py-1.5 text-white focus:outline-none focus:border-teal-500"
             />
             <div className="flex gap-2">
               <Button size="sm" onClick={handleSave} disabled={!name.trim() || loading}>

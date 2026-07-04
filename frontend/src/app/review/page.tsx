@@ -7,6 +7,7 @@ import {
     ArrowLeft, Tag, Zap, Calendar, Play, Globe, Trash2
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { display } from '@/lib/fonts';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { safeStringArray } from '@/lib/safeJson';
 import { toErrorMessage } from '@/lib/errorUtils';
@@ -218,7 +219,7 @@ export default function ReviewPage() {
             case 'approved': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
             case 'rejected': return 'bg-red-500/20 text-red-400 border-red-500/30';
             case 'uploaded': return 'bg-green-500/20 text-green-400 border-green-500/30';
-            case 'published': return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
+            case 'published': return 'bg-teal-500/20 text-teal-400 border-teal-500/30';
             default: return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
         }
     };
@@ -235,16 +236,16 @@ export default function ReviewPage() {
     return (
         <div className="min-h-screen bg-[var(--background)] text-white">
             {/* Header */}
-            <div className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
+            <div className="border-b border-white/[0.06] bg-[var(--surface-1)]/70 backdrop-blur-sm sticky top-0 z-10">
                 <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <Link href="/" className="text-gray-400 hover:text-white transition-colors">
                             <ArrowLeft className="w-5 h-5" />
                         </Link>
-                        <h1 className="text-xl font-bold flex items-center gap-2">
-                            <Eye className="w-6 h-6 text-orange-400" />
-                            {t('review.title')}
-                        </h1>
+                        <div>
+                            <div className="font-mono text-[9px] uppercase tracking-[0.35em] text-[var(--brand-1)]">● 04 · {t('sidebar.review')}</div>
+                            <h1 className={`${display.className} text-lg font-bold text-white leading-tight`}>{t('review.title')}</h1>
+                        </div>
                     </div>
                     <div className="flex items-center gap-3">
                         <select
@@ -280,14 +281,14 @@ export default function ReviewPage() {
 
                 {loading ? (
                     <div className="flex items-center justify-center py-20">
-                        <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
+                        <Loader2 className="w-8 h-8 animate-spin text-teal-400" />
                     </div>
                 ) : items.length === 0 ? (
                     <div className="text-center py-20 text-gray-500">
                         <Eye className="w-12 h-12 mx-auto mb-4 opacity-50" />
                         <p className="text-lg">{t('review.noVideos')}</p>
                         <p className="text-sm mt-2">
-                            {t('review.noVideosHint')} <Link href="/trends" className="text-purple-400 hover:text-purple-300">{t('review.trendsLink')}</Link>
+                            {t('review.noVideosHint')} <Link href="/trends" className="text-teal-400 hover:text-teal-300">{t('review.trendsLink')}</Link>
                         </p>
                     </div>
                 ) : (
@@ -298,7 +299,7 @@ export default function ReviewPage() {
                             const isLoading = actionLoading === item.id;
 
                             return (
-                                <div key={item.id} className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 hover:border-purple-500/30 transition-colors">
+                                <div key={item.id} className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 hover:border-teal-500/30 transition-colors">
                                     <div className="flex flex-col lg:flex-row gap-5">
                                         {/* Video Preview */}
                                         <div className="lg:w-64 flex-shrink-0">
@@ -323,7 +324,7 @@ export default function ReviewPage() {
                                                     {item.status.replace('_', ' ')}
                                                 </span>
                                                 {item.genre && (
-                                                    <span className="text-xs text-purple-400 uppercase font-medium">
+                                                    <span className="text-xs text-teal-400 uppercase font-medium">
                                                         {getGenreEmoji(item.genre)} {item.genre}
                                                     </span>
                                                 )}
@@ -467,7 +468,7 @@ export default function ReviewPage() {
                                                     <button
                                                         onClick={() => handlePublish(item.id)}
                                                         disabled={isLoading}
-                                                        className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors"
+                                                        className="bg-gradient-to-r from-teal-600 to-pink-600 hover:from-teal-700 hover:to-pink-700 disabled:opacity-50 px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors"
                                                     >
                                                         {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Globe className="w-3 h-3" />}
                                                         {t('review.publishAction')}

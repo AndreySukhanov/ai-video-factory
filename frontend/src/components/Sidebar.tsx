@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { API_V1_BASE_URL, apiFetch } from '@/lib/apiBase';
+import { display } from '@/lib/fonts';
 
 interface SidebarItemProps {
     href: string;
@@ -18,22 +19,25 @@ interface SidebarItemProps {
     isActive: boolean;
 }
 
-function SidebarItem({ href, icon, label, badge, iconColor = 'text-gray-400', isActive }: SidebarItemProps) {
+function SidebarItem({ href, icon, label, badge, isActive }: SidebarItemProps) {
     return (
         <Link
             href={href}
-            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors group ${
+            className={`relative flex items-center gap-3 px-3 py-2 rounded-[var(--radius-sm)] text-sm font-medium transition-colors group border ${
                 isActive
-                    ? 'bg-gray-100/10 text-white'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/60'
+                    ? 'bg-[var(--surface-2)]/80 text-white border-[var(--brand-1)]/30'
+                    : 'text-[var(--muted)] border-transparent hover:text-white hover:bg-white/[0.04]'
             }`}
         >
-            <span className={`w-4 h-4 flex-shrink-0 ${isActive ? iconColor : 'text-gray-500 group-hover:' + iconColor}`}>
+            {isActive && (
+                <span aria-hidden className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-[var(--brand-1)] rounded-full" />
+            )}
+            <span className={`w-4 h-4 flex-shrink-0 transition-colors ${isActive ? 'text-[var(--brand-1)]' : 'text-[var(--muted)] group-hover:text-[var(--brand-1)]'}`}>
                 {icon}
             </span>
             <span className="flex-1">{label}</span>
             {badge != null && badge > 0 && (
-                <span className="bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                <span className="bg-[var(--brand-2)] text-[#2a1802] text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
                     {badge > 99 ? '99+' : badge}
                 </span>
             )}
@@ -43,8 +47,8 @@ function SidebarItem({ href, icon, label, badge, iconColor = 'text-gray-400', is
 
 function SidebarSection({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <div className="mb-4">
-            <div className="px-3 mb-1 text-[10px] font-semibold text-gray-600 uppercase tracking-wider">
+        <div className="mb-5">
+            <div className="px-3 mb-1.5 font-mono text-[9px] text-[var(--muted)]/70 uppercase tracking-[0.3em]">
                 {label}
             </div>
             <div className="space-y-0.5">
@@ -99,12 +103,12 @@ export default function Sidebar() {
     if (pathname === '/') return null;
 
     return (
-        <aside className="w-52 shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col min-h-screen sticky top-0 h-screen overflow-y-auto">
+        <aside className="w-52 shrink-0 bg-[var(--surface-1)]/60 border-r border-white/[0.06] flex flex-col min-h-screen sticky top-0 h-screen overflow-y-auto">
             {/* Logo */}
-            <div className="px-4 py-5 border-b border-gray-800">
-                <Link href="/" className="flex items-center gap-2 text-white font-semibold text-sm hover:opacity-80 transition-opacity">
-                    <Zap className="w-4 h-4 text-purple-400" />
-                    AI Video Factory
+            <div className="px-4 py-5 border-b border-white/[0.06]">
+                <Link href="/" className="flex items-center gap-2 text-white hover:opacity-80 transition-opacity">
+                    <Zap className="w-4 h-4 text-[var(--brand-1)]" />
+                    <span className={`${display.className} text-[11px] font-bold tracking-wide`}>AI VIDEO FACTORY</span>
                 </Link>
             </div>
 
@@ -123,7 +127,7 @@ export default function Sidebar() {
                         href="/generate"
                         icon={<Video className="w-4 h-4" />}
                         label={t('sidebar.generate')}
-                        iconColor="text-purple-400"
+                        iconColor="text-teal-400"
                         isActive={pathname === '/generate' || pathname.startsWith('/generate/')}
                     />
                     <SidebarItem
@@ -154,8 +158,8 @@ export default function Sidebar() {
             </nav>
 
             {/* Footer */}
-            <div className="px-4 py-4 border-t border-gray-800">
-                <Link href="/" className="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-colors">
+            <div className="px-4 py-4 border-t border-white/[0.06]">
+                <Link href="/" className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]/70 hover:text-[var(--brand-1)] transition-colors">
                     <Home className="w-3.5 h-3.5" />
                     {t('sidebar.home')}
                 </Link>

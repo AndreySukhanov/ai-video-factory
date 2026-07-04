@@ -11,7 +11,7 @@ export default function LanguageSwitcher() {
         onClick={() => setLocale('en')}
         className={`px-2 py-1 rounded transition-colors ${
           locale === 'en'
-            ? 'bg-purple-600 text-white'
+            ? 'bg-teal-600 text-white'
             : 'text-gray-400 hover:text-white'
         }`}
       >
@@ -22,7 +22,7 @@ export default function LanguageSwitcher() {
         onClick={() => setLocale('ru')}
         className={`px-2 py-1 rounded transition-colors ${
           locale === 'ru'
-            ? 'bg-purple-600 text-white'
+            ? 'bg-teal-600 text-white'
             : 'text-gray-400 hover:text-white'
         }`}
       >

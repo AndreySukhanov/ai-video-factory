@@ -41,7 +41,7 @@ export default class FeatureErrorBoundary extends React.Component<Props, State> 
                         <p className="text-sm text-gray-400 mb-4 break-words">{this.state.error.message}</p>
                         <button
                             onClick={() => this.setState({ error: null })}
-                            className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg text-sm text-white transition-colors"
+                            className="inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 px-4 py-2 rounded-lg text-sm text-white transition-colors"
                         >
                             <RefreshCw className="w-4 h-4" />
                             Reload
