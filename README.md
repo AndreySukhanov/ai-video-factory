@@ -327,6 +327,31 @@ If this project saved you time or showed you something new — **star it**. It g
 
 [![Star History Chart](https://api.star-history.com/svg?repos=AndreySukhanov/ai-video-factory&type=Date)](https://star-history.com/#AndreySukhanov/ai-video-factory&Date)
 
+### 💜 Sponsor development
+
+This is a self-funded project — every generated clip costs real money (video, LLM and image API calls), plus hosting. If you'd like to help it grow faster, a donation directly funds generation credits and new provider integrations.
+
+<table>
+<tr>
+<td valign="top">
+
+**USDT — TRC-20 (Tron network)**
+
+```
+TERj89Gjf4qsMW7xyKQWGWtNmBQaDUPnnH
+```
+
+> ⚠️ Send **only USDT via the TRC-20 (Tron)** network to this address. Funds sent through any other network will be lost.
+
+</td>
+<td valign="top">
+<img src="assets/donate-usdt.png" alt="USDT TRC-20 donation QR code" width="180"/>
+</td>
+</tr>
+</table>
+
+Thank you — even a small contribution keeps the render queue running. 🙏
+
 ---
 
 ## 📄 License
