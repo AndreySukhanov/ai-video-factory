@@ -49,6 +49,7 @@ const en: Record<string, string> = {
   "home.statusOffline": "BACKEND OFFLINE",
   "home.statusChecking": "CHECKING…",
   "home.analytics": "Analytics",
+  "home.heroImageAlt": "AI video production line: glowing vertical frames on a conveyor moving toward an editing monitor",
 
   // ===== GENERATE PAGE =====
   "generate.back": "\u2190 Back",

@@ -49,6 +49,7 @@ const ru: Record<string, string> = {
   "home.statusOffline": "БЭКЕНД НЕДОСТУПЕН",
   "home.statusChecking": "ПРОВЕРКА…",
   "home.analytics": "Аналитика",
+  "home.heroImageAlt": "Производственная линия AI-видео: светящиеся вертикальные кадры на конвейере движутся к монтажному монитору",
 
   // ===== GENERATE PAGE =====
   "generate.back": "\u2190 Назад",
