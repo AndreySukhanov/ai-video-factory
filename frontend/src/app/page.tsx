@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
-  Play, TrendingUp, PenLine, Clapperboard, Eye, Youtube, BarChart3, Zap, ArrowUpRight,
+  Play, TrendingUp, BarChart3, Zap, ArrowUpRight,
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
@@ -14,11 +14,11 @@ import { display } from '@/lib/fonts';
 type SystemStatus = 'checking' | 'online' | 'offline';
 
 const STATIONS = [
-  { href: '/trends', icon: TrendingUp, num: '01', title: 'home.stTrend', desc: 'home.stTrendDesc' },
-  { href: '/generate', icon: PenLine, num: '02', title: 'home.stScript', desc: 'home.stScriptDesc' },
-  { href: '/generate', icon: Clapperboard, num: '03', title: 'home.stRender', desc: 'home.stRenderDesc' },
-  { href: '/review', icon: Eye, num: '04', title: 'home.stReview', desc: 'home.stReviewDesc' },
-  { href: '/youtube', icon: Youtube, num: '05', title: 'home.stPublish', desc: 'home.stPublishDesc' },
+  { href: '/trends', icon: '/icons/trend.jpg', num: '01', title: 'home.stTrend', desc: 'home.stTrendDesc' },
+  { href: '/generate', icon: '/icons/script.jpg', num: '02', title: 'home.stScript', desc: 'home.stScriptDesc' },
+  { href: '/generate', icon: '/icons/render.jpg', num: '03', title: 'home.stRender', desc: 'home.stRenderDesc' },
+  { href: '/review', icon: '/icons/review.jpg', num: '04', title: 'home.stReview', desc: 'home.stReviewDesc' },
+  { href: '/youtube', icon: '/icons/publish.jpg', num: '05', title: 'home.stPublish', desc: 'home.stPublishDesc' },
 ] as const;
 
 export default function Home() {
@@ -164,11 +164,18 @@ export default function Home() {
                 className="landing-frame landing-rise group relative bg-[var(--surface-1)]/80 border border-white/[0.07] rounded-[var(--radius-sm)] p-4 hover:border-[var(--brand-1)]/50 hover:bg-[var(--surface-2)]/80 transition-all"
                 style={{ animationDelay: `${0.65 + i * 0.08}s` }}
               >
-                <div className="flex items-start justify-between mb-6">
+                <div className="flex items-start justify-between mb-4">
+                  <Image
+                    src={s.icon}
+                    alt=""
+                    width={48}
+                    height={48}
+                    unoptimized
+                    className="w-12 h-12 rounded-[var(--radius-sm)] ring-1 ring-white/10 group-hover:ring-[var(--brand-1)]/40 transition-all"
+                  />
                   <span className="font-mono text-[10px] text-[var(--muted)] group-hover:text-[var(--brand-1)] transition-colors">
                     {s.num}
                   </span>
-                  <s.icon className="w-4 h-4 text-[var(--muted)] group-hover:text-[var(--brand-1)] transition-colors" />
                 </div>
                 <div className={`${display.className} text-sm font-bold text-white mb-1`}>
                   {t(s.title)}
