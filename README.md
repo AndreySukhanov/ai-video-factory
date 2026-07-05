@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/banner.png" alt="AI Video Factory — viral-video production line" width="100%"/>
+
 # 🎬 AI Video Factory
 
 ### The viral-video intelligence platform that turns worldwide trends into publish-ready video series.

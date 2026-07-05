@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   Play, TrendingUp, PenLine, Clapperboard, Eye, Youtube, BarChart3, Zap, ArrowUpRight,
 } from 'lucide-react';
@@ -83,37 +84,67 @@ export default function Home() {
 
       {/* ── Hero ── */}
       <main className="relative z-10 flex-1 flex flex-col justify-center px-6 sm:px-10 lg:px-16 py-12 max-w-6xl w-full mx-auto">
-        <div className="landing-rise font-mono text-[11px] uppercase tracking-[0.35em] text-[var(--brand-1)] mb-6" style={{ animationDelay: '0.05s' }}>
-          ● {t('home.tagline')}
-        </div>
+        <div className="lg:flex lg:items-center lg:gap-14 mb-16">
+          <div className="flex-1 min-w-0">
+            <div className="landing-rise font-mono text-[11px] uppercase tracking-[0.35em] text-[var(--brand-1)] mb-6" style={{ animationDelay: '0.05s' }}>
+              ● {t('home.tagline')}
+            </div>
 
-        <h1 className={`${display.className} landing-rise text-3xl sm:text-5xl lg:text-6xl font-black leading-[1.08] text-white mb-3`} style={{ animationDelay: '0.15s' }}>
-          {t('home.heroLine1')}
-        </h1>
-        <h1 className={`${display.className} landing-rise text-3xl sm:text-5xl lg:text-6xl font-black leading-[1.08] mb-8 pb-1 text-transparent bg-clip-text bg-gradient-to-r from-[var(--brand-1)] to-emerald-300`} style={{ animationDelay: '0.25s' }}>
-          {t('home.heroLine2')}
-        </h1>
+            <h1 className={`${display.className} landing-rise text-3xl sm:text-5xl lg:text-[52px] xl:text-6xl font-black leading-[1.08] text-white mb-3`} style={{ animationDelay: '0.15s' }}>
+              {t('home.heroLine1')}
+            </h1>
+            <h1 className={`${display.className} landing-rise text-3xl sm:text-5xl lg:text-[52px] xl:text-6xl font-black leading-[1.08] mb-8 pb-1 text-transparent bg-clip-text bg-gradient-to-r from-[var(--brand-1)] to-emerald-300`} style={{ animationDelay: '0.25s' }}>
+              {t('home.heroLine2')}
+            </h1>
 
-        <p className="landing-rise max-w-xl text-base sm:text-lg text-[var(--muted)] leading-relaxed mb-10" style={{ animationDelay: '0.35s' }}>
-          {t('home.heroSub')}
-        </p>
+            <p className="landing-rise max-w-xl text-base sm:text-lg text-[var(--muted)] leading-relaxed mb-10" style={{ animationDelay: '0.35s' }}>
+              {t('home.heroSub')}
+            </p>
 
-        <div className="landing-rise flex flex-wrap items-center gap-4 mb-16" style={{ animationDelay: '0.45s' }}>
-          <Link
-            href="/generate"
-            className="group flex items-center gap-3 bg-[var(--brand-1)] text-[#04211c] px-7 py-3.5 rounded-[var(--radius-sm)] font-bold text-base hover:brightness-110 transition-all shadow-[0_16px_40px_rgba(20,184,166,0.25)]"
-          >
-            <Play className="w-4 h-4 fill-current" />
-            {t('home.ctaStart')}
-            <ArrowUpRight className="w-4 h-4 opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0 transition-all" />
-          </Link>
-          <Link
-            href="/trends"
-            className="flex items-center gap-2 border border-white/15 text-white px-7 py-3.5 rounded-[var(--radius-sm)] font-medium text-base hover:border-[var(--brand-1)]/60 hover:bg-white/[0.03] transition-all"
-          >
-            <TrendingUp className="w-4 h-4 text-[var(--brand-1)]" />
-            {t('home.ctaTrends')}
-          </Link>
+            <div className="landing-rise flex flex-wrap items-center gap-4" style={{ animationDelay: '0.45s' }}>
+              <Link
+                href="/generate"
+                className="group flex items-center gap-3 bg-[var(--brand-1)] text-[#04211c] px-7 py-3.5 rounded-[var(--radius-sm)] font-bold text-base hover:brightness-110 transition-all shadow-[0_16px_40px_rgba(20,184,166,0.25)]"
+              >
+                <Play className="w-4 h-4 fill-current" />
+                {t('home.ctaStart')}
+                <ArrowUpRight className="w-4 h-4 opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0 transition-all" />
+              </Link>
+              <Link
+                href="/trends"
+                className="flex items-center gap-2 border border-white/15 text-white px-7 py-3.5 rounded-[var(--radius-sm)] font-medium text-base hover:border-[var(--brand-1)]/60 hover:bg-white/[0.03] transition-all"
+              >
+                <TrendingUp className="w-4 h-4 text-[var(--brand-1)]" />
+                {t('home.ctaTrends')}
+              </Link>
+            </div>
+          </div>
+
+          {/* Hero visual: the factory's own render, framed as a live monitor */}
+          <div className="landing-rise hidden lg:block shrink-0 w-[280px] xl:w-[320px] lg:rotate-[1.2deg] hover:rotate-0 transition-transform duration-500" style={{ animationDelay: '0.4s' }}>
+            <div className="relative rounded-[var(--radius-md)] overflow-hidden border border-white/10 shadow-[0_35px_90px_rgba(5,11,24,0.65)]">
+              <Image
+                src="/landing-hero.jpg"
+                alt={t('home.heroImageAlt')}
+                width={768}
+                height={1376}
+                priority
+                unoptimized
+                className="w-full h-auto"
+              />
+              <div className="absolute top-0 inset-x-0 flex items-center justify-between px-3 py-2.5 bg-gradient-to-b from-black/70 to-transparent font-mono text-[9px] tracking-[0.25em] text-white/85">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-2)] landing-tally" />
+                  REC
+                </span>
+                <span>9:16 · 24FPS</span>
+              </div>
+              <div className="absolute bottom-0 inset-x-0 flex items-center justify-between px-3 py-2.5 bg-gradient-to-t from-black/75 to-transparent font-mono text-[9px] tracking-[0.25em] text-white/70">
+                <span>ST.03 — RENDER</span>
+                <span className="text-[var(--brand-1)]">▶</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* ── Production line ── */}
