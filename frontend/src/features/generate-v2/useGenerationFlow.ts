@@ -145,6 +145,9 @@ export function useGenerationFlow() {
   const hydratedRef = useRef(false);
   const projectLoadedRef = useRef(false);
   const pendingOverridesRef = useRef<Array<{ number: number; model?: string; duration?: number }>>([]);
+  // Set when arriving from the homepage portal (?source=portal): auto-run planEpisodes once
+  // the idea has been hydrated, so the series "comes out of the portal" without a manual click.
+  const pendingAutoPlanRef = useRef(false);
 
   // Ref to always have fresh episodes (avoids stale closure in sequential queue)
   const episodesRef = useRef(episodes);
@@ -219,6 +222,45 @@ export function useGenerationFlow() {
     }
   }, [searchParams]);
 
+  // Prefill from the homepage "portal" (?source=portal). The portal stashes a brief
+  // { idea, reference_images, reference_local_urls } and hands off here; we hydrate the
+  // idea form + references and flag an auto-plan so the wizard runs itself.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (searchParams.get('source') !== 'portal') return;
+    if (projectLoadedRef.current) return;
+    projectLoadedRef.current = true;
+
+    let raw: string | null = null;
+    try { raw = sessionStorage.getItem('portal_brief'); } catch { return; }
+    if (!raw) return;
+
+    try {
+      const brief = JSON.parse(raw);
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+
+      setIdeaForm((prev) => normalizeIdeaForm({ ...prev, idea: brief.idea || '' }));
+
+      if (Array.isArray(brief.reference_images) && brief.reference_images.length > 0) {
+        setReferenceImages(brief.reference_images);
+      }
+      if (Array.isArray(brief.reference_local_urls) && brief.reference_local_urls.length > 0) {
+        setReferenceLocalUrls(brief.reference_local_urls);
+      }
+
+      setCurrentStep('idea');
+      // Only auto-plan when the idea is substantial enough for the LLM planner.
+      if (typeof brief.idea === 'string' && brief.idea.trim().length >= 10) {
+        pendingAutoPlanRef.current = true;
+      }
+
+      hydratedRef.current = true;
+      try { sessionStorage.removeItem('portal_brief'); } catch { /* ignore */ }
+    } catch (e) {
+      console.warn('[portal] failed to parse stashed brief:', e);
+    }
+  }, [searchParams]);
+
   // Load project from ?project=N URL parameter
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -268,7 +310,10 @@ export function useGenerationFlow() {
   // Load from localStorage
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (searchParams.get('project')) return;
+    // An explicit entry point (?project, ?source=portal|clone) is authoritative — never let a
+    // stale draft override it. This also avoids a StrictMode clobber where the save-draft effect
+    // writes an empty snapshot mid-hydration and this effect reads it straight back.
+    if (searchParams.get('project') || searchParams.get('source')) return;
     const snapshot = safeJsonParse<GenerationDraftSnapshot | null>(
       localStorage.getItem(DRAFT_STORAGE_KEY),
       null,
@@ -576,6 +621,15 @@ export function useGenerationFlow() {
       setIsPlanning(false);
     }
   }, [ideaForm, t]);
+
+  // Portal handoff: once the idea from ?source=portal is hydrated, plan the series once.
+  useEffect(() => {
+    if (!pendingAutoPlanRef.current) return;
+    if (isPlanning) return;
+    if (ideaForm.idea.trim().length < 10) return;
+    pendingAutoPlanRef.current = false;
+    void planEpisodes();
+  }, [ideaForm.idea, isPlanning, planEpisodes]);
 
   const runEpisodeGeneration = useCallback(
     async (episodeId: string): Promise<boolean> => {

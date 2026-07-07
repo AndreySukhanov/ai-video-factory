@@ -10,6 +10,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { API_BASE_URL, apiFetch } from '@/lib/apiBase';
 import { display } from '@/lib/fonts';
+import IdeaPortal from '@/components/IdeaPortal';
 
 type SystemStatus = 'checking' | 'online' | 'offline';
 
@@ -24,6 +25,7 @@ const STATIONS = [
 export default function Home() {
   const { t } = useLanguage();
   const [status, setStatus] = useState<SystemStatus>('checking');
+  const [portalOpen, setPortalOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,13 +104,32 @@ export default function Home() {
             </p>
 
             <div className="landing-rise flex flex-wrap items-center gap-4" style={{ animationDelay: '0.45s' }}>
+              <button
+                type="button"
+                onClick={() => setPortalOpen(true)}
+                aria-label={t('home.ctaPortal')}
+                className="portal-cta group relative inline-flex rounded-full p-[2px]"
+              >
+                {/* pulsing halo */}
+                <span aria-hidden className="portal-halo absolute -inset-4 rounded-full blur-xl pointer-events-none" />
+                {/* spinning portal rim */}
+                <span aria-hidden className="portal-rim absolute inset-0 rounded-full" />
+                {/* dark core with the label */}
+                <span className="relative z-10 flex items-center gap-3 rounded-full bg-[#04140f] text-white px-7 py-3.5 font-bold text-base group-hover:bg-[#052019] transition-colors">
+                  <span aria-hidden className="relative w-4 h-4 shrink-0">
+                    <span className="portal-swirl absolute inset-0 rounded-full" />
+                    <span className="absolute inset-[3px] rounded-full bg-[#04140f]" />
+                  </span>
+                  {t('home.ctaPortal')}
+                  <ArrowUpRight className="w-4 h-4 text-[var(--brand-1)] opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0 transition-all" />
+                </span>
+              </button>
               <Link
                 href="/generate"
-                className="group flex items-center gap-3 bg-[var(--brand-1)] text-[#04211c] px-7 py-3.5 rounded-[var(--radius-sm)] font-bold text-base hover:brightness-110 transition-all shadow-[0_16px_40px_rgba(20,184,166,0.25)]"
+                className="flex items-center gap-2 border border-white/15 text-white px-7 py-3.5 rounded-[var(--radius-sm)] font-medium text-base hover:border-[var(--brand-1)]/60 hover:bg-white/[0.03] transition-all"
               >
-                <Play className="w-4 h-4 fill-current" />
+                <Play className="w-4 h-4 fill-current text-[var(--brand-1)]" />
                 {t('home.ctaStart')}
-                <ArrowUpRight className="w-4 h-4 opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0 transition-all" />
               </Link>
               <Link
                 href="/trends"
@@ -196,6 +217,8 @@ export default function Home() {
           {t('home.analytics')}
         </Link>
       </footer>
+
+      <IdeaPortal open={portalOpen} onClose={() => setPortalOpen(false)} />
     </div>
   );
 }

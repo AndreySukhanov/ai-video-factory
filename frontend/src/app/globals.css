@@ -69,6 +69,56 @@ body {
   animation: beltFlow 1.1s linear infinite;
 }
 
+/* ── Portal CTA button (a spinning teal vortex) ─────────────────────── */
+@property --portal-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes portalSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes portalSweep {
+  to { --portal-angle: 360deg; }
+}
+@keyframes portalPulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 0.9;  transform: scale(1.08); }
+}
+
+.portal-cta { position: relative; }
+/* the portal's swirling edge — the conic gradient sweeps around the rim while the
+   element's box stays put (rotating a wide pill would sweep a diagonal shape). */
+.portal-rim {
+  background: conic-gradient(
+    from var(--portal-angle),
+    transparent 0deg,
+    rgba(20, 184, 166, 0.15) 40deg,
+    #14b8a6 130deg,
+    #5eead4 175deg,
+    #14b8a6 220deg,
+    rgba(20, 184, 166, 0.15) 320deg,
+    transparent 360deg
+  );
+  animation: portalSweep 3.5s linear infinite;
+}
+.portal-cta:hover .portal-rim { animation-duration: 1.6s; }
+/* pulsing halo behind the button */
+.portal-halo {
+  background: radial-gradient(circle, rgba(20, 184, 166, 0.55), transparent 70%);
+  animation: portalPulse 3s ease-in-out infinite;
+}
+/* the little vortex swirl inside the label */
+.portal-swirl {
+  background: conic-gradient(from 0deg, transparent, #5eead4, #14b8a6, transparent 80%);
+  animation: portalSpin 2.2s linear infinite;
+}
+.portal-cta:hover .portal-swirl { animation-duration: 1s; }
+@media (prefers-reduced-motion: reduce) {
+  .portal-rim, .portal-halo, .portal-swirl { animation: none; }
+  .portal-rim { background: conic-gradient(from 130deg, transparent, #14b8a6, #5eead4, #14b8a6, transparent 75%); }
+}
+
 .landing-frame {
   position: relative;
 }
