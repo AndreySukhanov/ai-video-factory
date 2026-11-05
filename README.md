@@ -17,7 +17,7 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](CONTRIBUTING.md)
 [![License](https://img.shields.io/badge/license-Source--Available-blue)](LICENSE)
 
-[Quick Start](#-quick-start) · [Trend Intelligence](#-trend-intelligence-the-part-nobody-else-has) · [How It Works](#-how-it-works) · [Features](#-features) · [Supported Models](#-supported-models) · [Roadmap](#-roadmap)
+[Quick Start](#-quick-start) · [Trend Intelligence](#-trend-intelligence--the-part-nobody-else-has) · [How It Works](#️-how-it-works) · [Features](#-features) · [Supported Models](#-supported-models) · [Roadmap](#-roadmap)
 
 </div>
 
@@ -358,7 +358,7 @@ Thank you — even a small contribution keeps the render queue running. 🙏
 
 **Source-Available** — free to read, run and learn from. Commercial or derivative use requires written permission. See [LICENSE](LICENSE).
 
-Licensing contact: avsukhanov21@gmail.com
+Licensing contact: [avsukhanov21@gmail.com](mailto:avsukhanov21@gmail.com)
 
 ---
 
